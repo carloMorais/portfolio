@@ -2,7 +2,7 @@
 
 Bilingual (PT/EN) portfolio of **Carlos Eduardo Araujo Morais**, Full-Stack Developer. Case studies, career and projects, all on one site.
 
-**Live:** _link coming with the first deploy_
+**Live:** [portfolio-carlomorais.vercel.app](https://portfolio-carlomorais.vercel.app)
 
 > 🇧🇷 Portfólio bilíngue de Carlos Morais, Desenvolvedor Full-Stack. O código das empresas é privado, então cada estudo de caso mostra o problema, as decisões técnicas, a arquitetura e o resultado, sem expor lógica ou dados de clientes. O site em si é público e testado de ponta a ponta.
 

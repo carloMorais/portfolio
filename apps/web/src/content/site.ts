@@ -8,6 +8,8 @@ export const site = {
   whatsapp: "5563992046146",
   linkedin: "https://www.linkedin.com/in/carlos-m-678974245",
   github: "https://github.com/carloMorais",
+  // Canonical origin: every Vercel deployment (previews too) points search engines here.
+  url: "https://portfolio-carlomorais.vercel.app",
   sourceRepo: "https://github.com/carloMorais/portfolio",
 } as const;
 

@@ -1,16 +1,16 @@
 import type { Metadata } from "next";
+import { site } from "@/content/site";
 import { routing, type Locale } from "@/i18n/routing";
 
 /**
  * The public origin, used for canonical URLs, hreflang, the sitemap and OG
- * tags. Set NEXT_PUBLIC_SITE_URL once the domain is chosen; on Vercel the
- * production domain is picked up automatically until then.
+ * tags. NEXT_PUBLIC_SITE_URL overrides it; any Vercel build uses `site.url`
+ * (not Vercel's generated domain); anything else is local.
  */
 export function siteUrl(env: Record<string, string | undefined> = process.env): string {
   const explicit = env.NEXT_PUBLIC_SITE_URL;
   if (explicit) return explicit.replace(/\/+$/, "");
-  const vercel = env.VERCEL_PROJECT_PRODUCTION_URL;
-  if (vercel) return `https://${vercel}`;
+  if (env.VERCEL) return site.url;
   return "http://localhost:17000";
 }
 

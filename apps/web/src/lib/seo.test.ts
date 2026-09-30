@@ -8,10 +8,10 @@ describe("siteUrl", () => {
     );
   });
 
-  it("falls back to the Vercel production domain, then localhost", () => {
-    expect(siteUrl({ VERCEL_PROJECT_PRODUCTION_URL: "carlos.vercel.app" })).toBe(
-      "https://carlos.vercel.app",
-    );
+  it("uses the chosen domain on Vercel, not the generated one, and localhost elsewhere", () => {
+    expect(
+      siteUrl({ VERCEL: "1", VERCEL_PROJECT_PRODUCTION_URL: "portfolio-kappa-lake-51.vercel.app" }),
+    ).toBe("https://portfolio-carlomorais.vercel.app");
     expect(siteUrl({})).toBe("http://localhost:17000");
   });
 });
