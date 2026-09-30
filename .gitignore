@@ -1,0 +1,36 @@
+node_modules/
+.next/
+out/
+build/
+coverage/
+*.tsbuildinfo
+next-env.d.ts
+.env*
+!.env.example
+.vercel
+.DS_Store
+*.pem
+npm-debug.log*
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Source resumes stay local; published PDFs live in apps/web/public/cv
+context/curriculo/*.docx
+~$*
+
+# Private context (company names that must stay out of the public repo)
+context/private.md
+
+# Original, full-size photos (optimized copies live in apps/web/public/photos)
+context/fotos-originais/
+
+# Interview notes and talk slides (name the anonymized employer)
+context/entrevista*.md
+context/powerpoint/
+
+# Project notes for Claude Code (local only)
+/CLAUDE.md

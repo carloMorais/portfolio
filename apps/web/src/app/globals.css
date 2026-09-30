@@ -1,0 +1,367 @@
+@import "tailwindcss";
+
+/* Warm "paper and ink" palette with a single deep-blue accent. */
+:root {
+  --bg: #f7f5f0;
+  --surface: #efebe3;
+  --ink: #1c1b19;
+  --muted: #6b675f;
+  --line: #ddd8cd;
+  --accent: #2553b8;
+  --radius-photo: 1.25rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #121211;
+    --surface: #1d1c1a;
+    --ink: #ecebe6;
+    --muted: #9a968c;
+    --line: #2e2c28;
+    --accent: #8db2ff;
+  }
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+}
+
+html {
+  color-scheme: light dark;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 25%, transparent);
+}
+
+@utility container-page {
+  width: 100%;
+  max-width: 72rem;
+  margin-inline: auto;
+  padding-inline: 1.25rem;
+  @media (width >= 40rem) {
+    padding-inline: 2rem;
+  }
+}
+
+@utility eyebrow {
+  font-size: 0.75rem;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+@utility link-underline {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, currentColor 30%, transparent);
+  text-underline-offset: 0.25em;
+  transition: text-decoration-color 150ms;
+  &:hover {
+    text-decoration-color: currentColor;
+  }
+}
+
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-radius: 9999px;
+    padding: 0.7rem 1.35rem;
+    font-size: 0.925rem;
+    font-weight: 500;
+    transition:
+      background-color 150ms,
+      color 150ms,
+      border-color 150ms;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--accent);
+  }
+  .btn-ghost {
+    border: 1px solid var(--line);
+  }
+  .btn-ghost:hover {
+    border-color: var(--ink);
+  }
+
+  .photo-placeholder {
+    background:
+      radial-gradient(
+        circle at 30% 20%,
+        color-mix(in oklab, var(--accent) 10%, transparent),
+        transparent 60%
+      ),
+      repeating-linear-gradient(
+        135deg,
+        transparent 0 14px,
+        color-mix(in oklab, var(--line) 55%, transparent) 14px 15px
+      ),
+      var(--surface);
+    outline: 1px dashed var(--line);
+    outline-offset: -10px;
+    border-radius: inherit;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* ---------- Brush-painted keywords ---------- */
+
+.hero-title::first-letter {
+  font-weight: 700;
+}
+
+/* A brush stroke paints in behind each <k> keyword. In the hero it runs on
+   load, staggered by --i; elsewhere (.brush-on-view) it runs as the heading
+   scrolls into view where scroll-driven animations are supported. */
+.brush-mark {
+  position: relative;
+  isolation: isolate;
+  white-space: nowrap;
+}
+.brush-mark::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 42% -0.12em 4% -0.12em;
+  background: color-mix(in oklab, var(--accent) 22%, transparent);
+  mask: url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 200 40%27 preserveAspectRatio=%27none%27%3E%3Cpath d=%27M5 13C42 5 118 3 196 8c3 7 2 17-2 23-58 5-128 8-189 3C1 27 1 19 5 13Z%27/%3E%3C/svg%3E")
+    center / 100% 100% no-repeat;
+  clip-path: inset(0 100% 0 0);
+  animation: brush-reveal 700ms cubic-bezier(0.65, 0, 0.35, 1) forwards;
+  animation-delay: calc(500ms + var(--i, 0) * 450ms);
+}
+.brush-on-view::before {
+  animation-delay: 150ms;
+}
+@supports (animation-timeline: view()) {
+  .brush-on-view::before {
+    animation: brush-reveal linear both;
+    animation-timeline: view();
+    animation-range: entry 40% cover 35%;
+  }
+}
+
+@keyframes brush-reveal {
+  to {
+    clip-path: inset(0 0 0 0);
+  }
+}
+
+/* ---------- Sections fade up as they enter ---------- */
+
+@supports (animation-timeline: view()) {
+  .reveal {
+    animation: reveal-up linear both;
+    animation-timeline: view();
+    animation-range: entry 0% cover 22%;
+  }
+}
+@keyframes reveal-up {
+  from {
+    opacity: 0;
+    translate: 0 2rem;
+  }
+}
+
+/* ---------- Hero tech graph ---------- */
+
+.tech-graph-cluster {
+  opacity: 0;
+  animation: graph-in 900ms ease-out 300ms forwards;
+}
+/* Faint outline icon behind each cluster says what it represents. */
+.tech-graph-icon {
+  fill: none;
+  stroke: color-mix(in oklab, var(--ink) 7%, transparent);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.tech-graph-icon * {
+  vector-effect: non-scaling-stroke;
+}
+.tech-graph-ring {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+}
+/* Dependencies (TypeScript, Node.js) and their chatter are grey. */
+.tech-graph-chatter {
+  fill: color-mix(in oklab, var(--muted) 70%, transparent);
+}
+.tech-graph-dot.tech-graph-dependency {
+  stroke: var(--muted);
+}
+.tech-graph-edge.tech-graph-dependency {
+  stroke-dasharray: 2 3;
+}
+.tech-graph-edge {
+  stroke: color-mix(in oklab, var(--ink) 16%, transparent);
+  stroke-width: 1;
+}
+.tech-graph-dot {
+  fill: var(--bg);
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.tech-graph-label {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  fill: var(--muted);
+}
+.tech-graph-request {
+  fill: var(--accent);
+}
+.tech-graph-response {
+  fill: color-mix(in oklab, var(--ink) 45%, transparent);
+}
+.tech-graph-input {
+  fill: var(--bg);
+  stroke: var(--line);
+}
+.tech-graph-typing {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.tech-graph-caret {
+  fill: var(--accent);
+  animation: graph-caret 900ms steps(1) infinite;
+}
+@keyframes graph-in {
+  to {
+    opacity: 1;
+  }
+}
+@keyframes graph-caret {
+  50% {
+    opacity: 0;
+  }
+}
+
+/* ---------- Scroll hint ---------- */
+
+.scroll-hint-dot {
+  animation: scroll-hint 1.8s ease-in-out infinite;
+}
+@keyframes scroll-hint {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+  }
+  30% {
+    opacity: 1;
+  }
+  80%,
+  100% {
+    opacity: 0;
+    translate: 0 0.75rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .brush-mark::before {
+    animation: none;
+    clip-path: none;
+  }
+  .reveal,
+  .tech-graph-cluster,
+  .tech-graph-caret,
+  .scroll-hint-dot {
+    animation: none;
+    opacity: 1;
+  }
+}
+
+/* ---------- Page slides between tabs (React <ViewTransition>) ---------- */
+
+::view-transition {
+  pointer-events: none;
+}
+::view-transition-group(site-header) {
+  animation: none;
+  z-index: 100;
+}
+::view-transition-old(site-header) {
+  display: none;
+}
+::view-transition-new(site-header) {
+  animation: none;
+}
+
+/* Old page leaves fast; new page arrives a touch slower, from the other side. */
+::view-transition-old(.nav-forward) {
+  --slide-offset: -14vw;
+  animation:
+    220ms ease-in both page-fade reverse,
+    420ms cubic-bezier(0.65, 0, 0.35, 1) both page-slide reverse;
+}
+::view-transition-new(.nav-forward) {
+  --slide-offset: 14vw;
+  animation:
+    300ms ease-out 140ms both page-fade,
+    520ms cubic-bezier(0.22, 1, 0.36, 1) both page-slide;
+}
+::view-transition-old(.nav-back) {
+  --slide-offset: 14vw;
+  animation:
+    220ms ease-in both page-fade reverse,
+    420ms cubic-bezier(0.65, 0, 0.35, 1) both page-slide reverse;
+}
+::view-transition-new(.nav-back) {
+  --slide-offset: -14vw;
+  animation:
+    300ms ease-out 140ms both page-fade,
+    520ms cubic-bezier(0.22, 1, 0.36, 1) both page-slide;
+}
+@keyframes page-fade {
+  from {
+    opacity: 0;
+    filter: blur(4px);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+  }
+}
+@keyframes page-slide {
+  from {
+    translate: var(--slide-offset) 0;
+  }
+  to {
+    translate: 0 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-old(*),
+  ::view-transition-new(*),
+  ::view-transition-group(*) {
+    animation-duration: 0s !important;
+    animation-delay: 0s !important;
+  }
+}

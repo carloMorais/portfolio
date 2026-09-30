@@ -1,0 +1,136 @@
+{
+  "Metadata": {
+    "title": "Carlos Morais — Desenvolvedor Full-Stack",
+    "description": "Desenvolvedor Full-Stack (React, Next.js, Node.js, NestJS, PostgreSQL). Estudos de caso, experiência e projetos."
+  },
+  "Nav": {
+    "home": "Início",
+    "experience": "Experiência",
+    "demos": "Demonstrações",
+    "skipToContent": "Pular para o conteúdo",
+    "menu": "Menu",
+    "openMenu": "Abrir menu",
+    "closeMenu": "Fechar menu",
+    "primary": "Navegação principal"
+  },
+  "LocaleSwitcher": {
+    "label": "Idioma",
+    "pt": "Português",
+    "en": "English"
+  },
+  "Common": {
+    "downloadCv": "Baixar currículo",
+    "downloadCvHint": "PDF · 1 página",
+    "present": "Atual",
+    "inProgress": "Em andamento",
+    "expected": "Previsão",
+    "comingSoon": "Estudo de caso em breve",
+    "viewCase": "Ler estudo de caso",
+    "viewProject": "Ver projeto",
+    "sourceCode": "Código no GitHub"
+  },
+  "Home": {
+    "eyebrow": "Desenvolvedor Full-Stack",
+    "lead": "Mais de 2 anos entregando features em produção em plataformas SaaS B2B/B2C, com React, Node.js, NestJS, PostgreSQL e testes automatizados.",
+    "location": "Jacareí, SP · Remoto",
+    "ctaWork": "Ver trabalhos",
+    "statsLabel": "Em números",
+    "workEyebrow": "Trabalhos selecionados",
+    "workTitle": "Problemas reais, <k>em produção</k>.",
+    "workLead": "O código das empresas é privado, então conto aqui o problema, as decisões e o resultado de cada trabalho.",
+    "aboutEyebrow": "Sobre",
+    "aboutTitle": "Como eu <k>trabalho</k>",
+    "aboutBody": "Sou de Jacareí/SP e trabalho remoto. Comecei com cursos na Alura em 2022, fiz cerca de 3.000 horas de formação full-stack na Alpha Edtech e desde 2024 trabalho na área — Bayer, uma startup de IA conversacional e, hoje, a Plumaa. Em paralelo, curso Administrador de Banco de Dados no IFRS.",
+    "principle1Title": "Testado antes de ir para produção",
+    "principle1Body": "Testes unitários e de integração antes de cada deploy. Este site vai além: o CI roda tudo a cada push.",
+    "principle2Title": "Revisão e decisões compartilhadas",
+    "principle2Body": "Faço code review e apoio decisões de arquitetura como referência técnica de uma squad pequena.",
+    "principle3Title": "IA como ferramenta de engenharia",
+    "principle3Body": "Uso Claude Code no dia a dia, com skills customizadas e agentes para pesquisar código e escrever testes.",
+    "skillsEyebrow": "Stack",
+    "skillsTitle": "Ferramentas que <k>uso</k>",
+    "experienceEyebrow": "Trajetória",
+    "experienceTitle": "Onde <k>trabalhei</k>",
+    "experienceCta": "Ver trajetória completa",
+    "contactEyebrow": "Contato",
+    "contactTitle": "Vamos <k>conversar</k>?",
+    "contactLead": "Quer conversar sobre um projeto ou trocar uma ideia sobre código? O jeito mais rápido de falar comigo é por e-mail ou WhatsApp.",
+    "portraitCaption": "Carlos Morais · Full-Stack · {age} anos",
+    "stackLabel": "Stack principal",
+    "workCta": "Ver todas as demonstrações",
+    "titleMain": "Construo produtos web de <k>ponta a ponta</k>",
+    "titleSub": "do <k>banco de dados</k> à <k>interface</k>.",
+    "scrollHint": "Role para ver mais",
+    "minimapLabel": "Seções da página",
+    "sections": {
+      "intro": "Início",
+      "work": "Trabalhos",
+      "about": "Sobre",
+      "career": "Trajetória",
+      "contact": "Contato"
+    },
+    "graph": {
+      "phrases": [
+        "agendar consulta",
+        "buscar psicólogo",
+        "reagendar sessão",
+        "cancelar horário",
+        "pagar assinatura",
+        "renovar plano",
+        "ver meus horários",
+        "enviar mensagem",
+        "editar perfil",
+        "trocar senha",
+        "entrar com Google",
+        "baixar recibo",
+        "avaliar sessão",
+        "filtrar por data",
+        "criar conta"
+      ]
+    }
+  },
+  "Experience": {
+    "metaTitle": "Experiência",
+    "metaDescription": "Trajetória profissional, formação e idiomas de Carlos Morais, Desenvolvedor Full-Stack.",
+    "eyebrow": "Experiência",
+    "title": "<k>Trajetória</k>",
+    "lead": "Da automação de processos na Bayer a produtos SaaS com IA em produção.",
+    "jobsTitle": "Experiência profissional",
+    "educationTitle": "Formação e cursos",
+    "languagesTitle": "Idiomas",
+    "volunteeringTitle": "Voluntariado"
+  },
+  "Footer": {
+    "builtWith": "Feito com Next.js, TypeScript e Tailwind CSS. Testado com Jest e Playwright.",
+    "source": "Código-fonte"
+  },
+  "NotFound": {
+    "title": "Página não encontrada",
+    "description": "A página que você procura não existe ou mudou de endereço.",
+    "back": "Voltar ao início"
+  },
+  "Photo": {
+    "placeholder": "Foto em breve",
+    "credit": "Foto: {author} / {source}"
+  },
+  "Demos": {
+    "metaTitle": "Demonstrações",
+    "metaDescription": "Estudos de caso e projetos de Carlos Morais, Desenvolvedor Full-Stack.",
+    "eyebrow": "Trabalhos selecionados",
+    "title": "Problemas reais, <k>em produção</k>.",
+    "lead": "O código das empresas é privado, então conto aqui o problema, as decisões e o resultado de cada trabalho."
+  },
+  "Case": {
+    "back": "Demonstrações",
+    "more": "Ver outros trabalhos",
+    "context": "Contexto",
+    "problem": "O problema",
+    "myPart": "Minha parte",
+    "decisions": "Decisões técnicas",
+    "architecture": "Arquitetura",
+    "result": "Resultado",
+    "play": "Reproduzir",
+    "pause": "Pausar",
+    "racegameVideo": "Trecho de uma partida de teste do RaceGame com 10 jogadores: carros correndo numa pista vista de cima."
+  }
+}
