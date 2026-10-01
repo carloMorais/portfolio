@@ -10,7 +10,6 @@ import {
   botKeys,
   classicTrack as track,
   createRace,
-  raceProgress,
   standings,
   stepRace,
   wrongWay,
@@ -22,13 +21,13 @@ import {
   drawItem,
   type CarLook,
   drawLabel,
-  drawStartLights,
   drawTarget,
   drawTrack,
   interpolateCar,
   readPalette,
   type Palette,
 } from "./draw";
+import { COLORS } from "./colors";
 import { Effects } from "./effects";
 import { Crowd, STANDS, drawScenery, seatFans } from "./scenery";
 import { BoltIcon } from "./icons";
@@ -82,10 +81,8 @@ type Hud = {
   justStarted: boolean;
   /** Ticks ahead (negative) or behind your reference lap at the last checkpoint crossed. */
   delta: number | null;
-  /** 0–1 of the current speed cap (higher while boosted). */
-  speed: number;
-  /** Every car's fraction of the whole race done, in no particular order. */
-  progress: { id: string; value: number }[];
+  /** Starting lights lit, 0–5 (only meaningful during the countdown). */
+  lit: number;
 };
 type Outcome = { newRace: boolean; newLap: boolean };
 type ChangeMark = { dir: "up" | "down"; until: number };
@@ -135,8 +132,7 @@ const initialHud = (): Hud => ({
   lastLap: false,
   justStarted: false,
   delta: null,
-  speed: 0,
-  progress: [PLAYER, ...BOT_IDS].map((id) => ({ id, value: 0 })),
+  lit: 0,
 });
 
 const storage = () => {
@@ -481,7 +477,13 @@ export function PracticeRace() {
           };
         });
 
-        const topSpeed = me.nitroUntil !== null ? PHYSICS.nitroMaxVelocity : PHYSICS.maxVelocity;
+        const lit =
+          phaseRef.current === "countdown"
+            ? Math.max(
+                0,
+                Math.min(5, Math.floor((now - (countdownEnd.current - COUNTDOWN_MS)) / 500) + 1),
+              )
+            : 0;
         setHud({
           tick: s.tick,
           time: me.finishedAt ?? s.tick,
@@ -497,8 +499,7 @@ export function PracticeRace() {
           lastLap: now < lastLapUntil.current,
           justStarted: now < startFlashUntil.current,
           delta: deltaRef.current,
-          speed: Math.max(0, Math.min(1, Math.hypot(me.vx, me.vy) / topSpeed)),
-          progress: ranked.map((c) => ({ id: c.id, value: raceProgress(c, track, LAPS) })),
+          lit,
         });
         // Say the position once it has held for a moment, not at every overtake.
         const pos = position.current;
@@ -545,13 +546,6 @@ export function PracticeRace() {
         ),
       );
 
-      if (phaseRef.current === "countdown") {
-        const elapsed = now - (countdownEnd.current - COUNTDOWN_MS);
-        const lit = Math.max(0, Math.min(5, Math.floor(elapsed / 500) + 1));
-        const f = track.finishLine;
-        drawStartLights(ctx, p, lit, f.x + f.width / 2, f.y - 25);
-      }
-
       // Where you need to go next.
       const me = s.cars.find((c) => c.id === PLAYER)!;
       if (me.finishedAt === null) {
@@ -583,7 +577,7 @@ export function PracticeRace() {
       for (const { car, at } of ordered) {
         const look =
           car.id === PLAYER
-            ? { body: p.accent, helmet: p.c.bolt, stripe: true }
+            ? { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true }
             : looks[BOT_IDS.indexOf(car.id)]!;
         drawCar(ctx, at, look, p, car.nitroUntil !== null);
       }
@@ -593,7 +587,7 @@ export function PracticeRace() {
           car.nitroUntil === null
             ? null
             : Math.max(0, Math.min(1, (car.nitroUntil - s.tick - alpha) / PHYSICS.nitroTicks));
-        drawLabel(ctx, at, names(car.id), car.nitro, p, track.width, boost);
+        drawLabel(ctx, at, names(car.id), car.nitro, p, track.width, boost, car.id === PLAYER);
       }
     };
 
@@ -617,20 +611,29 @@ export function PracticeRace() {
   const results = (focus: boolean) =>
     result && (
       <div className="race-fade-in my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
-        <p className="race-pop-in font-display text-2xl tracking-tight sm:text-3xl">
+        <p className="race-elastic-in font-display text-2xl tracking-tight sm:text-3xl">
           {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
         </p>
         {myTime !== null && (
-          <p className="mt-1 text-sm text-muted tabular-nums">
+          <p
+            className="race-elastic-in mt-1 text-sm text-muted tabular-nums"
+            style={{ animationDelay: "0.1s" }}
+          >
             {t("finishedTime", { time: formatTime(myTime) })}
           </p>
         )}
         {(outcome?.newRace || outcome?.newLap) && (
-          <p className="race-pop-in mt-2 text-sm text-accent">
+          <p
+            className="race-elastic-in mt-2 text-sm text-accent"
+            style={{ animationDelay: "0.2s" }}
+          >
             {outcome.newRace ? t("newRecord") : t("newBestLap")}
           </p>
         )}
-        <table className="mt-4 w-full text-left text-xs tabular-nums sm:text-sm">
+        <table
+          className="race-elastic-in mt-4 w-full text-left text-xs tabular-nums sm:text-sm"
+          style={{ animationDelay: "0.3s" }}
+        >
           <caption className="sr-only">{t("standings")}</caption>
           <thead>
             <tr className="text-xs text-muted">
@@ -667,7 +670,10 @@ export function PracticeRace() {
             ))}
           </tbody>
         </table>
-        <div className="mt-5 flex flex-col items-center gap-4">
+        <div
+          className="race-fade-in mt-5 flex flex-col items-center gap-4"
+          style={{ animationDelay: "0.45s" }}
+        >
           <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
           <button
             ref={focus ? restartRef : undefined}
@@ -749,15 +755,6 @@ export function PracticeRace() {
           <dt className="text-xs text-muted">{t("time")}</dt>
           <dd className="font-display text-3xl tracking-tight">{formatTime(hud.time)}</dd>
         </div>
-        <div>
-          <dt className="text-xs text-muted">{t("speed")}</dt>
-          <dd className="mt-1.5 h-1.5 w-full max-w-20 overflow-hidden rounded-full bg-line">
-            <div
-              className="h-full rounded-full bg-accent"
-              style={{ width: `${hud.speed * 100}%` }}
-            />
-          </dd>
-        </div>
         {hud.delta !== null && (
           <div>
             <dt className="text-xs text-muted">{t("delta")}</dt>
@@ -794,17 +791,6 @@ export function PracticeRace() {
 
       {/* Never taller than the window: the whole track stays in view while you drive. */}
       <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
-        {/* Where everyone is on the lap; the standings table already covers this for a reader. */}
-        <div aria-hidden className="relative mb-2 h-1.5 rounded-full bg-line">
-          {hud.progress.map((p) => (
-            <span
-              key={p.id}
-              className={`absolute top-1/2 size-2.5 -translate-y-1/2 rounded-full ring-2 ring-bg ${p.id === PLAYER ? "bg-accent" : "bg-muted"}`}
-              style={{ left: `calc(${Math.min(100, p.value * 100)}% - 5px)` }}
-            />
-          ))}
-        </div>
-
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -830,6 +816,47 @@ export function PracticeRace() {
             </div>
           )}
 
+          {/* The race stays fully visible; only the lights overlay it, zoomed in and large. */}
+          {phase === "countdown" && (
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
+              <div
+                className="race-lights-zoom flex gap-3 rounded-2xl px-6 py-5 ring-1 ring-white/10"
+                style={{ backgroundColor: COLORS.rig }}
+              >
+                {Array.from({ length: 5 }, (_, i) => (
+                  <span
+                    key={i}
+                    className="size-6 rounded-full sm:size-7"
+                    style={{
+                      backgroundColor: i < hud.lit ? COLORS.lightOn : "rgba(255,255,255,0.12)",
+                    }}
+                  />
+                ))}
+              </div>
+              <p className="race-pop-in rounded-full bg-bg/90 px-4 py-1.5 text-sm text-ink ring-1 ring-line">
+                {t("lightsHint")}
+              </p>
+            </div>
+          )}
+
+          {/* Lights out: the same rig flashes and zooms away as the race starts. */}
+          {hud.justStarted && (
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div
+                className="race-lights-out flex gap-3 rounded-2xl px-6 py-5"
+                style={{ backgroundColor: COLORS.rig }}
+              >
+                {Array.from({ length: 5 }, () => null).map((_, i) => (
+                  <span
+                    key={i}
+                    className="size-6 rounded-full sm:size-7"
+                    style={{ backgroundColor: COLORS.lightOn }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Banners over the race, never blocking it. */}
           <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
             {hud.wrongWay && (phase === "racing" || phase === "finishing") && (
@@ -852,22 +879,26 @@ export function PracticeRace() {
             )}
           </div>
 
-          {/* You're done: a soft veil, the race still visible behind it. */}
+          {/* You're done: a soft veil, the race still visible behind it; the texts bounce in one by one. */}
           {phase === "finishing" && hud.place > 0 && (
             <div
               role="status"
               className="race-fade-in pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/60 p-4 text-center"
             >
-              <p className="race-pop-in font-display text-4xl tracking-tight sm:text-6xl">
+              <p className="race-elastic-in font-display text-4xl tracking-tight sm:text-6xl">
                 {t("finished", { n: hud.place })}
               </p>
-              <p className="text-sm text-muted motion-safe:animate-pulse sm:text-base">
+              <p
+                className="race-elastic-in text-sm text-muted motion-safe:animate-pulse sm:text-base"
+                style={{ animationDelay: "0.12s" }}
+              >
                 {t("waiting")}
               </p>
               <button
                 type="button"
                 onClick={skip}
-                className="pointer-events-auto mt-2 text-xs text-muted underline underline-offset-4 hover:text-ink"
+                className="race-fade-in pointer-events-auto mt-2 text-xs text-muted underline underline-offset-4 hover:text-ink"
+                style={{ animationDelay: "0.3s" }}
               >
                 {t("skip")}
               </button>

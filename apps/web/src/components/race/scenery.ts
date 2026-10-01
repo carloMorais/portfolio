@@ -10,6 +10,8 @@ import type { Palette } from "./draw";
 /** `facing`: the side that looks at the road, where the front row sits. */
 export type Stand = Box & { facing: "up" | "down" | "right" };
 export type Tree = { x: number; y: number; r: number };
+export type Rock = { x: number; y: number; r: number };
+export type Shed = { x: number; y: number; w: number; h: number };
 
 export const STANDS: Stand[] = [
   // Above the S's long middle straight, and over the start straight.
@@ -46,6 +48,31 @@ export const TREES: Tree[] = [
   // Small patch by the last corner.
   { x: 532, y: 499, r: 5.5 },
   { x: 563, y: 498, r: 6 },
+  // The top-middle strip and the right-middle lane, both bare until now.
+  { x: 260, y: 210, r: 7 },
+  { x: 400, y: 205, r: 7 },
+  { x: 628, y: 180, r: 7 },
+];
+
+export const ROCKS: Rock[] = [
+  { x: 18, y: 110, r: 6 },
+  { x: 38, y: 230, r: 6 },
+  { x: 18, y: 330, r: 6 },
+  { x: 38, y: 440, r: 6 },
+  { x: 730, y: 70, r: 5 },
+  { x: 735, y: 300, r: 6 },
+  { x: 330, y: 220, r: 6 },
+  { x: 628, y: 380, r: 6 },
+  { x: 300, y: 390, r: 6 },
+  { x: 350, y: 388, r: 5.5 },
+  { x: 260, y: 448, r: 6 },
+  { x: 132, y: 420, r: 6 },
+  { x: 440, y: 415, r: 5 },
+];
+
+export const SHEDS: Shed[] = [
+  { x: 140, y: 336, w: 32, h: 20 },
+  { x: 14, y: 470, w: 26, h: 20 },
 ];
 
 const SEAT = 6;
@@ -146,6 +173,50 @@ export function drawScenery(ctx: CanvasRenderingContext2D, p: Palette) {
     ctx.fillStyle = c.treeLight;
     ctx.beginPath();
     ctx.arc(t.x - t.r * 0.3, t.y - t.r * 0.3, t.r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (const r of ROCKS) {
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = p.ink;
+    ctx.beginPath();
+    ctx.ellipse(r.x + 1.5, r.y + 2.5, r.r, r.r * 0.6, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // A squat, faceted boulder: a dark base shape with a lighter top-left facet.
+    ctx.fillStyle = c.rock;
+    ctx.beginPath();
+    ctx.ellipse(r.x, r.y, r.r, r.r * 0.78, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = c.rockLight;
+    ctx.beginPath();
+    ctx.ellipse(r.x - r.r * 0.3, r.y - r.r * 0.25, r.r * 0.55, r.r * 0.4, -0.3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  for (const s of SHEDS) {
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = p.ink;
+    ctx.beginPath();
+    ctx.roundRect(s.x + 2, s.y + 3, s.w, s.h, 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // A small flat-roofed hut: walls, a darker roof slab, a door.
+    ctx.fillStyle = c.shedWall;
+    ctx.beginPath();
+    ctx.roundRect(s.x, s.y + 4, s.w, s.h - 4, 1.5);
+    ctx.fill();
+    ctx.fillStyle = c.shedRoof;
+    ctx.beginPath();
+    ctx.roundRect(s.x - 1.5, s.y, s.w + 3, 6, 1.5);
+    ctx.fill();
+    ctx.fillStyle = c.shedDoor;
+    ctx.beginPath();
+    ctx.roundRect(s.x + s.w / 2 - 3, s.y + s.h - 10, 6, 10, [1, 1, 0, 0]);
     ctx.fill();
     ctx.restore();
   }

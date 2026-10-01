@@ -197,8 +197,8 @@
     "normal": "Normal",
     "hard": "Difícil",
     "delta": "Diferença",
-    "speed": "Velocidade",
     "gainedPlace": "Subiu uma posição",
-    "lostPlace": "Desceu uma posição"
+    "lostPlace": "Desceu uma posição",
+    "lightsHint": "Acelere quando as luzes se apagarem"
   }
 }

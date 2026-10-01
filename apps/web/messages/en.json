@@ -197,8 +197,8 @@
     "normal": "Normal",
     "hard": "Hard",
     "delta": "Delta",
-    "speed": "Speed",
     "gainedPlace": "Gained a place",
-    "lostPlace": "Lost a place"
+    "lostPlace": "Lost a place",
+    "lightsHint": "Accelerate when the lights go out"
   }
 }

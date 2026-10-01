@@ -1,5 +1,5 @@
 import { classicTrack, overlaps } from "race-engine";
-import { STANDS, TREES, seatFans } from "./scenery";
+import { ROCKS, SHEDS, STANDS, TREES, seatFans } from "./scenery";
 
 /** Is the point on the grass, i.e. inside one of the (rounded) walls? */
 const onGrass = (x: number, y: number) =>
@@ -22,6 +22,26 @@ describe("scenery", () => {
         const x = Math.round(t.x + Math.cos(a) * t.r);
         const y = Math.round(t.y + Math.sin(a) * t.r);
         expect([t.x, t.y, onGrass(x, y)]).toEqual([t.x, t.y, true]);
+      }
+    }
+  });
+
+  test("every rock sits on the grass", () => {
+    for (const r of ROCKS) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+        const x = Math.round(r.x + Math.cos(a) * r.r);
+        const y = Math.round(r.y + Math.sin(a) * r.r);
+        expect([r.x, r.y, onGrass(x, y)]).toEqual([r.x, r.y, true]);
+      }
+    }
+  });
+
+  test("every shed sits on the grass, a couple of pixels clear of the road", () => {
+    for (const s of SHEDS) {
+      for (let x = s.x - 2; x <= s.x + s.w + 2; x += 3) {
+        for (let y = s.y - 2; y <= s.y + s.h + 2; y += 3) {
+          expect([s.x, s.y, x, y, onGrass(x, y)]).toEqual([s.x, s.y, x, y, true]);
+        }
       }
     }
   });

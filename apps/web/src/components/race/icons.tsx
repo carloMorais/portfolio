@@ -1,4 +1,4 @@
-import { LIGHT } from "./colors";
+import { COLORS } from "./colors";
 
 /**
  * The race's items as SVG, matching how `draw.ts` paints them on the canvas,
@@ -9,7 +9,7 @@ import { LIGHT } from "./colors";
 type IconProps = { className?: string };
 
 const BOLT = "M13 4 7.2 12.6h4.1L10.2 20 16 11.4h-4.1z";
-const c = LIGHT;
+const c = COLORS;
 
 export function BoltIcon({ className }: IconProps) {
   return (

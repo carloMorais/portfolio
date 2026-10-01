@@ -1,15 +1,13 @@
 import type { Box, Car, ItemSpawn, Track } from "race-engine";
-import { DARK, LIGHT, type GameColors } from "./colors";
+import { COLORS, type GameColors } from "./colors";
 
 /**
- * Colours for the canvas: the site's tokens, read from CSS so the track
- * follows light/dark mode, plus the game's own set (`c`).
+ * Colours for the canvas: a couple of the site's tokens (for text that sits
+ * over the game), plus the game's own fixed palette (`c`).
  */
 export type Palette = {
   bg: string;
-  surface: string;
   ink: string;
-  muted: string;
   line: string;
   accent: string;
   /** The page's text font, for labels drawn on the canvas. */
@@ -20,53 +18,68 @@ export type Palette = {
 export function readPalette(el: Element): Palette {
   const css = getComputedStyle(el);
   const v = (name: string) => css.getPropertyValue(name).trim();
-  const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return {
     font: css.fontFamily,
     bg: v("--bg"),
-    surface: v("--surface"),
     ink: v("--ink"),
-    muted: v("--muted"),
     line: v("--line"),
     accent: v("--accent"),
-    c: dark ? DARK : LIGHT,
+    c: COLORS,
   };
+}
+
+/** A small deterministic PRNG (shared shape with scenery.ts's), for the grass texture. */
+function seeded(seed: number) {
+  let s = seed;
+  return () => (s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
 }
 
 /**
  * The track, drawn from the engine's own collision boxes so what you see is
- * exactly what you hit: the road is the site's paper, everything off it is
- * pastel grass with the site's fine diagonal hatch, edged by a soft kerb.
+ * exactly what you hit: grey asphalt with a light kerb and a dashed line
+ * along the racing line, everything off it mottled green grass (small
+ * blotches, not a hatch pattern).
  */
 export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palette) {
   const { width, height } = track;
-  ctx.fillStyle = p.bg;
+  const c = p.c;
+  ctx.fillStyle = c.road;
   ctx.fillRect(0, 0, width, height);
 
-  // Kerb: the walls grown by a pixel and a half.
-  ctx.fillStyle = p.c.kerb;
-  for (const w of track.walls) ctx.fillRect(w.x - 1.5, w.y - 1.5, w.width + 3, w.height + 3);
+  // Kerb: the walls grown by a few pixels, a light outer band and a near-white inner line.
+  ctx.fillStyle = c.kerbOuter;
+  for (const w of track.walls) ctx.fillRect(w.x - 3, w.y - 3, w.width + 6, w.height + 6);
+  ctx.fillStyle = c.kerbInner;
+  for (const w of track.walls) ctx.fillRect(w.x - 1, w.y - 1, w.width + 2, w.height + 2);
 
-  // Grass, clipped to the walls.
+  // Grass, clipped to the walls, with scattered blotches instead of a hatch.
   ctx.save();
   ctx.beginPath();
   for (const w of track.walls) ctx.rect(w.x, w.y, w.width, w.height);
   ctx.clip();
-  ctx.fillStyle = p.c.grass;
+  ctx.fillStyle = c.grass;
   ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = p.c.grassLine;
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  for (let d = -height; d < width; d += 9) {
-    ctx.moveTo(d, height);
-    ctx.lineTo(d + height, 0);
+  const rand = seeded(13);
+  for (let gy = -6; gy < height; gy += 13) {
+    for (let gx = -6; gx < width; gx += 13) {
+      if (rand() < 0.5) continue;
+      const x = gx + rand() * 11;
+      const y = gy + rand() * 11;
+      const r = 3 + rand() * 3.5;
+      ctx.globalAlpha = 0.3 + rand() * 0.3;
+      ctx.fillStyle = rand() < 0.5 ? c.grassBlotchDark : c.grassBlotchLight;
+      ctx.beginPath();
+      ctx.ellipse(x, y, r, r * 0.75, rand() * Math.PI, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
-  ctx.stroke();
+  ctx.globalAlpha = 1;
   ctx.restore();
 
-  // Racing line.
+  // The racing line, as a dashed centreline (like the 2024 map's).
   ctx.save();
-  ctx.strokeStyle = p.line;
+  ctx.strokeStyle = c.roadDash;
+  ctx.globalAlpha = 0.8;
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 12]);
   ctx.lineJoin = "round";
@@ -78,8 +91,8 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
 
   // Checkpoints: a thin dashed line across the road (the box is just its hit area).
   ctx.save();
-  ctx.strokeStyle = p.muted;
-  ctx.globalAlpha = 0.5;
+  ctx.strokeStyle = c.checkpoint;
+  ctx.globalAlpha = 0.4;
   ctx.lineWidth = 1.5;
   ctx.setLineDash([3, 4]);
   ctx.beginPath();
@@ -100,10 +113,16 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   const cell = f.width / 4;
   for (let row = 0; row * cell < f.height; row++) {
     for (let col = 0; col < 4; col++) {
-      ctx.fillStyle = (row + col) % 2 === 0 ? p.ink : p.bg;
+      ctx.fillStyle = (row + col) % 2 === 0 ? "#1a1a1a" : "#f2f1ec";
       ctx.fillRect(f.x + col * cell, f.y + row * cell, cell, Math.min(cell, f.height - row * cell));
     }
   }
+
+  ctx.strokeStyle = c.border;
+  ctx.globalAlpha = 0.5;
+  ctx.lineWidth = 2;
+  ctx.strokeRect(1, 1, width - 2, height - 2);
+  ctx.globalAlpha = 1;
 }
 
 /** A soft contact shadow under things that sit on the road. */
@@ -143,44 +162,6 @@ const easeOutBack = (x: number) => {
   const c3 = c1 + 1;
   return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2;
 };
-
-/**
- * The starting gantry: five lights on a dark rig, lit left to right, held, then
- * all out together ("lights out") when the race starts. `lit` is 0–5.
- */
-export function drawStartLights(
-  ctx: CanvasRenderingContext2D,
-  p: Palette,
-  lit: number,
-  cx: number,
-  y: number,
-) {
-  const spacing = 17;
-  const r = 6;
-  const left = cx - spacing * 2;
-  ctx.save();
-  ctx.fillStyle = p.c.rig;
-  ctx.beginPath();
-  ctx.roundRect(left - r - 6, y - r - 6, spacing * 4 + (r + 6) * 2, (r + 6) * 2, 6);
-  ctx.fill();
-  for (let i = 0; i < 5; i++) {
-    const x = left + i * spacing;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    ctx.fillStyle = i < lit ? p.c.lightOn : p.c.wheel;
-    ctx.fill();
-    if (i < lit) {
-      ctx.save();
-      ctx.globalAlpha = 0.35;
-      ctx.fillStyle = p.c.lightOn;
-      ctx.beginPath();
-      ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
-    }
-  }
-  ctx.restore();
-}
 
 /** The main colour of each item, for the particles it leaves behind. */
 export const itemColors = (type: ItemSpawn["type"], p: Palette): [string, string] =>
@@ -323,7 +304,8 @@ export function drawItem(
   ctx.restore();
 }
 
-export type CarLook = { body: string; helmet: string; stripe: boolean };
+/** `highlight`: a white outline so you can always spot your own car. */
+export type CarLook = { body: string; helmet: string; stripe: boolean; highlight?: boolean };
 
 /** Darkens whatever was just filled with `path`: wings and the floor read as carbon. */
 function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number) {
@@ -429,6 +411,14 @@ export function drawCar(
   ctx.fillStyle = look.body;
   body();
   ctx.fill();
+  if (look.highlight) {
+    ctx.save();
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1.4;
+    body();
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.save();
   body();
   ctx.clip();
@@ -461,10 +451,13 @@ export function drawCar(
 }
 
 /**
- * The driver's name above the car, faint so it never hides the track, with
- * one small bolt per nitro charge beside it. While nitro burns, a thin bar
- * between the name and the car empties with the time left (`boost`, 1 → 0).
- * Flips below the car at the top edge and stays inside the map at the sides.
+ * The driver's name above the car, with one small bolt per nitro charge
+ * beside it. Black outline, white text, so it reads on the grey road or the
+ * green grass alike: `mine` (your own car) stands out at 0.9 opacity, bots
+ * stay a little dimmer so yours is the one that pops. While nitro burns, a
+ * thin bar between the name and the car empties with the time left (`boost`,
+ * 1 → 0). Flips below the car at the top edge and stays inside the map at
+ * the sides.
  */
 export function drawLabel(
   ctx: CanvasRenderingContext2D,
@@ -474,9 +467,10 @@ export function drawLabel(
   p: Palette,
   mapWidth: number,
   boost: number | null,
+  mine: boolean,
 ) {
   ctx.save();
-  ctx.font = `500 10px ${p.font}`;
+  ctx.font = `600 10px ${p.font}`;
   const textWidth = ctx.measureText(name).width;
   const diamonds = nitro > 0 ? 4 + nitro * 7 : 0;
   const total = textWidth + diamonds;
@@ -500,15 +494,15 @@ export function drawLabel(
     ctx.fill();
   }
 
-  ctx.globalAlpha = 0.65;
+  ctx.globalAlpha = mine ? 0.9 : 0.6;
   ctx.lineJoin = "round";
-  ctx.lineWidth = 3;
-  ctx.strokeStyle = p.bg;
+  ctx.lineWidth = 2.6;
+  ctx.strokeStyle = "#000000";
   ctx.strokeText(name, x, y);
-  ctx.fillStyle = p.ink;
+  ctx.fillStyle = "#ffffff";
   ctx.fillText(name, x, y);
 
-  ctx.fillStyle = p.accent;
+  ctx.fillStyle = mine ? p.accent : p.c.bolt;
   for (let i = 0; i < nitro; i++) {
     boltPath(ctx, x + textWidth + 4 + 3 + i * 7, y - 3.5, 9);
     ctx.fill();

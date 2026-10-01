@@ -10,7 +10,7 @@ import { NO_KEYS, type Box, type Car, type Keys, type RaceState, type Track } fr
  * (cars don't collide with each other, as in the original).
  */
 const GRID_X = [368, 394];
-const GRID_Y = [512, 533, 554];
+const GRID_Y = [510, 532, 555];
 
 export function gridPosition(_track: Track, index: number) {
   return { x: GRID_X[index % 2]!, y: GRID_Y[Math.floor(index / 2) % GRID_Y.length]! };

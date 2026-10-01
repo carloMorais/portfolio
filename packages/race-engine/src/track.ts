@@ -70,8 +70,9 @@ export const classicTrack: Track = {
     { id: "g", type: 1, x: 660, y: 150, width: 20, height: 20 },
     { id: "h", type: 3, x: 650, y: 450, width: 25, height: 30 },
     { id: "i", type: 1, x: 600, y: 520, width: 20, height: 20 },
-    { id: "j", type: 4, x: 80, y: 549, width: 20, height: 20 },
-    { id: "k", type: 2, x: 58, y: 534, width: 20, height: 20 },
+    // j and k moved off the crowded start-area cluster onto the bare right lane.
+    { id: "j", type: 4, x: 685, y: 420, width: 20, height: 20 },
+    { id: "k", type: 2, x: 685, y: 250, width: 20, height: 20 },
     { id: "l", type: 2, x: 153, y: 280, width: 20, height: 20 },
     { id: "m", type: 1, x: 150, y: 550, width: 20, height: 20 },
   ],
