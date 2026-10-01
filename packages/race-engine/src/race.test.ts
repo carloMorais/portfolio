@@ -101,6 +101,37 @@ describe("stepRace", () => {
     }
   });
 
+  test("full throttle into the stepped top corner never pins the car", () => {
+    // Reported: heading right along the top into the corner where the inner
+    // lane starts (x 195–290, y 15–50), turning down, throttle held: stuck.
+    // Driving from there towards the middle of the lane must get out.
+    for (const y of [20, 25, 30, 35, 40, 50, 60]) {
+      let s = createRace(track, ["a"]);
+      s.cars[0] = { ...s.cars[0]!, x: 120, y, rotation: 180, vx: 6, checkpoint: 1, waypoint: 5 };
+      let escapedAt = -1;
+      for (let i = 0; i < 5 * TICK_RATE && escapedAt < 0; i++) {
+        s = stepRace(s, track, { a: botKeys(s.cars[0]!, track) });
+        if (s.cars[0]!.y > 200) escapedAt = i;
+      }
+      assert.ok(escapedAt >= 0, `entering at y=${y}: still at ${s.cars[0]!.x},${s.cars[0]!.y}`);
+    }
+  });
+
+  test("a glancing hit keeps the car going and turns it along the wall", () => {
+    // Img 2: in the right lane, nose down and to the right, throttle held, into the outer wall.
+    let s = createRace(track, ["a"]);
+    s.cars[0] = { ...s.cars[0]!, x: 690, y: 150, rotation: 225, vx: 3, vy: 3, checkpoint: 3 };
+    let bumped = false;
+    for (let i = 0; i < 30; i++) {
+      s = stepRace(s, track, { a: { ...NO_KEYS, up: true } });
+      bumped ||= s.cars[0]!.align !== null;
+    }
+    const car = s.cars[0]!;
+    assert.ok(bumped, "the wall hit started an alignment");
+    assert.ok(car.y > 250, `kept driving down (y=${car.y})`);
+    assert.ok(Math.abs(car.rotation - 270) < 10, `nose turned down (rotation ${car.rotation})`);
+  });
+
   test("checkpoints only count in order: driving backwards into one bounces off it", () => {
     let s = createRace(track, ["a"]);
     // Just right of checkpoint 5, rolling left into it with no checkpoint done.
@@ -154,7 +185,8 @@ describe("stepRace", () => {
     let s = createRace(track, ["a"]);
     s.cars[0] = { ...s.cars[0]!, x: barrel.x, y: barrel.y, vx: 0, vy: -5.5 };
     s = stepRace(s, track, { a: NO_KEYS });
-    assert.ok(Math.abs(s.cars[0]!.vy) < 1);
+    // Gentler than the 2024 game (−5): it takes 2 off, plus the coasting drag.
+    assert.ok(Math.abs(s.cars[0]!.vy) < 3.6 && Math.abs(s.cars[0]!.vy) > 3);
   });
 
   test("leaving the map sends the car back to the start", () => {

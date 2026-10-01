@@ -1,90 +1,75 @@
-import { round2 } from "./constants.ts";
+import { PHYSICS, round2 } from "./constants.ts";
 import type { Box, Car } from "./types.ts";
 
-/** Axis-aligned overlap test (the car is treated as its bounding box, as in 2024). */
+/** Axis-aligned overlap test (the car is treated as its bounding box). */
 export const overlaps = (car: Box, box: Box) =>
   car.x + car.width > box.x &&
   car.x < box.x + box.width &&
   car.y + car.height > box.y &&
   car.y < box.y + box.height;
 
+/** Which axes hit something during the last move. */
+export type Bump = { x: boolean; y: boolean };
+
 /**
- * Pushes `car` out of `box` against its direction of travel and bounces it,
- * ported from the 2024 CollisionDetector. When it hits a corner, it is moved
- * out along whichever side it would have crossed first.
+ * Moves the car by its velocity like a box bouncing off walls: first along x,
+ * then along y. Hitting something on an axis puts the car flush against it and
+ * reverses that axis's speed with a loss (`wallBounce`); the other axis keeps
+ * its speed. With X=5, Y=5 hitting a ceiling you get X=5, Y=−2.
+ *
+ * Replaces the 2024 corner-escape logic, which could pin a car in stepped
+ * corners or tunnel it through thin walls. The car starts each move outside
+ * every blocker and never moves more than a wall's thickness, so it can't end
+ * up inside one.
  */
-export function resolveCollision(
-  car: Car,
-  box: Box,
-  resetVelocity: boolean,
-  multipleHits: boolean,
-): void {
-  const left = box.x;
-  const right = box.x + box.width;
-  const top = box.y;
-  const bottom = box.y + box.height;
-  const { vx, vy } = car;
+export function moveCar(car: Car, blockers: Box[]): Bump {
+  // Something the car already overlaps (e.g. it was just made solid) can't trap it.
+  const solid = blockers.filter((box) => !overlaps(car, box));
+  const bump: Bump = { x: false, y: false };
 
-  // The way out is opposite to the velocity.
-  const escapeRight = vx < 0 ? right : undefined;
-  const escapeLeft = vx > 0 ? left : undefined;
-  const escapeDown = vy < 0 ? bottom : undefined;
-  const escapeUp = vy > 0 ? top : undefined;
-
-  if (escapeUp !== undefined || escapeDown !== undefined) {
-    const up = escapeUp !== undefined;
-    const deltaY = up ? car.y + car.height - escapeUp! : escapeDown! - car.y;
-    const ySign = up ? -1 : 1;
-    if (escapeLeft !== undefined) {
-      diagonal(car, car.x + car.width - escapeLeft, deltaY, ySign, -1, resetVelocity, multipleHits);
-    } else if (escapeRight !== undefined) {
-      diagonal(car, escapeRight - car.x, deltaY, ySign, 1, resetVelocity, multipleHits);
-    } else {
-      car.y += deltaY * ySign;
-      if (resetVelocity) car.vy = (Math.abs(car.vy) / 2) * ySign;
-    }
-  } else if (escapeLeft !== undefined) {
-    car.x -= car.x + car.width - escapeLeft;
-    if (resetVelocity) car.vx = (Math.abs(car.vx) / 2) * -1;
-  } else if (escapeRight !== undefined) {
-    car.x += escapeRight - car.x;
-    if (resetVelocity) car.vx = Math.abs(car.vx) / 2;
+  car.x += car.vx;
+  const hitX = solid.filter((box) => overlaps(car, box));
+  if (hitX.length > 0) {
+    car.x =
+      car.vx > 0
+        ? Math.min(...hitX.map((b) => b.x)) - car.width
+        : Math.max(...hitX.map((b) => b.x + b.width));
+    car.vx = -car.vx * PHYSICS.wallBounce;
+    bump.x = true;
   }
 
-  car.vx = round2(car.vx);
-  car.vy = round2(car.vy);
+  car.y += car.vy;
+  const hitY = solid.filter((box) => overlaps(car, box));
+  if (hitY.length > 0) {
+    car.y =
+      car.vy > 0
+        ? Math.min(...hitY.map((b) => b.y)) - car.height
+        : Math.max(...hitY.map((b) => b.y + b.height));
+    car.vy = -car.vy * PHYSICS.wallBounce;
+    bump.y = true;
+  }
+
   car.x = round2(car.x);
   car.y = round2(car.y);
+  car.vx = round2(car.vx);
+  car.vy = round2(car.vy);
+  return bump;
 }
 
-function diagonal(
-  car: Car,
-  deltaX: number,
-  deltaY: number,
-  ySign: number,
-  xSign: number,
-  resetVelocity: boolean,
-  multipleHits: boolean,
-) {
-  const ax = Math.abs(car.vx);
-  const ay = Math.abs(car.vy);
-  const xFirst = Math.abs(deltaX) / ax < Math.abs(deltaY) / ay;
-
-  if (xFirst) {
-    car.x += deltaX * xSign;
-    car.y += ((deltaX * ay) / ax) * ySign;
-    if (resetVelocity) {
-      car.vy = multipleHits ? 0 : car.vy * 0.93;
-      car.y += car.vy;
-      car.vx = car.vx * 0.2 * -1;
-    }
-  } else {
-    car.x += ((deltaY * ax) / ay) * xSign;
-    car.y += deltaY * ySign;
-    if (resetVelocity) {
-      car.vx = multipleHits ? 0 : car.vx * 0.93;
-      car.x += car.vx;
-      car.vy = car.vy * 0.2 * -1;
-    }
-  }
+/**
+ * After a glancing hit, aim the car along the wall it's sliding on: hitting a
+ * side wall while moving down turns the nose down, hitting a ceiling while
+ * moving right turns it right. Only when the car already points roughly that
+ * way (a head-on hit just bounces) and is still moving along the wall.
+ */
+export function alignAfterBump(car: Car, bump: Bump): void {
+  if (bump.x === bump.y) return; // no hit, or a corner
+  const along = bump.x ? car.vy : car.vx;
+  if (Math.abs(along) < 1) return;
+  // Facing angles in screen space (y down): 0 = right, 90 = down.
+  const facingTarget = bump.x ? (along > 0 ? 90 : 270) : along > 0 ? 0 : 180;
+  const facing = car.rotation + 180;
+  const diff = ((((facingTarget - facing + 180) % 360) + 360) % 360) - 180;
+  if (Math.abs(diff) >= 90) return;
+  car.align = (((facingTarget - 180) % 360) + 360) % 360;
 }

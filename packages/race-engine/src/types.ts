@@ -46,6 +46,8 @@ export type Car = {
   nitro: number;
   /** Tick until which nitro is active, or null. */
   nitroUntil: number | null;
+  /** Rotation the car is easing towards after a glancing wall hit, or null. */
+  align: number | null;
   /** Index into `track.waypoints` the bot is heading to (also handy for placement). */
   waypoint: number;
   finishedAt: number | null;

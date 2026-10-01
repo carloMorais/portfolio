@@ -1,7 +1,7 @@
 import { PHYSICS } from "./constants.ts";
-import { overlaps, resolveCollision } from "./collision.ts";
+import { alignAfterBump, moveCar, overlaps } from "./collision.ts";
 import { applySlowdown, stepCarPhysics } from "./physics.ts";
-import { NO_KEYS, type Car, type Keys, type RaceState, type Track } from "./types.ts";
+import { NO_KEYS, type Box, type Car, type Keys, type RaceState, type Track } from "./types.ts";
 
 /**
  * Starting grid: the gap between the finish line (ends at x 367) and
@@ -32,6 +32,7 @@ export function createCar(id: string, x: number, y: number): Car {
     laps: 0,
     nitro: 0,
     nitroUntil: null,
+    align: null,
     waypoint: 0,
     finishedAt: null,
   };
@@ -70,9 +71,8 @@ export function stepRace(state: RaceState, track: Track, inputs: Record<string, 
 
   for (const car of next.cars) {
     const keys = car.finishedAt === null ? (inputs[car.id] ?? NO_KEYS) : NO_KEYS;
-    const before = { x: car.x, y: car.y };
     stepCarPhysics(car, keys, tick);
-    hitWalls(car, track, before);
+    alignAfterBump(car, moveCar(car, blockersFor(car, track)));
     keepInside(car, track);
   }
   for (const car of next.cars) crossCheckpoints(car, track);
@@ -83,25 +83,17 @@ export function stepRace(state: RaceState, track: Track, inputs: Record<string, 
   return next;
 }
 
-function hitWalls(car: Car, track: Track, before: { x: number; y: number }) {
-  const hits = track.walls.filter((wall) => overlaps(car, wall));
-  if (hits.length === 1) resolveCollision(car, hits[0]!, true, false);
-  // Several walls at once (a corner): only the last push resets the speed.
-  // Fixed from the original: a wall the car already left is skipped. Resolving
-  // it anyway pushed the car back into the previous wall, and on the next tick
-  // the car escaped through the far side of it (tunnelling).
-  else
-    hits.forEach((wall, i) => {
-      const last = i === hits.length - 1;
-      if (overlaps(car, wall)) resolveCollision(car, wall, last, last);
-    });
-  // Safety net: never end a tick inside a wall. Go back to the last valid spot.
-  if (track.walls.some((wall) => overlaps(car, wall))) {
-    car.x = before.x;
-    car.y = before.y;
-    car.vx = 0;
-    car.vy = 0;
-  }
+/**
+ * What this car bounces off: the walls, any checkpoint out of order (no
+ * shortcuts, no driving backwards) and the finish line unless the lap is
+ * complete or hasn't started.
+ */
+function blockersFor(car: Car, track: Track): Box[] {
+  const checkpoints = track.checkpoints.filter(
+    (cp) => car.checkpoint !== cp.order - 1 && car.checkpoint !== cp.order,
+  );
+  const lineOpen = car.checkpoint === 0 || car.checkpoint === track.checkpoints.length;
+  return [...track.walls, ...checkpoints, ...(lineOpen ? [] : [track.finishLine])];
 }
 
 /** Leaving the map sends the car back to the start, as in the original. */
@@ -117,25 +109,19 @@ function keepInside(car: Car, track: Track) {
   car.waypoint = 0;
 }
 
-/** Checkpoints count only in order; one out of order acts as a wall (no shortcuts, no reversing). */
+/** Checkpoints count only in order (out-of-order ones are solid, see blockersFor). */
 function crossCheckpoints(car: Car, track: Track) {
   const box = track.checkpoints.find((cp) => overlaps(car, cp));
-  if (!box) return;
-  if (car.checkpoint === box.order - 1) car.checkpoint += 1;
-  else if (car.checkpoint !== box.order) resolveCollision(car, box, true, false);
+  if (box && car.checkpoint === box.order - 1) car.checkpoint += 1;
 }
 
 function crossFinishLine(car: Car, track: Track, state: RaceState) {
-  if (!overlaps(car, track.finishLine)) return;
-  if (car.checkpoint === track.checkpoints.length) {
-    car.checkpoint = 0;
-    car.laps += 1;
-    if (car.laps >= state.laps && car.finishedAt === null) {
-      car.finishedAt = state.tick;
-      state.finished.push(car.id);
-    }
-  } else if (car.checkpoint !== 0) {
-    resolveCollision(car, track.finishLine, true, false);
+  if (!overlaps(car, track.finishLine) || car.checkpoint !== track.checkpoints.length) return;
+  car.checkpoint = 0;
+  car.laps += 1;
+  if (car.laps >= state.laps && car.finishedAt === null) {
+    car.finishedAt = state.tick;
+    state.finished.push(car.id);
   }
 }
 

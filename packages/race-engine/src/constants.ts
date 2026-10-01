@@ -25,6 +25,15 @@ export const PHYSICS = {
   rotationFriction: 0.5,
   /** 3000 ms at 30 ticks/s. */
   itemRespawnTicks: 90,
+  /** Share of an axis's speed kept (and reversed) when it hits a wall. Not in the original. */
+  wallBounce: 0.4,
+  /** Degrees per tick the nose turns towards the wall it's sliding along. Not in the original. */
+  alignStep: 4,
+  /**
+   * With throttle or brake held, steering works as if the car were at least
+   * this fast, so a car stopped against a wall can always turn away. Not in the original.
+   */
+  minSteerSpeed: 3,
 } as const;
 
 /** Rounds to 2 decimals like the original, so client and server stay in sync. */

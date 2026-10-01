@@ -139,7 +139,7 @@
     "eyebrow": "RaceGame",
     "title": "Modo <k>treino</k>",
     "lead": "Duas voltas contra três bots, rodando inteiras no seu navegador.",
-    "note": "Reimplementação de 2026 a partir do motor de 2024: a mesma física e o mesmo traçado, com dois bugs corrigidos e a pista redesenhada.",
+    "note": "Reimplementação de 2026 a partir do motor de 2024: a mesma direção e o mesmo traçado, com colisões refeitas (o carro quica nas paredes e se alinha a elas), obstáculos mais leves e a pista redesenhada.",
     "backToCase": "Estudo de caso",
     "start": "Começar corrida",
     "restart": "Correr de novo",

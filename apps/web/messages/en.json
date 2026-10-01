@@ -139,7 +139,7 @@
     "eyebrow": "RaceGame",
     "title": "Practice <k>mode</k>",
     "lead": "Two laps against three bots, running entirely in your browser.",
-    "note": "A 2026 reimplementation of the 2024 engine: same physics and same layout, two bugs fixed and the track redrawn.",
+    "note": "A 2026 reimplementation of the 2024 engine: same steering and same layout, with reworked collisions (the car bounces off walls and lines up with them), gentler obstacles and the track redrawn.",
     "backToCase": "Case study",
     "start": "Start race",
     "restart": "Race again",

@@ -18,11 +18,34 @@ describe("stepCarPhysics", () => {
     assert.equal(car.rotation, 0);
   });
 
-  test("at rotation 0 the throttle moves the car left", () => {
+  test("at rotation 0 the throttle pushes the car left (moving is moveCar's job)", () => {
     const car = drive({ up: true }, 5);
     assert.ok(car.vx < 0);
     assert.equal(car.vy, 0);
-    assert.ok(car.x < 300);
+    assert.equal(car.x, 300);
+  });
+
+  test("with the throttle held, a stopped car can still turn (to back off a wall)", () => {
+    const car = drive({ up: true, right: true }, 1);
+    assert.ok(car.rotation > 0);
+  });
+
+  test("steering cancels an ongoing wall alignment", () => {
+    const car = createCar("a", 300, 300);
+    car.align = 90;
+    stepCarPhysics(car, keys({ up: true, left: true }), 1);
+    assert.equal(car.align, null);
+  });
+
+  test("after a glancing hit the nose eases towards the wall, a few degrees per tick", () => {
+    const car = createCar("a", 300, 300);
+    car.rotation = 225;
+    car.align = 270;
+    stepCarPhysics(car, keys({ up: true }), 1);
+    assert.equal(car.rotation, 225 + PHYSICS.alignStep);
+    for (let t = 2; t < 20; t++) stepCarPhysics(car, keys({ up: true }), t);
+    assert.equal(car.rotation, 270);
+    assert.equal(car.align, null);
   });
 
   test("speed is capped per axis", () => {

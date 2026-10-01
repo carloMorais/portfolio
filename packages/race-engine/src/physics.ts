@@ -3,11 +3,13 @@ import type { Car, Keys } from "./types.ts";
 
 const P = PHYSICS;
 const rad = (deg: number) => (deg * Math.PI) / 180;
+const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
 
 /**
- * Advances one car by one tick: nitro, deceleration, steering, acceleration and
- * movement, in the same order as the 2024 game. Mutates `car` (callers pass a
- * copy; `stepRace` is pure from the outside).
+ * Advances one car's controls by one tick: nitro, deceleration, steering and
+ * acceleration, in the same order as the 2024 game. Moving (and bouncing off
+ * walls) is `moveCar`. Mutates `car` (callers pass a copy; `stepRace` is pure
+ * from the outside).
  */
 export function stepCarPhysics(car: Car, keys: Keys, tick: number): void {
   // Nitro: expire, then fire if the key is held and a charge is available.
@@ -20,15 +22,14 @@ export function stepCarPhysics(car: Car, keys: Keys, tick: number): void {
   const maxVelocity = boosted ? P.nitroMaxVelocity : P.maxVelocity;
 
   decelerate(car, keys, maxVelocity);
-  steerAndAccelerate(car, keys, boosted);
+  steer(car, keys);
+  accelerate(car, keys, boosted);
   clampVelocity(car, maxVelocity);
   // Fixed on purpose: the original snapped negative angles to 360 instead of wrapping.
   car.rotation = ((car.rotation % 360) + 360) % 360;
 
   car.vx = round2(car.vx);
   car.vy = round2(car.vy);
-  car.x = round2(car.x);
-  car.y = round2(car.y);
 }
 
 function decelerate(car: Car, keys: Keys, maxVelocity: number) {
@@ -45,9 +46,15 @@ function decelerate(car: Car, keys: Keys, maxVelocity: number) {
   else if (car.vx > 0 && car.vx < maxVelocity) car.vx = Math.max(0, car.vx - d);
 }
 
-function steerAndAccelerate(car: Car, keys: Keys, boosted: boolean) {
-  // Steering builds up with speed: a parked car can't turn.
-  const speed = Math.ceil(Math.abs(car.vx) + Math.abs(car.vy));
+function steer(car: Car, keys: Keys) {
+  // Steering builds up with speed. Unlike the original, holding throttle or
+  // brake lets a stopped car turn too, so it can always back off a wall.
+  const driving = keys.up || keys.down;
+  const speed = Math.max(
+    Math.ceil(Math.abs(car.vx) + Math.abs(car.vy)),
+    driving ? P.minSteerSpeed : 0,
+  );
+  if (keys.left || keys.right) car.align = null; // the driver's steering wins
   if (keys.left) {
     car.rotationSpeed = Math.max(-P.maxRotationSpeed, car.rotationSpeed - P.rotationStep * speed);
   } else if (keys.right) {
@@ -59,6 +66,19 @@ function steerAndAccelerate(car: Car, keys: Keys, boosted: boolean) {
     car.rotationSpeed = Math.min(0, car.rotationSpeed + P.rotationFriction);
   car.rotation += car.rotationSpeed;
 
+  // After a glancing wall hit, ease the nose along the wall (see alignAfterBump).
+  if (car.align !== null) {
+    const diff = wrap180(car.align - car.rotation);
+    if (Math.abs(diff) <= P.alignStep) {
+      car.rotation = car.align;
+      car.align = null;
+    } else {
+      car.rotation += Math.sign(diff) * P.alignStep;
+    }
+  }
+}
+
+function accelerate(car: Car, keys: Keys, boosted: boolean) {
   const acceleration = P.acceleration + (boosted ? P.nitroAcceleration : 0);
   const sin = Math.sin(rad(car.rotation));
   const cos = Math.cos(rad(car.rotation));
@@ -70,8 +90,6 @@ function steerAndAccelerate(car: Car, keys: Keys, boosted: boolean) {
     car.vy += acceleration * sin;
     car.vx += acceleration * cos;
   }
-  car.x += car.vx;
-  car.y += car.vy;
 }
 
 /** Each axis is capped on its own, as in the original. */
