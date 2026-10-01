@@ -9,6 +9,7 @@ import { itemColors, type Palette } from "./draw";
  * - soft items (nitro, cone) burst into round bits in their colours;
  * - rigid ones (barrel, log) shatter: spinning shards, a crack ring, dust;
  * - wall hits puff dust off the wall, and strong ones throw sparks;
+ * - hitting an obstacle flashes a little impact star where the two touched;
  * - nitro leaves a trail.
  * With reduced motion none of this is drawn.
  */
@@ -30,6 +31,10 @@ type Particle = {
   spin?: number;
   points?: [number, number][];
 };
+/** An impact star: short rays and a bright core where a car met an obstacle. */
+type Impact = { x: number; y: number; born: number; angle: number };
+const IMPACT_MS = 240;
+
 type Ring = { x: number; y: number; color: string; born: number; life: number; radius: number };
 
 const TRAIL_EVERY_MS = 18;
@@ -38,6 +43,7 @@ const rand = (min: number, max: number) => min + Math.random() * (max - min);
 export class Effects {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
+  private impacts: Impact[] = [];
   private lastTrail = new Map<string, number>();
 
   constructor(private readonly reduced: boolean) {}
@@ -45,7 +51,14 @@ export class Effects {
   clear() {
     this.particles = [];
     this.rings = [];
+    this.impacts = [];
     this.lastTrail.clear();
+  }
+
+  /** Where a car met an obstacle (the middle of their overlap): a quick impact star. */
+  impact(x: number, y: number, now: number) {
+    if (this.reduced) return;
+    this.impacts.push({ x, y, born: now, angle: rand(0, Math.PI) });
   }
 
   /** An item picked up: rigid ones shatter, soft ones burst. */
@@ -286,6 +299,37 @@ export class Effects {
       ctx.beginPath();
       ctx.arc(r.x, r.y, 6 + r.radius * (1 - (1 - t) ** 3), 0, Math.PI * 2);
       ctx.stroke();
+      return true;
+    });
+
+    ctx.restore();
+  }
+
+  /** Impact stars: drawn over the cars, where the hit was. */
+  drawImpacts(ctx: CanvasRenderingContext2D, p: Palette, now: number) {
+    ctx.save();
+    this.impacts = this.impacts.filter((im) => {
+      const t = (now - im.born) / IMPACT_MS;
+      if (t >= 1) return false;
+      const out = 1 - (1 - t) ** 3; // fast out, then hold
+      ctx.globalAlpha = 1 - t;
+      ctx.strokeStyle = p.c.spark;
+      ctx.lineCap = "round";
+      ctx.lineWidth = 2 * (1 - t) + 0.6;
+      ctx.beginPath();
+      for (let i = 0; i < 8; i++) {
+        const a = im.angle + (i / 8) * Math.PI * 2;
+        const long = i % 2 === 0 ? 10 : 6;
+        const from = 2 + out * 3;
+        const to = from + long * (0.4 + out * 0.6);
+        ctx.moveTo(im.x + Math.cos(a) * from, im.y + Math.sin(a) * from);
+        ctx.lineTo(im.x + Math.cos(a) * to, im.y + Math.sin(a) * to);
+      }
+      ctx.stroke();
+      ctx.fillStyle = p.c.stripe;
+      ctx.beginPath();
+      ctx.arc(im.x, im.y, 3.5 * (1 - t), 0, Math.PI * 2);
+      ctx.fill();
       return true;
     });
     ctx.restore();

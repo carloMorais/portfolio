@@ -28,6 +28,7 @@ import {
   type Palette,
 } from "./draw";
 import { Effects } from "./effects";
+import { STANDS, drawFans, drawScenery, seatFans } from "./scenery";
 import { BoltIcon } from "./icons";
 import {
   BOTS,
@@ -209,7 +210,9 @@ export function PracticeRace() {
       const layer = document.createElement("canvas");
       layer.width = track.width;
       layer.height = track.height;
-      drawTrack(layer.getContext("2d")!, track, palette.current);
+      const lctx = layer.getContext("2d")!;
+      drawTrack(lctx, track, palette.current);
+      drawScenery(lctx, palette.current);
       trackLayer.current = layer;
     };
     build();
@@ -284,6 +287,7 @@ export function PracticeRace() {
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     effects.current ??= new Effects(reduced);
     const fx = effects.current;
+    const fans = seatFans(STANDS, 7);
     const running = () => phaseRef.current === "racing" || phaseRef.current === "finishing";
     const moving = () => running() || phaseRef.current === "paused";
 
@@ -310,6 +314,15 @@ export function PracticeRace() {
         } else if (ev.type === "pickup") {
           const item = track.items.find((it) => it.id === ev.item)!;
           fx.pickup(item, p, now);
+          if (item.type !== 1) {
+            // The impact star goes exactly where the car met the obstacle.
+            const car = s.cars.find((c) => c.id === ev.car)!;
+            const x =
+              (Math.max(car.x, item.x) + Math.min(car.x + car.width, item.x + item.width)) / 2;
+            const y =
+              (Math.max(car.y, item.y) + Math.min(car.y + car.height, item.y + item.height)) / 2;
+            fx.impact(x, y, now);
+          }
         } else if (ev.car === PLAYER && !ev.finished && ev.lap === LAPS - 1) {
           lastLapUntil.current = now + LAST_LAP_MS;
           setAnnouncement(t("announceLastLap"));
@@ -409,6 +422,8 @@ export function PracticeRace() {
       ctx.drawImage(trackLayer.current, 0, 0);
 
       const s = race.current;
+      // The crowd cheers when a car goes past its stand.
+      drawFans(ctx, fans, p.c.fans, s.cars, now, reduced);
       // Nitro badges float gently, each at its own beat.
       activeItems(track, s).forEach((item, i) =>
         drawItem(ctx, item, p, reduced ? 0 : Math.sin(now / 450 + i * 1.7)),
@@ -437,12 +452,19 @@ export function PracticeRace() {
       }
       fx.draw(ctx, now);
       // You in the site's blue with a stripe; each bot in its own colour.
-      const looks: CarLook[] = p.c.bots.map((body) => ({ body, stripe: false }));
+      const looks: CarLook[] = p.c.bots.map((body) => ({
+        body,
+        helmet: p.c.helmet,
+        stripe: false,
+      }));
       for (const { car, at } of ordered) {
         const look =
-          car.id === PLAYER ? { body: p.accent, stripe: true } : looks[BOT_IDS.indexOf(car.id)]!;
+          car.id === PLAYER
+            ? { body: p.accent, helmet: p.c.bolt, stripe: true }
+            : looks[BOT_IDS.indexOf(car.id)]!;
         drawCar(ctx, at, look, p, car.nitroUntil !== null);
       }
+      fx.drawImpacts(ctx, p, now);
       for (const { car, at } of ordered) {
         const boost =
           car.nitroUntil === null

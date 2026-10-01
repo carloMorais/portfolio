@@ -10,9 +10,15 @@ export type GameColors = {
   kerb: string;
   bots: [string, string, string];
   wheel: string;
-  glass: string;
   stripe: string;
-  headlight: string;
+  helmet: string;
+  standFront: string;
+  standRow: string;
+  standRowAlt: string;
+  standRoof: string;
+  tree: string;
+  treeLight: string;
+  fans: string[];
   bolt: string;
   barrel: string;
   barrelHoop: string;
@@ -33,9 +39,15 @@ export const LIGHT: GameColors = {
   kerb: "#e4dccb",
   bots: ["#ef6f6c", "#f2b134", "#3bb08f"],
   wheel: "#2d2b28",
-  glass: "#d9eefc",
   stripe: "#fffaf0",
-  headlight: "#ffe39a",
+  helmet: "#fffaf0",
+  standFront: "#b8ad98",
+  standRow: "#e6dfd1",
+  standRowAlt: "#d9d0bf",
+  standRoof: "#8f8676",
+  tree: "#7fb069",
+  treeLight: "#a3c98a",
+  fans: ["#ef6f6c", "#f2b134", "#3bb08f", "#5b8def", "#f3924a", "#b07cc6", "#fffaf0"],
   bolt: "#ffd166",
   barrel: "#e07a5f",
   barrelHoop: "#a9503a",
@@ -56,9 +68,15 @@ export const DARK: GameColors = {
   kerb: "#2d2b27",
   bots: ["#e86a67", "#e8a93a", "#38a385"],
   wheel: "#0b0b0b",
-  glass: "#b9d7ec",
   stripe: "#f6efe2",
-  headlight: "#ffe08a",
+  helmet: "#f6efe2",
+  standFront: "#4a453c",
+  standRow: "#2f2c27",
+  standRowAlt: "#36332d",
+  standRoof: "#57514a",
+  tree: "#2f5a35",
+  treeLight: "#3f7246",
+  fans: ["#e86a67", "#e8a93a", "#38a385", "#6f9cf2", "#e6843f", "#b98ad0", "#f6efe2"],
   bolt: "#ffd166",
   barrel: "#d0705a",
   barrelHoop: "#8e4433",

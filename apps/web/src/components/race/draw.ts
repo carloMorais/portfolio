@@ -265,12 +265,23 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
   ctx.restore();
 }
 
-export type CarLook = { body: string; stripe: boolean };
+export type CarLook = { body: string; helmet: string; stripe: boolean };
+
+/** Darkens whatever was just filled with `path`: wings and the floor read as carbon. */
+function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number) {
+  ctx.save();
+  ctx.globalAlpha = amount;
+  ctx.fillStyle = "#000000";
+  path();
+  ctx.fill();
+  ctx.restore();
+}
 
 /**
- * A small, rounded top-down car pointing where it drives (the engine faces
- * rotation + 180°): wheels peeking out, a glass windscreen, a roof, small
- * lamps on the nose corners. `boosted` adds a flame.
+ * A top-down open-wheel racer pointing where it drives (the engine faces
+ * rotation + 180°), after the 2024 game's F1 sprite: wide front and rear
+ * wings, wheels outside a narrow body with sidepods, a cockpit with the
+ * driver's helmet. `boosted` lights the exhaust.
  */
 export function drawCar(
   ctx: CanvasRenderingContext2D,
@@ -283,74 +294,111 @@ export function drawCar(
   const cx = car.x + car.width / 2;
   const cy = car.y + car.height / 2;
   ctx.save();
-  shadow(ctx, cx + 1, cy + 2.5, 12, 8.5, p);
+  shadow(ctx, cx + 1, cy + 2, 12.5, 7.5, p);
   ctx.translate(cx, cy);
   ctx.rotate(((car.rotation + 180) * Math.PI) / 180);
 
   if (boosted) {
     ctx.fillStyle = c.bolt;
-    ctx.globalAlpha = 0.75;
+    ctx.globalAlpha = 0.8;
     ctx.beginPath();
-    ctx.moveTo(-10.5, -3.5);
-    ctx.quadraticCurveTo(-20, 0, -10.5, 3.5);
+    ctx.moveTo(-12, -2);
+    ctx.quadraticCurveTo(-20.5, 0, -12, 2);
     ctx.fill();
     ctx.fillStyle = p.accent;
-    ctx.globalAlpha = 0.6;
+    ctx.globalAlpha = 0.7;
     ctx.beginPath();
-    ctx.moveTo(-10.5, -2);
-    ctx.quadraticCurveTo(-15.5, 0, -10.5, 2);
+    ctx.moveTo(-12, -1.1);
+    ctx.quadraticCurveTo(-16, 0, -12, 1.1);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
 
+  // Wheels, outside the body: wider at the back.
   ctx.fillStyle = c.wheel;
-  for (const [x, y] of [
-    [-7, -7.2],
-    [5, -7.2],
-    [-7, 4.2],
-    [5, 4.2],
+  for (const [x, y, w, h] of [
+    [-10, -9, 5.4, 3.6],
+    [-10, 5.4, 5.4, 3.6],
+    [5, -8.2, 4.6, 3],
+    [5, 5.2, 4.6, 3],
   ] as const) {
     ctx.beginPath();
-    ctx.roundRect(x, y, 5.5, 3, 1.5);
+    ctx.roundRect(x, y, w, h, 1.2);
     ctx.fill();
   }
+  // Suspension arms.
+  ctx.strokeStyle = c.wheel;
+  ctx.lineWidth = 0.8;
+  ctx.beginPath();
+  ctx.moveTo(-7.3, -5.4);
+  ctx.lineTo(-7.3, 5.4);
+  ctx.moveTo(7.3, -5.2);
+  ctx.lineTo(7.3, 5.2);
+  ctx.stroke();
 
-  // Body: a pill with a slightly rounder nose.
+  // Rear and front wings.
+  const rearWing = () => {
+    ctx.beginPath();
+    ctx.roundRect(-12.5, -6.2, 2.4, 12.4, 0.8);
+  };
+  const frontWing = () => {
+    ctx.beginPath();
+    ctx.roundRect(9.6, -7, 2.2, 14, [0.6, 1.1, 1.1, 0.6]);
+  };
+  ctx.fillStyle = look.body;
+  rearWing();
+  ctx.fill();
+  darken(ctx, rearWing, 0.35);
+  frontWing();
+  ctx.fill();
+  darken(ctx, frontWing, 0.2);
+
+  // Body: engine cover, sidepods, then a nose that narrows to the front wing.
   const body = () => {
     ctx.beginPath();
-    ctx.roundRect(-11, -6.5, 22, 13, [5, 6.5, 6.5, 5]);
+    ctx.moveTo(-11, -2.6);
+    ctx.lineTo(-7.5, -4.6);
+    ctx.quadraticCurveTo(-2, -5.4, 1, -4.2);
+    ctx.lineTo(3, -2);
+    ctx.lineTo(10.4, -1.3);
+    ctx.quadraticCurveTo(11.4, 0, 10.4, 1.3);
+    ctx.lineTo(3, 2);
+    ctx.lineTo(1, 4.2);
+    ctx.quadraticCurveTo(-2, 5.4, -7.5, 4.6);
+    ctx.lineTo(-11, 2.6);
+    ctx.closePath();
   };
   ctx.fillStyle = look.body;
   body();
   ctx.fill();
+  ctx.save();
+  body();
+  ctx.clip();
+  // Livery: a stripe down the middle, and a light sheen on the near side.
   if (look.stripe) {
-    ctx.save();
-    body();
-    ctx.clip();
     ctx.fillStyle = c.stripe;
-    ctx.globalAlpha = 0.85;
-    ctx.fillRect(-11, -1.2, 22, 2.4);
-    ctx.restore();
+    ctx.globalAlpha = 0.9;
+    ctx.fillRect(-11, -0.55, 23, 1.1);
   }
-
-  // Roof, then the windscreen in front of it.
   ctx.fillStyle = "#ffffff";
-  ctx.globalAlpha = 0.22;
+  ctx.globalAlpha = 0.16;
+  ctx.fillRect(-11, -6, 23, 2.6);
+  ctx.restore();
+
+  // Cockpit and helmet.
+  ctx.fillStyle = "#000000";
+  ctx.globalAlpha = 0.55;
   ctx.beginPath();
-  ctx.roundRect(-5.5, -4.5, 8.5, 9, 3);
+  ctx.ellipse(-1.8, 0, 3.2, 1.9, 0, 0, Math.PI * 2);
   ctx.fill();
   ctx.globalAlpha = 1;
-  ctx.fillStyle = c.glass;
+  ctx.fillStyle = look.helmet;
   ctx.beginPath();
-  ctx.roundRect(3, -4.3, 3.6, 8.6, [1, 2.5, 2.5, 1]);
+  ctx.arc(-1.4, 0, 1.55, 0, Math.PI * 2);
   ctx.fill();
-  // Lamps: two small warm dashes tucked into the nose's corners.
-  ctx.fillStyle = c.headlight;
-  for (const y of [-5, 3]) {
-    ctx.beginPath();
-    ctx.roundRect(9, y, 1.6, 2, 0.8);
-    ctx.fill();
-  }
+  ctx.fillStyle = "#000000";
+  ctx.globalAlpha = 0.45;
+  ctx.fillRect(-0.4, -1, 0.7, 2); // visor
   ctx.restore();
 }
 
