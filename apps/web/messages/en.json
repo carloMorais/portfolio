@@ -40,7 +40,7 @@
     "workLead": "Company code is private, so here I walk through the problem, the decisions and the outcome of each one.",
     "aboutEyebrow": "About",
     "aboutTitle": "How I <k>work</k>",
-    "aboutBody": "I'm based in Jacareí, Brazil, and work remotely. I started with online courses at Alura in 2022, completed about 3,000 hours of full-stack training at Alpha Edtech, and have worked in the field since 2024 — Bayer, a conversational AI startup and, today, Plumaa. I'm also currently studying Database Administration at IFRS.",
+    "aboutBody": "I'm based in Jacareí, Brazil, and work remotely. I started with online courses at Alura in 2022, completed about 3,000 hours of full-stack training at Alpha EdTech, and have worked in the field since 2024 — Bayer, a conversational AI startup and, today, Plumaa. I'm also currently studying Database Administration at IFRS.",
     "principle1Title": "Tested before it ships",
     "principle1Body": "Unit and integration tests before every deploy. This site goes further: CI runs everything on every push.",
     "principle2Title": "Reviews and shared decisions",

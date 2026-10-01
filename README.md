@@ -9,7 +9,7 @@ Bilingual (PT/EN) portfolio of **Carlos Eduardo Araujo Morais**, Full-Stack Deve
 ## What's inside
 
 - **Home** with an animated architecture graph in the margins: every phrase typed in the "user" input becomes a request travelling React → Next.js → NestJS → Prisma → PostgreSQL (or ioredis → Redis) and back.
-- **Case studies** for each role (a mental health SaaS, a conversational AI platform on WhatsApp, Power Platform apps at Bayer) and a capstone project (RaceGame, a real-time multiplayer racing game). Each one follows the same arc: context → problem → my part → technical decisions → architecture diagram → outcome.
+- **Case studies** for each role (a mental health SaaS, a conversational AI platform on WhatsApp, Power Platform apps at Bayer) and RaceGame, a real-time multiplayer racing game built at Alpha EdTech. Each one follows the same arc: context → problem → my part → technical decisions → architecture diagram → outcome.
 - **Experience** page and downloadable resume (PDF) in both languages.
 
 ## Stack

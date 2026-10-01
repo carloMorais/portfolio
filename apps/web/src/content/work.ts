@@ -71,7 +71,7 @@ export const work: WorkItem[] = [
     slug: "racegame",
     kind: "project",
     ready: true,
-    context: { pt: "Projeto de curso · Líder do projeto", en: "Capstone project · Team lead" },
+    context: { pt: "Alpha EdTech · Líder do projeto", en: "Alpha EdTech · Project lead" },
     period: { pt: "nov 2024", en: "Nov 2024" },
     title: {
       pt: "RaceGame: corrida multiplayer em tempo real",

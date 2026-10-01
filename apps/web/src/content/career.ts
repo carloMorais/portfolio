@@ -167,12 +167,12 @@ export const education: Education[] = [
   {
     id: "alpha",
     title: { pt: "Formação Full-Stack", en: "Full-Stack Development Program" },
-    institution: { pt: "Alpha Edtech", en: "Alpha Edtech" },
+    institution: { pt: "Alpha EdTech", en: "Alpha EdTech" },
     start: "2023-11",
     end: "2025-04",
     details: {
-      pt: "~3.000h práticas em React, Node.js, PostgreSQL, Linux e Soft Skills — base para os 3 empregos conquistados na área.",
-      en: "~3,000 hours of hands-on practice in React, Node.js, PostgreSQL, Linux, and Soft Skills — foundation for the 3 jobs held in the field so far.",
+      pt: "Code academy sem fins lucrativos, em tempo integral (8h/dia), com projetos reais. ~3.000h práticas em React, Node.js, PostgreSQL, Linux e soft skills — base para os 3 empregos conquistados na área.",
+      en: "A non-profit, full-time (8h/day) code academy built on real projects. ~3,000 hours of hands-on practice in React, Node.js, PostgreSQL, Linux and soft skills — foundation for the 3 jobs held in the field so far.",
     },
   },
   {

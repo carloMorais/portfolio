@@ -1,7 +1,7 @@
 import { same, type CaseStudy } from "./types";
 
 /**
- * Derived from the capstone resume and the public repository
+ * Derived from the RaceGame resume and the public repository
  * (github.com/Projeto-Ciclo-2/RaceGame). Authorship per area comes from the
  * git history; Carlos confirmed the "delfo" account is his.
  */
@@ -37,8 +37,8 @@ export const racegame: CaseStudy = {
   ],
   context: [
     {
-      pt: "Projeto de conclusão de curso na Alpha Edtech. O time tinha três semanas para entregar um jogo multiplayer que rodasse no navegador, com login, salas e ranking.",
-      en: "Capstone project at Alpha Edtech. The team had three weeks to ship a browser multiplayer game, with sign-in, rooms and a leaderboard.",
+      pt: "Projeto do ciclo 2 da Alpha EdTech, uma code academy sem fins lucrativos que forma desenvolvedores em tempo integral, trabalhando em projetos reais. O time tinha três semanas para entregar um jogo multiplayer que rodasse no navegador, com login, salas e ranking.",
+      en: "A cycle 2 project at Alpha EdTech, a non-profit code academy that trains developers full-time on real projects. The team had three weeks to ship a browser multiplayer game, with sign-in, rooms and a leaderboard.",
     },
     {
       pt: "Escolhemos uma corrida em visão de cima: pista com paredes, checkpoints, voltas, itens de nitro e até 10 carros disputando ao mesmo tempo.",
@@ -178,8 +178,8 @@ export const racegame: CaseStudy = {
   },
   result: [
     {
-      pt: "O jogo foi entregue e testado com a sala cheia, 10 jogadores na mesma corrida, rodando num servidor da escola. O vídeo no topo desta página é um recorte dessa partida.",
-      en: "The game shipped and was tested with a full room, 10 players in the same race, running on a school server. The video at the top of this page is a clip of that match.",
+      pt: "O jogo foi entregue e testado com a sala cheia, 10 jogadores na mesma corrida, rodando num servidor da Alpha EdTech. O vídeo no topo desta página é um recorte dessa partida.",
+      en: "The game shipped and was tested with a full room, 10 players in the same race, running on an Alpha EdTech server. The video at the top of this page is a clip of that match.",
     },
   ],
   afterword: {
