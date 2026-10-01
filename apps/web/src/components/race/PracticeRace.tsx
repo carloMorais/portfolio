@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
+  PHYSICS,
   TICK_RATE,
   activeItems,
   botKeys,
@@ -14,7 +15,15 @@ import {
   type Keys,
   type RaceState,
 } from "race-engine";
-import { drawCar, drawItem, drawTrack, interpolateCar, readPalette, type Palette } from "./draw";
+import {
+  drawCar,
+  drawItem,
+  drawLabel,
+  drawTrack,
+  interpolateCar,
+  readPalette,
+  type Palette,
+} from "./draw";
 
 const PLAYER = "you";
 const BOTS = [
@@ -25,9 +34,21 @@ const BOTS = [
 const LAPS = 2;
 const STEP_MS = 1000 / TICK_RATE;
 const COUNTDOWN_MS = 3000;
+/** After you cross the line, the bots get this long to finish before the results show anyway. */
+const WAIT_TICKS = 45 * TICK_RATE;
 
-type Phase = "ready" | "countdown" | "racing" | "finished";
-type Hud = { tick: number; lap: number; position: number; nitro: number; playerX: number };
+/** "finishing": you're done, the bots are still racing. */
+type Phase = "ready" | "countdown" | "racing" | "finishing" | "finished";
+type Driver = { id: string; nitro: number; done: boolean };
+type Hud = {
+  tick: number;
+  time: number;
+  lap: number;
+  /** Your finishing place, 0 while you race. */
+  place: number;
+  playerX: number;
+  board: Driver[];
+};
 
 const KEY_MAP: Record<string, keyof Keys> = {
   ArrowUp: "up",
@@ -48,6 +69,14 @@ const formatTime = (ticks: number) => {
 
 const newRace = () => createRace(track, [PLAYER, ...BOTS.map((b) => b.id)], LAPS);
 
+const board = (s: RaceState): Driver[] =>
+  standings(s, track).map((c) => ({ id: c.id, nitro: c.nitro, done: c.finishedAt !== null }));
+
+const initialHud = (): Hud => {
+  const s = newRace();
+  return { tick: 0, time: 0, lap: 1, place: 0, playerX: 0, board: board(s) };
+};
+
 /**
  * Practice mode: the whole race runs in the browser at 30 ticks/s on the
  * shared engine, and is drawn at the screen's refresh rate by interpolating
@@ -67,7 +96,7 @@ export function PracticeRace() {
 
   const [phase, setPhaseState] = useState<Phase>("ready");
   const [count, setCount] = useState(3);
-  const [hud, setHud] = useState<Hud>({ tick: 0, lap: 1, position: 1, nitro: 0, playerX: 0 });
+  const [hud, setHud] = useState<Hud>(initialHud);
   const [result, setResult] = useState<RaceState | null>(null);
 
   const setPhase = useCallback((p: Phase) => {
@@ -98,7 +127,7 @@ export function PracticeRace() {
     return () => media.removeEventListener("change", build);
   }, []);
 
-  // Keyboard, only while a race is on (so arrows still scroll the page otherwise).
+  // Keyboard, only while you drive (so arrows still scroll the page otherwise).
   useEffect(() => {
     const onKey = (down: boolean) => (e: KeyboardEvent) => {
       const key = KEY_MAP[e.code];
@@ -125,6 +154,7 @@ export function PracticeRace() {
     let last = performance.now();
     let acc = 0;
     let hudAt = 0;
+    const running = () => phaseRef.current === "racing" || phaseRef.current === "finishing";
 
     const frame = (now: number) => {
       const dt = Math.min(now - last, 250);
@@ -136,7 +166,7 @@ export function PracticeRace() {
         if (now >= countdownEnd.current) setPhase("racing");
       }
 
-      if (phaseRef.current === "racing") {
+      if (running()) {
         acc += dt;
         while (acc >= STEP_MS) {
           const s = race.current;
@@ -146,10 +176,15 @@ export function PracticeRace() {
             inputs[bot.id] = botKeys(car, track, { skill: bot.skill });
           }
           prev.current = s;
-          race.current = stepRace(s, track, inputs);
+          const next = stepRace(s, track, inputs);
+          race.current = next;
           acc -= STEP_MS;
-          if (race.current.finished.includes(PLAYER)) {
-            setResult(race.current);
+
+          const me = next.cars.find((c) => c.id === PLAYER)!;
+          if (phaseRef.current === "racing" && me.finishedAt !== null) setPhase("finishing");
+          const allDone = next.finished.length === next.cars.length;
+          if (me.finishedAt !== null && (allDone || next.tick - me.finishedAt >= WAIT_TICKS)) {
+            setResult(next);
             setPhase("finished");
             acc = 0;
             break;
@@ -164,10 +199,11 @@ export function PracticeRace() {
         const me = s.cars.find((c) => c.id === PLAYER)!;
         setHud({
           tick: s.tick,
+          time: me.finishedAt ?? s.tick,
           lap: Math.min(LAPS, me.laps + 1),
-          position: standings(s, track).findIndex((c) => c.id === PLAYER) + 1,
-          nitro: me.nitro,
+          place: s.finished.indexOf(PLAYER) + 1,
           playerX: Math.round(me.x),
+          board: board(s),
         });
       }
       raf = requestAnimationFrame(frame);
@@ -190,22 +226,26 @@ export function PracticeRace() {
       const s = race.current;
       for (const item of activeItems(track, s)) drawItem(ctx, item, p);
       const bodies = [p.ink, p.muted, p.ink];
-      // Bots first, the player on top.
+      // Bots first, the player on top; names over every car.
       const ordered = [
         ...s.cars.filter((c) => c.id !== PLAYER),
         ...s.cars.filter((c) => c.id === PLAYER),
-      ];
-      for (const car of ordered) {
+      ].map((car) => {
         const before = prev.current?.cars.find((c) => c.id === car.id);
-        const at = phaseRef.current === "racing" ? interpolateCar(before, car, alpha) : car;
+        return { car, at: running() ? interpolateCar(before, car, alpha) : car };
+      });
+      for (const { car, at } of ordered) {
         const body = car.id === PLAYER ? p.accent : bodies[BOTS.findIndex((b) => b.id === car.id)]!;
         drawCar(ctx, at, body, p, car.nitroUntil !== null);
+      }
+      for (const { car, at } of ordered) {
+        drawLabel(ctx, at, names(car.id), car.nitro, p, track.width);
       }
     };
 
     raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [setPhase]);
+  }, [setPhase, names]);
 
   const start = () => {
     race.current = newRace();
@@ -218,6 +258,11 @@ export function PracticeRace() {
     canvasRef.current?.focus({ preventScroll: true });
     // Bring the whole track into view: you can't drive what you can't see.
     rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+  };
+
+  const skip = () => {
+    setResult(race.current);
+    setPhase("finished");
   };
 
   const press = (key: keyof Keys, down: boolean) => {
@@ -235,31 +280,30 @@ export function PracticeRace() {
       ref={rootRef}
       className="w-full max-w-[calc((100svh-7rem)*760/600)] scroll-mt-20"
     >
-      <dl className="mb-3 flex flex-wrap gap-x-8 gap-y-2 text-sm tabular-nums" aria-live="polite">
-        <div className="flex gap-2">
-          <dt className="text-muted">{t("lap")}</dt>
-          <dd>
-            {hud.lap}/{LAPS}
-          </dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="text-muted">{t("position")}</dt>
-          <dd>
-            {t("ordinal", { n: hud.position })} / {BOTS.length + 1}
-          </dd>
-        </div>
-        <div className="flex gap-2">
-          <dt className="text-muted">{t("nitro")}</dt>
-          <dd aria-label={String(hud.nitro)} className="tracking-widest text-accent">
-            {"◆".repeat(hud.nitro)}
-            <span className="text-line">{"◆".repeat(3 - hud.nitro)}</span>
-          </dd>
-        </div>
-        <div className="flex gap-2" aria-live="off">
-          <dt className="text-muted">{t("time")}</dt>
-          <dd>{formatTime(hud.tick)}</dd>
-        </div>
-      </dl>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-8 gap-y-3 text-sm tabular-nums">
+        <ol aria-label={t("standings")} className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {hud.board.map((d, i) => (
+            <li key={d.id} className="flex items-center gap-2">
+              <span className="text-muted">{i + 1}</span>
+              <span className={d.id === PLAYER ? "text-accent" : undefined}>{names(d.id)}</span>
+              <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
+              {d.done && <FlagIcon label={t("done")} />}
+            </li>
+          ))}
+        </ol>
+        <dl className="ml-auto flex gap-x-6">
+          <div className="flex gap-2">
+            <dt className="text-muted">{t("lap")}</dt>
+            <dd>
+              {hud.lap}/{LAPS}
+            </dd>
+          </div>
+          <div className="flex gap-2">
+            <dt className="text-muted">{t("time")}</dt>
+            <dd className="min-w-[4ch]">{formatTime(hud.time)}</dd>
+          </div>
+        </dl>
+      </div>
 
       <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
         <canvas
@@ -270,7 +314,27 @@ export function PracticeRace() {
           className="block aspect-[760/600] w-full bg-bg outline-none"
         />
 
-        {phase !== "racing" && (
+        {phase === "finishing" && hud.place > 0 && (
+          <div
+            className="absolute inset-x-0 top-3 flex justify-center px-3"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-full bg-bg/90 px-4 py-2 text-sm ring-1 ring-line">
+              <span>{t("finished", { n: hud.place })}</span>
+              <span className="text-muted">{t("waiting")}</span>
+              <button
+                type="button"
+                onClick={skip}
+                className="text-muted underline underline-offset-4 hover:text-ink"
+              >
+                {t("skip")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {(phase === "ready" || phase === "countdown" || phase === "finished") && (
           <div className="absolute inset-0 flex items-center justify-center bg-bg/70 backdrop-blur-[2px]">
             {phase === "ready" && (
               <button type="button" onClick={start} className="btn btn-primary">
@@ -288,7 +352,9 @@ export function PracticeRace() {
                   {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
                 </p>
                 <p className="mt-1 text-sm text-muted tabular-nums">
-                  {t("finishedTime", { time: formatTime(result.tick) })}
+                  {t("finishedTime", {
+                    time: formatTime(final.find((c) => c.id === PLAYER)?.finishedAt ?? result.tick),
+                  })}
                 </p>
                 <ol className="mt-5 space-y-1 text-left text-sm">
                   {final.map((car, i) => (
@@ -354,6 +420,25 @@ export function PracticeRace() {
         </div>
       </div>
     </div>
+  );
+}
+
+/** Nitro charges as filled diamonds out of the tank's size. */
+function Nitro({ count, label }: { count: number; label: string }) {
+  return (
+    <span role="img" aria-label={label} className="text-xs tracking-wider text-accent">
+      {"◆".repeat(count)}
+      <span className="text-line">{"◆".repeat(PHYSICS.maxNitro - count)}</span>
+    </span>
+  );
+}
+
+function FlagIcon({ label }: { label: string }) {
+  return (
+    <svg role="img" aria-label={label} viewBox="0 0 12 12" className="size-3 text-muted">
+      <path d="M2 1v10" stroke="currentColor" strokeWidth="1.2" />
+      <path d="M2.5 1.5h7l-1.5 2.5 1.5 2.5h-7z" fill="currentColor" />
+    </svg>
   );
 }
 

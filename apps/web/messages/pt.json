@@ -145,7 +145,6 @@
     "restart": "Correr de novo",
     "go": "Vai!",
     "lap": "Volta",
-    "position": "Posição",
     "nitro": "Nitro",
     "time": "Tempo",
     "you": "Você",
@@ -157,13 +156,23 @@
     "notFinished": "na pista",
     "controlsTitle": "Controles",
     "controlsKeys": "Setas ou WASD para dirigir, espaço para o nitro. Os losangos azuis são nitro; barris e troncos te seguram.",
-    "controlsTouch": "No celular, use os botões abaixo da pista.",
+    "controlsTouch": "No celular, use os botões abaixo da pista: setas para dirigir, ◆ para o nitro.",
     "canvasLabel": "Pista vista de cima com o seu carro, em azul, e três bots.",
     "left": "Esquerda",
     "right": "Direita",
     "gas": "Acelerar",
     "brake": "Frear",
     "nitroButton": "Nitro",
-    "playCta": "Jogar no navegador"
+    "playCta": "Jogar no navegador",
+    "or": "ou",
+    "drive": "Dirigir",
+    "space": "Espaço",
+    "nitroKey": "Nitro",
+    "itemNitro": "Nitro (guarda até 3)",
+    "itemObstacles": "Obstáculos: −70% da velocidade",
+    "nitroCount": "{n, plural, =0 {sem nitro} one {# nitro} other {# nitros}}",
+    "done": "Terminou",
+    "waiting": "Esperando os outros pilotos…",
+    "skip": "Ver resultado"
   }
 }

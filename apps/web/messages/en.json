@@ -145,7 +145,6 @@
     "restart": "Race again",
     "go": "Go!",
     "lap": "Lap",
-    "position": "Position",
     "nitro": "Nitro",
     "time": "Time",
     "you": "You",
@@ -157,13 +156,23 @@
     "notFinished": "still racing",
     "controlsTitle": "Controls",
     "controlsKeys": "Arrow keys or WASD to drive, space for nitro. Blue diamonds are nitro; barrels and logs slow you down.",
-    "controlsTouch": "On a phone, use the buttons below the track.",
+    "controlsTouch": "On a phone, use the buttons below the track: arrows to drive, ◆ for nitro.",
     "canvasLabel": "Top-down track with your car, in blue, and three bots.",
     "left": "Left",
     "right": "Right",
     "gas": "Accelerate",
     "brake": "Brake",
     "nitroButton": "Nitro",
-    "playCta": "Play in your browser"
+    "playCta": "Play in your browser",
+    "or": "or",
+    "drive": "Drive",
+    "space": "Space",
+    "nitroKey": "Nitro",
+    "itemNitro": "Nitro (hold up to 3)",
+    "itemObstacles": "Obstacles: −70% speed",
+    "nitroCount": "{n, plural, =0 {no nitro} one {# nitro} other {# nitros}}",
+    "done": "Finished",
+    "waiting": "Waiting for the other drivers…",
+    "skip": "See results"
   }
 }

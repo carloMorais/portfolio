@@ -37,6 +37,22 @@ test("a race counts down, then the car answers the throttle", async ({ page, isM
   expect(Number(await game(page).getAttribute("data-tick"))).toBeGreaterThan(20);
 });
 
+test("a live board ranks every driver with their nitro, beside lap and time", async ({ page }) => {
+  await page.goto("/en/projects/racegame/play");
+  const board = page.getByRole("list", { name: "Standings" });
+  await expect(board.getByRole("listitem")).toHaveCount(4);
+  await expect(board).toContainText("You");
+  await expect(board.getByRole("img", { name: "no nitro" })).toHaveCount(4);
+  await expect(page.getByText("Lap", { exact: true })).toBeVisible();
+});
+
+test("controls are drawn as keys on desktop", async ({ page, isMobile }) => {
+  await page.goto("/en/projects/racegame/play");
+  const space = page.locator("kbd", { hasText: "Space" });
+  if (isMobile) await expect(space).toBeHidden();
+  else await expect(space).toBeVisible();
+});
+
 test("touch controls show on phones and stay out of the way on desktop", async ({
   page,
   isMobile,

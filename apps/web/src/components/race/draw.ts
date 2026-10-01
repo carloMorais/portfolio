@@ -8,12 +8,15 @@ export type Palette = {
   muted: string;
   line: string;
   accent: string;
+  /** The page's text font, for labels drawn on the canvas. */
+  font: string;
 };
 
 export function readPalette(el: Element): Palette {
   const css = getComputedStyle(el);
   const v = (name: string) => css.getPropertyValue(name).trim();
   return {
+    font: css.fontFamily,
     bg: v("--bg"),
     surface: v("--surface"),
     ink: v("--ink"),
@@ -169,6 +172,50 @@ export function drawCar(
   ctx.beginPath();
   ctx.roundRect(2, -4.5, 4.5, 9, 1.5);
   ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The driver's name above the car, faint so it never hides the track, with
+ * one small diamond per nitro charge beside it. Flips below the car at the
+ * top edge and stays inside the map at the sides.
+ */
+export function drawLabel(
+  ctx: CanvasRenderingContext2D,
+  car: Pick<Car, "x" | "y" | "width" | "height">,
+  name: string,
+  nitro: number,
+  p: Palette,
+  mapWidth: number,
+) {
+  ctx.save();
+  ctx.font = `500 10px ${p.font}`;
+  const textWidth = ctx.measureText(name).width;
+  const diamonds = nitro > 0 ? 4 + nitro * 7 : 0;
+  const total = textWidth + diamonds;
+  const x = Math.max(3, Math.min(mapWidth - total - 3, car.x + car.width / 2 - total / 2));
+  const y = car.y < 16 ? car.y + car.height + 12 : car.y - 5;
+
+  ctx.globalAlpha = 0.65;
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = p.bg;
+  ctx.strokeText(name, x, y);
+  ctx.fillStyle = p.ink;
+  ctx.fillText(name, x, y);
+
+  ctx.fillStyle = p.accent;
+  for (let i = 0; i < nitro; i++) {
+    const cx = x + textWidth + 4 + 3 + i * 7;
+    const cy = y - 3.5;
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - 4);
+    ctx.lineTo(cx + 3, cy);
+    ctx.lineTo(cx, cy + 4);
+    ctx.lineTo(cx - 3, cy);
+    ctx.closePath();
+    ctx.fill();
+  }
   ctx.restore();
 }
 

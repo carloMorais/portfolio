@@ -5,6 +5,7 @@ import { site } from "@/content/site";
 import { Link } from "@/i18n/navigation";
 import { ArrowIcon } from "@/components/icons";
 import { PageTransition } from "@/components/PageTransition";
+import { Controls } from "@/components/race/Controls";
 import { PracticeRace } from "@/components/race/PracticeRace";
 import { brushTags } from "@/lib/rich";
 import { pageMetadata } from "@/lib/seo";
@@ -38,15 +39,11 @@ export default function PlayPage() {
           {t.rich("title", brushTags)}
         </h1>
         <p className="mt-5 max-w-2xl text-lg text-muted text-pretty">{t("lead")}</p>
+        <p className="mt-3 max-w-2xl text-sm text-muted text-pretty">{t("note")}</p>
+        <Controls />
 
-        <div className="mt-10 grid gap-10 lg:grid-cols-[1fr_16rem]">
+        <div className="mt-10">
           <PracticeRace />
-          <aside className="text-sm text-muted text-pretty">
-            <h2 className="font-display text-xl tracking-tight text-ink">{t("controlsTitle")}</h2>
-            <p className="mt-3">{t("controlsKeys")}</p>
-            <p className="mt-2 lg:hidden">{t("controlsTouch")}</p>
-            <p className="mt-6 border-t border-line pt-6">{t("note")}</p>
-          </aside>
         </div>
       </section>
     </PageTransition>
