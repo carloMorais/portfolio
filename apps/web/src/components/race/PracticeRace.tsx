@@ -272,151 +272,182 @@ export function PracticeRace() {
   const final = result ? standings(result, track) : [];
 
   return (
-    // Never taller than the window: the whole track stays in view while you drive.
+    // Standings on the left, the track in the middle, lap and time on the right.
+    // Below lg the track drops under the two panels.
     <div
       data-phase={phase}
       data-tick={hud.tick}
       data-player-x={hud.playerX}
       ref={rootRef}
-      className="w-full max-w-[calc((100svh-7rem)*760/600)] scroll-mt-20"
+      className="grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[11rem_minmax(0,1fr)_6rem] lg:gap-x-8"
     >
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-x-8 gap-y-3 text-sm tabular-nums">
-        <ol aria-label={t("standings")} className="flex flex-wrap gap-x-5 gap-y-1.5">
+      <table className="col-start-1 row-start-1 self-start text-sm tabular-nums">
+        <caption className="sr-only">{t("standings")}</caption>
+        <thead>
+          <tr className="border-b border-line text-left text-xs text-muted">
+            <th scope="col" className="pr-3 pb-2 font-normal">
+              {t("place")}
+            </th>
+            <th scope="col" className="pr-3 pb-2 font-normal">
+              {t("driver")}
+            </th>
+            <th scope="col" className="pb-2 font-normal">
+              {t("nitro")}
+            </th>
+          </tr>
+        </thead>
+        <tbody>
           {hud.board.map((d, i) => (
-            <li key={d.id} className="flex items-center gap-2">
-              <span className="text-muted">{i + 1}</span>
-              <span className={d.id === PLAYER ? "text-accent" : undefined}>{names(d.id)}</span>
-              <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
-              {d.done && <FlagIcon label={t("done")} />}
-            </li>
-          ))}
-        </ol>
-        <dl className="ml-auto flex gap-x-6">
-          <div className="flex gap-2">
-            <dt className="text-muted">{t("lap")}</dt>
-            <dd>
-              {hud.lap}/{LAPS}
-            </dd>
-          </div>
-          <div className="flex gap-2">
-            <dt className="text-muted">{t("time")}</dt>
-            <dd className="min-w-[4ch]">{formatTime(hud.time)}</dd>
-          </div>
-        </dl>
-      </div>
-
-      <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
-        <canvas
-          ref={canvasRef}
-          tabIndex={-1}
-          role="img"
-          aria-label={t("canvasLabel")}
-          className="block aspect-[760/600] w-full bg-bg outline-none"
-        />
-
-        {phase === "finishing" && hud.place > 0 && (
-          <div
-            className="absolute inset-x-0 top-3 flex justify-center px-3"
-            role="status"
-            aria-live="polite"
-          >
-            <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-full bg-bg/90 px-4 py-2 text-sm ring-1 ring-line">
-              <span>{t("finished", { n: hud.place })}</span>
-              <span className="text-muted">{t("waiting")}</span>
-              <button
-                type="button"
-                onClick={skip}
-                className="text-muted underline underline-offset-4 hover:text-ink"
+            <tr key={d.id} className="border-b border-line last:border-0">
+              <td className="py-2 pr-3 text-muted">{i + 1}</td>
+              <th
+                scope="row"
+                className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${d.id === PLAYER ? "text-accent" : ""}`}
               >
-                {t("skip")}
-              </button>
-            </div>
-          </div>
-        )}
+                <span className="inline-flex items-center gap-1.5">
+                  {names(d.id)}
+                  {d.done && <FlagIcon label={t("done")} />}
+                </span>
+              </th>
+              <td className="py-2">
+                <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
 
-        {(phase === "ready" || phase === "countdown" || phase === "finished") && (
-          <div className="absolute inset-0 flex items-center justify-center bg-bg/70 backdrop-blur-[2px]">
-            {phase === "ready" && (
-              <button type="button" onClick={start} className="btn btn-primary">
-                {t("start")}
-              </button>
-            )}
-            {phase === "countdown" && (
-              <p className="font-display text-7xl tabular-nums" aria-live="assertive">
-                {count > 0 ? count : t("go")}
-              </p>
-            )}
-            {phase === "finished" && result && (
-              <div className="max-w-xs rounded-2xl bg-bg p-6 text-center ring-1 ring-line">
-                <p className="font-display text-3xl tracking-tight">
-                  {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
-                </p>
-                <p className="mt-1 text-sm text-muted tabular-nums">
-                  {t("finishedTime", {
-                    time: formatTime(final.find((c) => c.id === PLAYER)?.finishedAt ?? result.tick),
-                  })}
-                </p>
-                <ol className="mt-5 space-y-1 text-left text-sm">
-                  {final.map((car, i) => (
-                    <li key={car.id} className="flex justify-between gap-6">
-                      <span className={car.id === PLAYER ? "text-accent" : undefined}>
-                        {i + 1}. {names(car.id)}
-                      </span>
-                      <span className="text-muted tabular-nums">
-                        {car.finishedAt !== null ? formatTime(car.finishedAt) : t("notFinished")}
-                      </span>
-                    </li>
-                  ))}
-                </ol>
-                <button type="button" onClick={start} className="btn btn-primary mt-6">
-                  {t("restart")}
+      <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start text-right tabular-nums lg:col-start-3">
+        <div>
+          <dt className="text-xs text-muted">{t("lap")}</dt>
+          <dd className="font-display text-3xl tracking-tight">
+            {hud.lap}
+            <span className="text-muted">/{LAPS}</span>
+          </dd>
+        </div>
+        <div>
+          <dt className="text-xs text-muted">{t("time")}</dt>
+          <dd className="font-display text-3xl tracking-tight">{formatTime(hud.time)}</dd>
+        </div>
+      </dl>
+
+      {/* Never taller than the window: the whole track stays in view while you drive. */}
+      <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-7rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
+        <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
+          <canvas
+            ref={canvasRef}
+            tabIndex={-1}
+            role="img"
+            aria-label={t("canvasLabel")}
+            className="block aspect-[760/600] w-full bg-bg outline-none"
+          />
+
+          {phase === "finishing" && hud.place > 0 && (
+            <div
+              className="absolute inset-x-0 top-3 flex justify-center px-3"
+              role="status"
+              aria-live="polite"
+            >
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-full bg-bg/90 px-4 py-2 text-sm ring-1 ring-line">
+                <span>{t("finished", { n: hud.place })}</span>
+                <span className="text-muted">{t("waiting")}</span>
+                <button
+                  type="button"
+                  onClick={skip}
+                  className="text-muted underline underline-offset-4 hover:text-ink"
+                >
+                  {t("skip")}
                 </button>
               </div>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          )}
 
-      {/* Touch controls below lg (phones and tablets; pointer media queries aren't reliable). */}
-      <div className="mt-4 flex select-none justify-between gap-3 lg:hidden">
-        <div className="flex gap-3">
-          <TouchButton
-            label={t("left")}
-            onDown={() => press("left", true)}
-            onUp={() => press("left", false)}
-          >
-            ←
-          </TouchButton>
-          <TouchButton
-            label={t("right")}
-            onDown={() => press("right", true)}
-            onUp={() => press("right", false)}
-          >
-            →
-          </TouchButton>
+          {(phase === "ready" || phase === "countdown" || phase === "finished") && (
+            <div className="absolute inset-0 flex items-center justify-center bg-bg/70 backdrop-blur-[2px]">
+              {phase === "ready" && (
+                <button type="button" onClick={start} className="btn btn-primary">
+                  {t("start")}
+                </button>
+              )}
+              {phase === "countdown" && (
+                <p className="font-display text-7xl tabular-nums" aria-live="assertive">
+                  {count > 0 ? count : t("go")}
+                </p>
+              )}
+              {phase === "finished" && result && (
+                <div className="max-w-xs rounded-2xl bg-bg p-6 text-center ring-1 ring-line">
+                  <p className="font-display text-3xl tracking-tight">
+                    {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
+                  </p>
+                  <p className="mt-1 text-sm text-muted tabular-nums">
+                    {t("finishedTime", {
+                      time: formatTime(
+                        final.find((c) => c.id === PLAYER)?.finishedAt ?? result.tick,
+                      ),
+                    })}
+                  </p>
+                  <ol className="mt-5 space-y-1 text-left text-sm">
+                    {final.map((car, i) => (
+                      <li key={car.id} className="flex justify-between gap-6">
+                        <span className={car.id === PLAYER ? "text-accent" : undefined}>
+                          {i + 1}. {names(car.id)}
+                        </span>
+                        <span className="text-muted tabular-nums">
+                          {car.finishedAt !== null ? formatTime(car.finishedAt) : t("notFinished")}
+                        </span>
+                      </li>
+                    ))}
+                  </ol>
+                  <button type="button" onClick={start} className="btn btn-primary mt-6">
+                    {t("restart")}
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <div className="flex gap-3">
-          <TouchButton
-            label={t("nitroButton")}
-            onDown={() => press("nitro", true)}
-            onUp={() => press("nitro", false)}
-          >
-            ◆
-          </TouchButton>
-          <TouchButton
-            label={t("brake")}
-            onDown={() => press("down", true)}
-            onUp={() => press("down", false)}
-          >
-            ↓
-          </TouchButton>
-          <TouchButton
-            label={t("gas")}
-            onDown={() => press("up", true)}
-            onUp={() => press("up", false)}
-          >
-            ↑
-          </TouchButton>
+
+        {/* Touch controls below lg (phones and tablets; pointer media queries aren't reliable). */}
+        <div className="mt-4 flex select-none justify-between gap-3 lg:hidden">
+          <div className="flex gap-3">
+            <TouchButton
+              label={t("left")}
+              onDown={() => press("left", true)}
+              onUp={() => press("left", false)}
+            >
+              ←
+            </TouchButton>
+            <TouchButton
+              label={t("right")}
+              onDown={() => press("right", true)}
+              onUp={() => press("right", false)}
+            >
+              →
+            </TouchButton>
+          </div>
+          <div className="flex gap-3">
+            <TouchButton
+              label={t("nitroButton")}
+              onDown={() => press("nitro", true)}
+              onUp={() => press("nitro", false)}
+            >
+              ◆
+            </TouchButton>
+            <TouchButton
+              label={t("brake")}
+              onDown={() => press("down", true)}
+              onUp={() => press("down", false)}
+            >
+              ↓
+            </TouchButton>
+            <TouchButton
+              label={t("gas")}
+              onDown={() => press("up", true)}
+              onUp={() => press("up", false)}
+            >
+              ↑
+            </TouchButton>
+          </div>
         </div>
       </div>
     </div>

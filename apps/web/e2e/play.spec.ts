@@ -39,8 +39,8 @@ test("a race counts down, then the car answers the throttle", async ({ page, isM
 
 test("a live board ranks every driver with their nitro, beside lap and time", async ({ page }) => {
   await page.goto("/en/projects/racegame/play");
-  const board = page.getByRole("list", { name: "Standings" });
-  await expect(board.getByRole("listitem")).toHaveCount(4);
+  const board = page.getByRole("table", { name: "Standings" });
+  await expect(board.locator("tbody tr")).toHaveCount(4);
   await expect(board).toContainText("You");
   await expect(board.getByRole("img", { name: "no nitro" })).toHaveCount(4);
   await expect(page.getByText("Lap", { exact: true })).toBeVisible();

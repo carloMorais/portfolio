@@ -173,6 +173,8 @@
     "nitroCount": "{n, plural, =0 {no nitro} one {# nitro} other {# nitros}}",
     "done": "Finished",
     "waiting": "Waiting for the other drivers…",
-    "skip": "See results"
+    "skip": "See results",
+    "place": "Pos.",
+    "driver": "Driver"
   }
 }
