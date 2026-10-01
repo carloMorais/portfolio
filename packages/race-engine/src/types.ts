@@ -51,7 +51,22 @@ export type Car = {
   /** Index into `track.waypoints` the bot is heading to (also handy for placement). */
   waypoint: number;
   finishedAt: number | null;
+  /** Ticks each completed lap took, in order. */
+  lapTicks: number[];
+  /** Tick the current lap started. */
+  lapStartedAt: number;
 };
+
+/**
+ * What happened during the last tick, for effects and announcements. Not
+ * needed to run the race: each tick starts with an empty list.
+ */
+export type RaceEvent =
+  /** Bounced off something. `impact` is the speed into it; `nx`/`ny` the direction it was going. `gate`: an out-of-order checkpoint or the closed finish line (wrong way). */
+  | { type: "bump"; car: string; impact: number; nx: -1 | 0 | 1; ny: -1 | 0 | 1; gate: boolean }
+  | { type: "pickup"; car: string; item: string; itemType: ItemType }
+  /** Completed lap number `lap` in `ticks`; `finished` on the last one. */
+  | { type: "lap"; car: string; lap: number; ticks: number; finished: boolean };
 
 export type RaceState = {
   tick: number;
@@ -61,4 +76,5 @@ export type RaceState = {
   itemRespawnAt: Record<string, number>;
   /** Car ids in finishing order. */
   finished: string[];
+  events: RaceEvent[];
 };

@@ -8,8 +8,18 @@ export const overlaps = (car: Box, box: Box) =>
   car.y + car.height > box.y &&
   car.y < box.y + box.height;
 
-/** Which axes hit something during the last move. */
-export type Bump = { x: boolean; y: boolean };
+/**
+ * Which axes hit something during the last move, how fast the car was going
+ * into it (the larger axis speed before the bounce) and what it hit.
+ */
+export type Bump = {
+  x: boolean;
+  y: boolean;
+  impact: number;
+  nx: -1 | 0 | 1;
+  ny: -1 | 0 | 1;
+  hits: Box[];
+};
 
 /**
  * Moves the car by its velocity like a box bouncing off walls: first along x,
@@ -25,7 +35,7 @@ export type Bump = { x: boolean; y: boolean };
 export function moveCar(car: Car, blockers: Box[]): Bump {
   // Something the car already overlaps (e.g. it was just made solid) can't trap it.
   const solid = blockers.filter((box) => !overlaps(car, box));
-  const bump: Bump = { x: false, y: false };
+  const bump: Bump = { x: false, y: false, impact: 0, nx: 0, ny: 0, hits: [] };
 
   car.x += car.vx;
   const hitX = solid.filter((box) => overlaps(car, box));
@@ -34,6 +44,9 @@ export function moveCar(car: Car, blockers: Box[]): Bump {
       car.vx > 0
         ? Math.min(...hitX.map((b) => b.x)) - car.width
         : Math.max(...hitX.map((b) => b.x + b.width));
+    bump.impact = Math.abs(car.vx);
+    bump.nx = car.vx > 0 ? 1 : -1;
+    bump.hits.push(...hitX);
     car.vx = -car.vx * PHYSICS.wallBounce;
     bump.x = true;
   }
@@ -45,6 +58,9 @@ export function moveCar(car: Car, blockers: Box[]): Bump {
       car.vy > 0
         ? Math.min(...hitY.map((b) => b.y)) - car.height
         : Math.max(...hitY.map((b) => b.y + b.height));
+    bump.impact = Math.max(bump.impact, Math.abs(car.vy));
+    bump.ny = car.vy > 0 ? 1 : -1;
+    bump.hits.push(...hitY);
     car.vy = -car.vy * PHYSICS.wallBounce;
     bump.y = true;
   }
@@ -62,7 +78,7 @@ export function moveCar(car: Car, blockers: Box[]): Bump {
  * moving right turns it right. Only when the car already points roughly that
  * way (a head-on hit just bounces) and is still moving along the wall.
  */
-export function alignAfterBump(car: Car, bump: Bump): void {
+export function alignAfterBump(car: Car, bump: Pick<Bump, "x" | "y">): void {
   if (bump.x === bump.y) return; // no hit, or a corner
   const along = bump.x ? car.vy : car.vx;
   if (Math.abs(along) < 1) return;

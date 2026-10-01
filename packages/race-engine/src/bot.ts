@@ -1,7 +1,11 @@
 import type { Car, Keys, Track } from "./types.ts";
 
-/** How a bot drives. Lower `skill` brakes earlier and turns later. */
-export type BotStyle = { skill: number };
+/**
+ * How a bot drives. Lower `skill` keeps the throttle in sharper turns;
+ * `topSpeed` (track pixels per tick) makes it lift off above that speed and
+ * skip the nitro, which is what sets the difficulty.
+ */
+export type BotStyle = { skill: number; topSpeed?: number };
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -27,8 +31,8 @@ export function botKeys(car: Car, track: Track, style: BotStyle = { skill: 1 }):
     left: turn < -tolerance,
     right: turn > tolerance,
     // Lift off in sharp turns, brake if they come in too fast.
-    up: Math.abs(turn) < sharp || speed < 2,
+    up: (Math.abs(turn) < sharp || speed < 2) && speed < (style.topSpeed ?? Infinity),
     down: Math.abs(turn) > 2 * sharp && speed > 3,
-    nitro: car.nitro > 0 && Math.abs(turn) < 10 && speed > 4,
+    nitro: style.topSpeed === undefined && car.nitro > 0 && Math.abs(turn) < 10 && speed > 4,
   };
 }

@@ -21,6 +21,20 @@ export function Controls() {
           <Key wide>{t("space")}</Key>
           <figcaption>{t("nitroKey")}</figcaption>
         </figure>
+        <div className="hidden items-end gap-4 lg:flex">
+          {(
+            [
+              ["Enter", "startKey"],
+              ["R", "restartKey"],
+              ["Esc", "pauseKey"],
+            ] as const
+          ).map(([key, caption]) => (
+            <figure key={key} className="flex flex-col items-center gap-2">
+              <Key medium={key !== "R"}>{key}</Key>
+              <figcaption>{t(caption)}</figcaption>
+            </figure>
+          ))}
+        </div>
         <figure className="flex flex-col items-center gap-2">
           <svg viewBox="0 0 20 20" className="size-8">
             <path d="M10 1 17 10 10 19 3 10Z" className="fill-accent" />
@@ -60,10 +74,18 @@ function KeyCluster({ keys: [up, left, down, right] }: { keys: [string, string, 
   );
 }
 
-function Key({ children, wide = false }: { children: string; wide?: boolean }) {
+function Key({
+  children,
+  wide = false,
+  medium = false,
+}: {
+  children: string;
+  wide?: boolean;
+  medium?: boolean;
+}) {
   return (
     <kbd
-      className={`grid h-8 place-items-center rounded-md bg-surface font-sans text-xs text-ink shadow-[0_2px_0_var(--line)] ring-1 ring-line ${wide ? "w-36" : "w-8"}`}
+      className={`grid h-8 place-items-center rounded-md bg-surface font-sans text-xs text-ink shadow-[0_2px_0_var(--line)] ring-1 ring-line ${wide ? "w-36" : medium ? "w-12" : "w-8"}`}
     >
       {children}
     </kbd>

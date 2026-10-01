@@ -62,3 +62,34 @@ test("touch controls show on phones and stay out of the way on desktop", async (
   if (isMobile) await expect(gas).toBeVisible();
   else await expect(gas).toBeHidden();
 });
+
+test("the keyboard starts, pauses, resumes and restarts the race", async ({ page, isMobile }) => {
+  test.skip(isMobile, "keyboard shortcuts are for desktop");
+  await page.goto("/en/projects/racegame/play");
+  await page.keyboard.press("Enter");
+  await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
+
+  await page.keyboard.press("Escape");
+  await expect(game(page)).toHaveAttribute("data-phase", "paused");
+  const frozen = await game(page).getAttribute("data-tick");
+  await page.waitForTimeout(500);
+  await expect(game(page)).toHaveAttribute("data-tick", frozen!);
+  await page.keyboard.press("Escape");
+  await expect(game(page)).toHaveAttribute("data-phase", "racing");
+
+  await page.keyboard.press("KeyR");
+  await expect(game(page)).toHaveAttribute("data-phase", "countdown");
+});
+
+test("the difficulty is remembered in this browser", async ({ page }) => {
+  await page.goto("/en/projects/racegame/play");
+  const hard = page.getByRole("button", { name: "Hard" });
+  await expect(page.getByRole("button", { name: "Normal" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await hard.click();
+  await expect(hard).toHaveAttribute("aria-pressed", "true");
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Hard" })).toHaveAttribute("aria-pressed", "true");
+});

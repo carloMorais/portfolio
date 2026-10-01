@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { botKeys } from "./bot.ts";
 import { overlaps } from "./collision.ts";
 import { PHYSICS, TICK_RATE } from "./constants.ts";
-import { activeItems, createRace, standings, stepRace } from "./race.ts";
+import { activeItems, createRace, standings, stepRace, wrongWay } from "./race.ts";
 import { classicTrack as track } from "./track.ts";
 import { NO_KEYS, type Keys, type RaceState } from "./types.ts";
 
@@ -189,6 +189,51 @@ describe("stepRace", () => {
     assert.equal(s.cars[0]!.vy, -1.63);
   });
 
+  test("a wall hit is reported with its impact and direction", () => {
+    let s = createRace(track, ["a"]);
+    // Rolling down into the bottom wall of the start straight.
+    s.cars[0] = { ...s.cars[0]!, x: 300, y: 550, vy: 6 };
+    s = stepRace(s, track, { a: NO_KEYS });
+    const bump = s.events.find((e) => e.type === "bump");
+    assert.ok(bump && bump.type === "bump");
+    assert.deepEqual([bump.car, bump.nx, bump.ny, bump.gate], ["a", 0, 1, false]);
+    assert.ok(bump.impact > 4);
+    // Events only describe the last tick.
+    s.cars[0] = { ...s.cars[0]!, y: 540, vy: 0 };
+    s = stepRace(s, track, { a: NO_KEYS });
+    assert.deepEqual(s.events, []);
+  });
+
+  test("bouncing off an out-of-order checkpoint is reported as a gate", () => {
+    let s = createRace(track, ["a"]);
+    const cp5 = track.checkpoints[4]!;
+    s.cars[0] = { ...s.cars[0]!, x: cp5.x + cp5.width + 2, y: 540, vx: -5 };
+    s = stepRace(s, track, { a: NO_KEYS });
+    assert.ok(s.events.some((e) => e.type === "bump" && e.gate));
+  });
+
+  test("pickups and laps are reported, and each lap is timed", () => {
+    const barrel = track.items.find((it) => it.type === 2)!;
+    let s = createRace(track, ["a"]);
+    s.cars[0] = { ...s.cars[0]!, x: barrel.x, y: barrel.y };
+    s = stepRace(s, track, { a: NO_KEYS });
+    assert.deepEqual(s.events, [{ type: "pickup", car: "a", item: barrel.id, itemType: 2 }]);
+
+    const { state } = raceBots(createRace(track, ["bot"], 2), 120);
+    const car = state.cars[0]!;
+    assert.equal(car.lapTicks.length, 2);
+    assert.equal(car.lapTicks[0]! + car.lapTicks[1]!, car.finishedAt);
+  });
+
+  test("driving against the racing line is the wrong way", () => {
+    const s = createRace(track, ["a"]);
+    // On the grid the racing line runs left, to the finish line.
+    const car = { ...s.cars[0]!, vx: 4 };
+    assert.equal(wrongWay(car, track), true);
+    assert.equal(wrongWay({ ...car, vx: -4 }, track), false);
+    assert.equal(wrongWay({ ...car, vx: 1 }, track), false); // too slow to tell
+  });
+
   test("leaving the map sends the car back to the start", () => {
     let s = createRace(track, ["a"]);
     s.cars[0] = { ...s.cars[0]!, x: -40, y: 300, checkpoint: 2 };
@@ -214,5 +259,19 @@ describe("standings", () => {
     s.cars[0] = { ...s.cars[0]!, waypoint: 0, checkpoint: track.checkpoints.length };
     s.cars[1] = { ...s.cars[1]!, waypoint: 12, checkpoint: 3 };
     assert.equal(standings(s, track)[0]!.id, "closing");
+  });
+});
+
+describe("botKeys", () => {
+  test("a lower top speed makes a slower bot: that is the difficulty", () => {
+    const time = (topSpeed?: number) => {
+      let s = createRace(track, ["b"], 1);
+      while (s.finished.length === 0 && s.tick < 120 * TICK_RATE) {
+        s = stepRace(s, track, { b: botKeys(s.cars[0]!, track, { skill: 1, topSpeed }) });
+      }
+      return s.cars[0]!.finishedAt ?? Infinity;
+    };
+    const [easy, normal, hard] = [time(3.75), time(5), time()];
+    assert.ok(easy > normal && normal > hard, `easy ${easy}, normal ${normal}, hard ${hard}`);
   });
 });

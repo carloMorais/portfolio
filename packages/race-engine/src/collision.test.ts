@@ -20,7 +20,8 @@ describe("moveCar", () => {
     car.vx = 5;
     car.vy = -4;
     const bump = moveCar(car, [ceiling]);
-    assert.deepEqual(bump, { x: false, y: true });
+    assert.deepEqual([bump.x, bump.y, bump.impact, bump.ny], [false, true, 4, -1]);
+    assert.deepEqual(bump.hits, [ceiling]);
     assert.equal(car.vx, 5);
     assert.equal(car.vy, 1);
     assert.equal(car.y, ceiling.height); // flush against it
@@ -30,7 +31,7 @@ describe("moveCar", () => {
     const car = createCar("a", 72, 50);
     car.vx = 4;
     const bump = moveCar(car, [wall]);
-    assert.deepEqual(bump, { x: true, y: false });
+    assert.deepEqual([bump.x, bump.y, bump.impact, bump.nx], [true, false, 4, 1]);
     assert.equal(car.x + car.width, wall.x);
     assert.equal(car.vx, -1);
   });

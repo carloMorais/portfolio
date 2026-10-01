@@ -1,4 +1,4 @@
-import type { Car, ItemSpawn, Track } from "race-engine";
+import type { Box, Car, ItemSpawn, Track } from "race-engine";
 
 /** The site's colour tokens, read from CSS so the track follows light/dark mode. */
 export type Palette = {
@@ -177,8 +177,9 @@ export function drawCar(
 
 /**
  * The driver's name above the car, faint so it never hides the track, with
- * one small diamond per nitro charge beside it. Flips below the car at the
- * top edge and stays inside the map at the sides.
+ * one small diamond per nitro charge beside it. While nitro burns, a thin bar
+ * between the name and the car empties with the time left (`boost`, 1 → 0).
+ * Flips below the car at the top edge and stays inside the map at the sides.
  */
 export function drawLabel(
   ctx: CanvasRenderingContext2D,
@@ -187,6 +188,7 @@ export function drawLabel(
   nitro: number,
   p: Palette,
   mapWidth: number,
+  boost: number | null,
 ) {
   ctx.save();
   ctx.font = `500 10px ${p.font}`;
@@ -194,7 +196,24 @@ export function drawLabel(
   const diamonds = nitro > 0 ? 4 + nitro * 7 : 0;
   const total = textWidth + diamonds;
   const x = Math.max(3, Math.min(mapWidth - total - 3, car.x + car.width / 2 - total / 2));
-  const y = car.y < 16 ? car.y + car.height + 12 : car.y - 5;
+  const below = car.y < 22;
+  const bar = boost === null ? 0 : 6;
+  const y = below ? car.y + car.height + 12 + bar : car.y - 5 - bar;
+
+  if (boost !== null) {
+    const barWidth = 24;
+    const bx = car.x + car.width / 2 - barWidth / 2;
+    const by = below ? car.y + car.height + 3 : car.y - 7;
+    ctx.globalAlpha = 0.9;
+    ctx.fillStyle = p.line;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, barWidth, 3, 1.5);
+    ctx.fill();
+    ctx.fillStyle = p.accent;
+    ctx.beginPath();
+    ctx.roundRect(bx, by, Math.max(0, barWidth * boost), 3, 1.5);
+    ctx.fill();
+  }
 
   ctx.globalAlpha = 0.65;
   ctx.lineJoin = "round";
@@ -215,6 +234,39 @@ export function drawLabel(
     ctx.lineTo(cx - 3, cy);
     ctx.closePath();
     ctx.fill();
+  }
+  ctx.restore();
+}
+
+/**
+ * Where to go next: the next checkpoint's line, or the finish line once every
+ * checkpoint is done, in the accent colour and gently pulsing (`pulse`, 0–1).
+ */
+export function drawTarget(
+  ctx: CanvasRenderingContext2D,
+  box: Box,
+  finish: boolean,
+  p: Palette,
+  pulse: number,
+) {
+  ctx.save();
+  ctx.strokeStyle = p.accent;
+  ctx.globalAlpha = 0.45 + 0.45 * pulse;
+  if (finish) {
+    ctx.lineWidth = 2;
+    ctx.strokeRect(box.x - 2, box.y - 2, box.width + 4, box.height + 4);
+  } else {
+    ctx.lineWidth = 2.5;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    if (box.width > box.height) {
+      ctx.moveTo(box.x, box.y + box.height / 2);
+      ctx.lineTo(box.x + box.width, box.y + box.height / 2);
+    } else {
+      ctx.moveTo(box.x + box.width / 2, box.y);
+      ctx.lineTo(box.x + box.width / 2, box.y + box.height);
+    }
+    ctx.stroke();
   }
   ctx.restore();
 }

@@ -1,4 +1,4 @@
-import { PHYSICS } from "./constants.ts";
+import { PHYSICS, round2 } from "./constants.ts";
 import { alignAfterBump, moveCar, overlaps } from "./collision.ts";
 import { applySlowdown, stepCarPhysics } from "./physics.ts";
 import { NO_KEYS, type Box, type Car, type Keys, type RaceState, type Track } from "./types.ts";
@@ -35,6 +35,8 @@ export function createCar(id: string, x: number, y: number): Car {
     align: null,
     waypoint: 0,
     finishedAt: null,
+    lapTicks: [],
+    lapStartedAt: 0,
   };
 }
 
@@ -48,6 +50,7 @@ export function createRace(track: Track, carIds: string[], laps = 3): RaceState 
     }),
     itemRespawnAt: {},
     finished: [],
+    events: [],
   };
 }
 
@@ -63,6 +66,7 @@ export const activeItems = (track: Track, state: RaceState) =>
 export function stepRace(state: RaceState, track: Track, inputs: Record<string, Keys>): RaceState {
   const next = structuredClone(state);
   next.tick += 1;
+  next.events = [];
   const tick = next.tick;
 
   for (const [id, at] of Object.entries(next.itemRespawnAt)) {
@@ -72,7 +76,18 @@ export function stepRace(state: RaceState, track: Track, inputs: Record<string, 
   for (const car of next.cars) {
     const keys = car.finishedAt === null ? (inputs[car.id] ?? NO_KEYS) : NO_KEYS;
     stepCarPhysics(car, keys, tick);
-    alignAfterBump(car, moveCar(car, blockersFor(car, track)));
+    const bump = moveCar(car, blockersFor(car, track));
+    alignAfterBump(car, bump);
+    if (bump.hits.length > 0) {
+      next.events.push({
+        type: "bump",
+        car: car.id,
+        impact: round2(bump.impact),
+        nx: bump.nx,
+        ny: bump.ny,
+        gate: bump.hits.every((box) => !track.walls.includes(box)),
+      });
+    }
     keepInside(car, track);
   }
   for (const car of next.cars) crossCheckpoints(car, track);
@@ -119,10 +134,15 @@ function crossFinishLine(car: Car, track: Track, state: RaceState) {
   if (!overlaps(car, track.finishLine) || car.checkpoint !== track.checkpoints.length) return;
   car.checkpoint = 0;
   car.laps += 1;
-  if (car.laps >= state.laps && car.finishedAt === null) {
+  const ticks = state.tick - car.lapStartedAt;
+  car.lapTicks.push(ticks);
+  car.lapStartedAt = state.tick;
+  const finished = car.laps >= state.laps && car.finishedAt === null;
+  if (finished) {
     car.finishedAt = state.tick;
     state.finished.push(car.id);
   }
+  state.events.push({ type: "lap", car: car.id, lap: car.laps, ticks, finished });
 }
 
 function pickItems(car: Car, track: Track, state: RaceState) {
@@ -135,6 +155,7 @@ function pickItems(car: Car, track: Track, state: RaceState) {
     applySlowdown(car);
   }
   state.itemRespawnAt[item.id] = state.tick + PHYSICS.itemRespawnTicks;
+  state.events.push({ type: "pickup", car: car.id, item: item.id, itemType: item.type });
 }
 
 const WAYPOINT_RADIUS = 40;
@@ -163,4 +184,22 @@ export function standings(state: RaceState, track: Track): Car[] {
     return car.laps * n + (aboutToFinish ? n : car.waypoint);
   };
   return [...state.cars].sort((a, b) => progress(b) - progress(a));
+}
+
+/**
+ * True when the car is driving against the racing line: moving with some
+ * speed, mostly opposite to the stretch it should be on. A bounce flips the
+ * velocity for a moment, so callers should wait for it to last a little.
+ */
+export function wrongWay(car: Car, track: Track): boolean {
+  const n = track.waypoints.length;
+  const to = track.waypoints[car.waypoint];
+  const from = track.waypoints[(car.waypoint - 1 + n) % n];
+  if (!to || !from) return false;
+  const speed = Math.hypot(car.vx, car.vy);
+  if (speed < 1.5) return false;
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const along = (car.vx * dx + car.vy * dy) / (speed * Math.hypot(dx, dy));
+  return along < -0.5;
 }
