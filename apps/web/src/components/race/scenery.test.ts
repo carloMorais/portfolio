@@ -1,5 +1,5 @@
 import { classicTrack, overlaps } from "race-engine";
-import { ROCKS, SHEDS, STANDS, TREES, seatFans } from "./scenery";
+import { OIL_BARRELS, ROCKS, STANDS, TIRES, TREES, seatFans } from "./scenery";
 
 /** Is the point on the grass, i.e. inside one of the (rounded) walls? */
 const onGrass = (x: number, y: number) =>
@@ -36,13 +36,50 @@ describe("scenery", () => {
     }
   });
 
-  test("every shed sits on the grass, a couple of pixels clear of the road", () => {
-    for (const s of SHEDS) {
-      for (let x = s.x - 2; x <= s.x + s.w + 2; x += 3) {
-        for (let y = s.y - 2; y <= s.y + s.h + 2; y += 3) {
-          expect([s.x, s.y, x, y, onGrass(x, y)]).toEqual([s.x, s.y, x, y, true]);
-        }
+  test("every tire sits on the grass", () => {
+    for (const t of TIRES) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+        const x = Math.round(t.x + Math.cos(a) * 7);
+        const y = Math.round(t.y + Math.sin(a) * 7);
+        expect([t.x, t.y, onGrass(x, y)]).toEqual([t.x, t.y, true]);
       }
+    }
+  });
+
+  test("every oil barrel sits on the grass", () => {
+    for (const b of OIL_BARRELS) {
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+        const x = Math.round(b.x + Math.cos(a) * 8);
+        const y = Math.round(b.y + Math.sin(a) * 8);
+        expect([b.x, b.y, onGrass(x, y)]).toEqual([b.x, b.y, true]);
+      }
+    }
+  });
+
+  test("no two pieces of scenery sit on top of each other", () => {
+    const round = [...TREES, ...ROCKS].map((o) => ({ ...o, r: o.r }));
+    const small = [
+      ...TIRES.map((t) => ({ ...t, r: 6.5 })),
+      ...OIL_BARRELS.map((b) => ({ ...b, r: 8 })),
+    ];
+    const points = [...round, ...small];
+    for (let i = 0; i < points.length; i++) {
+      for (let j = i + 1; j < points.length; j++) {
+        const a = points[i]!;
+        const b = points[j]!;
+        const dist = Math.hypot(a.x - b.x, a.y - b.y);
+        expect([a, b, dist >= a.r + b.r]).toEqual([a, b, true]);
+      }
+      const p = points[i]!;
+      expect(
+        STANDS.some(
+          (s) =>
+            p.x > s.x - p.r &&
+            p.x < s.x + s.width + p.r &&
+            p.y > s.y - p.r &&
+            p.y < s.y + s.height + p.r,
+        ),
+      ).toBe(false);
     }
   });
 

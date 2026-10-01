@@ -4,7 +4,7 @@
  * asphalt with a white dashed line, a light kerb, and vivid green grass).
  * None of this is traced from the original art (no licence for it) — it's a
  * fresh, flat 2D read of the same palette and the same kind of trackside
- * objects (trees, rocks, a shed).
+ * objects (trees, rocks, tires, oil barrels).
  */
 export type GameColors = {
   road: string;
@@ -28,9 +28,10 @@ export type GameColors = {
   treeLight: string;
   rock: string;
   rockLight: string;
-  shedWall: string;
-  shedRoof: string;
-  shedDoor: string;
+  tire: string;
+  tireRim: string;
+  oilBarrel: string;
+  oilBarrelBand: string;
   fans: string[];
   bolt: string;
   barrel: string;
@@ -64,17 +65,18 @@ export const COLORS: GameColors = {
   wheel: "#201f1d",
   stripe: "#fffaf0",
   helmet: "#fffaf0",
-  standFront: "#9a958a",
-  standRow: "#d8d2c4",
-  standRowAlt: "#c7c0af",
-  standRoof: "#6b6559",
+  standFront: "#7e7a71",
+  standRow: "#b1aca1",
+  standRowAlt: "#a39d90",
+  standRoof: "#585349",
   tree: "#3c7a40",
   treeLight: "#55974f",
   rock: "#8f8d85",
   rockLight: "#aaa79c",
-  shedWall: "#8a4b3d",
-  shedRoof: "#4c3326",
-  shedDoor: "#30211a",
+  tire: "#201f1d",
+  tireRim: "#4a4642",
+  oilBarrel: "#30342f",
+  oilBarrelBand: "#1b1e1a",
   fans: ["#ef6f6c", "#f2b134", "#3bb08f", "#5b8def", "#f3924a", "#b07cc6", "#fffaf0"],
   bolt: "#ffd166",
   barrel: "#e07a5f",

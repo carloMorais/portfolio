@@ -52,16 +52,21 @@ export const classicTrack: Track = {
   height: 600,
   spawn: { x: 380, y: 540 },
   walls: roundCorners(ORIGINAL_WALLS, 760, 600, { outer: 20, inner: 6 }),
+  // Checkpoints sized to the actual lane width (70 px) they sit across, not
+  // the original 80 px (which poked a few pixels into the walls on either
+  // side, drawing bigger than the road).
   checkpoints: [
-    { order: 1, x: 50, y: 400, width: 80, height: 20 },
-    { order: 2, x: 140, y: 100, width: 80, height: 20 },
-    { order: 3, x: 540, y: 300, width: 80, height: 20 },
-    { order: 4, x: 640, y: 300, width: 80, height: 20 },
-    { order: 5, x: 420, y: 500, width: 20, height: 80 },
+    { order: 1, x: 55, y: 400, width: 70, height: 20 },
+    { order: 2, x: 140, y: 100, width: 70, height: 20 },
+    { order: 3, x: 540, y: 300, width: 70, height: 20 },
+    { order: 4, x: 650, y: 300, width: 70, height: 20 },
+    { order: 5, x: 420, y: 510, width: 20, height: 70 },
   ],
-  finishLine: { x: 330, y: 500, width: 37, height: 80 },
+  finishLine: { x: 330, y: 510, width: 37, height: 70 },
   items: [
-    { id: "a", type: 2, x: 60, y: 450, width: 20, height: 20 },
+    // Moved up from the first curve's exit (near the bottom straight) to its
+    // entry, higher up the left straight.
+    { id: "a", type: 2, x: 60, y: 260, width: 20, height: 20 },
     { id: "b", type: 1, x: 90, y: 420, width: 20, height: 20 },
     { id: "c", type: 2, x: 180, y: 160, width: 20, height: 20 },
     { id: "d", type: 4, x: 300, y: 300, width: 20, height: 20 },
@@ -70,8 +75,9 @@ export const classicTrack: Track = {
     { id: "g", type: 1, x: 660, y: 150, width: 20, height: 20 },
     { id: "h", type: 3, x: 650, y: 450, width: 25, height: 30 },
     { id: "i", type: 1, x: 600, y: 520, width: 20, height: 20 },
-    // j and k moved off the crowded start-area cluster onto the bare right lane.
-    { id: "j", type: 4, x: 685, y: 420, width: 20, height: 20 },
+    // j and k moved off the crowded start-area cluster onto the bare right
+    // lane, spaced out from the log at h so the lane isn't a forced double hit.
+    { id: "j", type: 4, x: 685, y: 350, width: 20, height: 20 },
     { id: "k", type: 2, x: 685, y: 250, width: 20, height: 20 },
     { id: "l", type: 2, x: 153, y: 280, width: 20, height: 20 },
     { id: "m", type: 1, x: 150, y: 550, width: 20, height: 20 },
