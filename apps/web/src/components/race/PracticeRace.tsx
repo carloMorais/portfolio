@@ -305,11 +305,11 @@ export function PracticeRace() {
       for (const ev of s.events) {
         if (ev.type === "bump") {
           const car = s.cars.find((c) => c.id === ev.car)!;
-          fx.bump(ev.car, car, ev.impact, ev.nx, ev.ny, ev.gate, p, now);
+          fx.bump(car, ev.impact, ev.nx, ev.ny, ev.gate, p, now);
           if (ev.car === PLAYER && ev.gate) gateAt.current = s.tick;
         } else if (ev.type === "pickup") {
           const item = track.items.find((it) => it.id === ev.item)!;
-          fx.pickup(item, ev.car, ev.car === PLAYER, p, now);
+          fx.pickup(item, p, now);
         } else if (ev.car === PLAYER && !ev.finished && ev.lap === LAPS - 1) {
           lastLapUntil.current = now + LAST_LAP_MS;
           setAnnouncement(t("announceLastLap"));
@@ -435,17 +435,13 @@ export function PracticeRace() {
       for (const { car, at } of ordered) {
         if (car.nitroUntil !== null && running()) fx.trail(car.id, at, p, now);
       }
-      fx.drawBelow(ctx, now);
-      // Only the site's tokens: you in the accent, bots in ink and grey, told apart by a stripe.
-      const looks: CarLook[] = [
-        { body: p.ink, stripe: false },
-        { body: p.muted, stripe: false },
-        { body: p.ink, stripe: true },
-      ];
+      fx.draw(ctx, now);
+      // You in the site's blue with a stripe; each bot in its own colour.
+      const looks: CarLook[] = p.c.bots.map((body) => ({ body, stripe: false }));
       for (const { car, at } of ordered) {
         const look =
           car.id === PLAYER ? { body: p.accent, stripe: true } : looks[BOT_IDS.indexOf(car.id)]!;
-        drawCar(ctx, at, look, p, car.nitroUntil !== null, fx.flash(car.id, now));
+        drawCar(ctx, at, look, p, car.nitroUntil !== null);
       }
       for (const { car, at } of ordered) {
         const boost =
@@ -454,8 +450,6 @@ export function PracticeRace() {
             : Math.max(0, Math.min(1, (car.nitroUntil - s.tick - alpha) / PHYSICS.nitroTicks));
         drawLabel(ctx, at, names(car.id), car.nitro, p, track.width, boost);
       }
-      const where = new Map(ordered.map(({ car, at }) => [car.id, at]));
-      fx.drawAbove(ctx, p, now, (id) => where.get(id));
     };
 
     raf = requestAnimationFrame(frame);
@@ -550,7 +544,7 @@ export function PracticeRace() {
       data-tick={hud.tick}
       data-player-x={hud.playerX}
       ref={rootRef}
-      className="grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[11rem_minmax(0,1fr)_7rem] lg:gap-x-8"
+      className="grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,1fr)_6.5rem] lg:gap-x-6"
     >
       <p className="sr-only" aria-live="polite">
         {announcement}
@@ -628,7 +622,7 @@ export function PracticeRace() {
       </dl>
 
       {/* Never taller than the window: the whole track stays in view while you drive. */}
-      <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-7rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
+      <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}

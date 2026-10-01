@@ -1,3 +1,5 @@
+import type { ItemType } from "./types.ts";
+
 /** Server ticks per second, as in the 2024 game. */
 export const TICK_RATE = 30;
 
@@ -40,3 +42,18 @@ export const PHYSICS = {
 
 /** Rounds to 2 decimals like the original, so client and server stay in sync. */
 export const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * What each item is. `rigid` doesn't change the physics (every obstacle costs
+ * `obstaclePenalty`); it tells clients how to show the hit: rigid things
+ * shatter, soft ones just burst.
+ */
+export const ITEM_KINDS: Record<
+  ItemType,
+  { name: "nitro" | "barrel" | "log" | "cone"; rigid: boolean }
+> = {
+  1: { name: "nitro", rigid: false },
+  2: { name: "barrel", rigid: true },
+  3: { name: "log", rigid: true },
+  4: { name: "cone", rigid: false },
+};

@@ -26,23 +26,26 @@ export default function PlayPage() {
 
   return (
     <PageTransition>
-      <section className="container-page pt-10 pb-20 md:pt-16">
-        <Link
-          href="/projects/racegame"
-          className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink"
-        >
-          <ArrowIcon className="size-4 rotate-180" />
-          {t("backToCase")}
-        </Link>
-        <p className="eyebrow mt-10">{t("eyebrow")}</p>
-        <h1 className="mt-4 font-display text-4xl leading-[1.1] tracking-tight sm:text-5xl">
-          {t.rich("title", brushTags)}
-        </h1>
-        <p className="mt-5 max-w-2xl text-lg text-muted text-pretty">{t("lead")}</p>
-        <p className="mt-3 max-w-2xl text-sm text-muted text-pretty">{t("note")}</p>
-        <Controls />
+      <section className="pt-10 pb-20 md:pt-16">
+        <div className="container-page">
+          <Link
+            href="/projects/racegame"
+            className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink"
+          >
+            <ArrowIcon className="size-4 rotate-180" />
+            {t("backToCase")}
+          </Link>
+          <p className="eyebrow mt-10">{t("eyebrow")}</p>
+          <h1 className="mt-4 font-display text-4xl leading-[1.1] tracking-tight sm:text-5xl">
+            {t.rich("title", brushTags)}
+          </h1>
+          <p className="mt-5 max-w-2xl text-lg text-muted text-pretty">{t("lead")}</p>
+          <p className="mt-3 max-w-2xl text-sm text-muted text-pretty">{t("note")}</p>
+          <Controls />
+        </div>
 
-        <div className="mt-10">
+        {/* The game gets more room than the text column: as wide as the window allows. */}
+        <div className="mx-auto mt-10 w-full max-w-[96rem] px-5 sm:px-8">
           <PracticeRace />
         </div>
       </section>

@@ -1,42 +1,43 @@
-import type { Box, ItemSpawn } from "race-engine";
-import type { Palette } from "./draw";
+import { ITEM_KINDS, type Box, type ItemSpawn } from "race-engine";
+import { itemColors, type Palette } from "./draw";
 
 /**
- * Short-lived visual effects drawn over the race, all timed in milliseconds
- * (not ticks) so they stay smooth at any frame rate. Inspired by the 2024
- * game, which burst picked items into 4 px squares and left a trail of
- * shrinking circles behind a car on nitro; here the bursts follow the item's
- * colour, wall hits kick up dust and flash the car, and pickups float a label.
- * With reduced motion only the labels show, without moving.
+ * Short-lived visual effects drawn under the cars, timed in milliseconds (not
+ * ticks) so they stay smooth at any frame rate. Inspired by the 2024 game,
+ * which burst picked items into 4 px squares and left a trail of shrinking
+ * circles behind a car on nitro. Here:
+ * - soft items (nitro, cone) burst into round bits in their colours;
+ * - rigid ones (barrel, log) shatter: spinning shards, a crack ring, dust;
+ * - wall hits puff dust off the wall, and strong ones throw sparks;
+ * - nitro leaves a trail.
+ * With reduced motion none of this is drawn.
  */
 
 type Particle = {
+  kind: "dot" | "square" | "puff" | "shard" | "spark";
   x: number;
   y: number;
+  /** px per ms */
   vx: number;
   vy: number;
   size: number;
   color: string;
-  shape: "square" | "circle";
   born: number;
   life: number;
   alpha: number;
+  /** Shards: starting angle, spin (rad per ms) and shape. */
+  angle?: number;
+  spin?: number;
+  points?: [number, number][];
 };
 type Ring = { x: number; y: number; color: string; born: number; life: number; radius: number };
-/** A label that rides above a car. */
-type Floater = { id: string; text: string; color: string; born: number; life: number };
-/** Where a car is drawn this frame (its top-left corner and width). */
-export type Locate = (id: string) => { x: number; y: number; width: number } | undefined;
-type Hit = { born: number; strength: number };
 
-const HIT_MS = 280;
 const TRAIL_EVERY_MS = 18;
+const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 export class Effects {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
-  private floaters: Floater[] = [];
-  private hits = new Map<string, Hit>();
   private lastTrail = new Map<string, number>();
 
   constructor(private readonly reduced: boolean) {}
@@ -44,138 +45,234 @@ export class Effects {
   clear() {
     this.particles = [];
     this.rings = [];
-    this.floaters = [];
-    this.hits.clear();
     this.lastTrail.clear();
   }
 
-  /** An item picked up: it bursts outwards; for your car, a label says what it did. */
-  pickup(item: ItemSpawn, id: string, mine: boolean, p: Palette, now: number) {
+  /** An item picked up: rigid ones shatter, soft ones burst. */
+  pickup(item: ItemSpawn, p: Palette, now: number) {
+    if (this.reduced) return;
     const cx = item.x + item.width / 2;
     const cy = item.y + item.height / 2;
-    const nitro = item.type === 1;
-    if (!this.reduced) {
-      const count = nitro ? 14 : 18;
-      for (let i = 0; i < count; i++) {
-        const angle = (i / count) * Math.PI * 2 + Math.random() * 0.4;
-        const speed = 0.06 + Math.random() * 0.08;
-        this.particles.push({
-          x: cx,
-          y: cy,
-          vx: Math.cos(angle) * speed,
-          vy: Math.sin(angle) * speed,
-          size: nitro ? 3 : 2.5 + Math.random() * 2,
-          color: nitro ? p.accent : p.muted,
-          shape: nitro ? "circle" : "square",
-          born: now,
-          life: 420 + Math.random() * 200,
-          alpha: 0.9,
-        });
-      }
-      if (nitro)
-        this.rings.push({ x: cx, y: cy, color: p.accent, born: now, life: 450, radius: 22 });
-    }
-    if (mine) {
-      this.floaters.push({
-        id,
-        text: nitro ? "+1" : "−70%",
-        color: nitro ? p.accent : p.ink,
-        born: now,
-        life: 900,
-      });
-    }
+    const [main, second] = itemColors(item.type, p);
+    if (ITEM_KINDS[item.type].rigid) this.shatter(cx, cy, main, second, p, now);
+    else this.burst(cx, cy, main, second, item.type === 1, now);
   }
 
-  /** A wall hit: the car flashes, harder the faster it hit, and dust flies off the wall. */
-  bump(
-    id: string,
-    car: Box,
-    impact: number,
+  private burst(cx: number, cy: number, main: string, second: string, ring: boolean, now: number) {
+    const count = 16;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rand(0, 0.4);
+      const speed = rand(0.05, 0.12);
+      this.particles.push({
+        kind: "dot",
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: rand(2, 3.2),
+        color: i % 3 === 0 ? second : main,
+        born: now,
+        life: rand(420, 620),
+        alpha: 0.95,
+      });
+    }
+    if (ring) this.rings.push({ x: cx, y: cy, color: main, born: now, life: 450, radius: 22 });
+  }
+
+  /** Something hard breaking: angular shards that spin away, a crack ring, a puff. */
+  private shatter(cx: number, cy: number, main: string, second: string, p: Palette, now: number) {
+    const count = 9;
+    for (let i = 0; i < count; i++) {
+      const angle = (i / count) * Math.PI * 2 + rand(-0.25, 0.25);
+      const speed = rand(0.07, 0.15);
+      const s = rand(2.5, 4.5);
+      // An irregular triangle around the origin.
+      const points: [number, number][] = [
+        [rand(-s, -s / 3), rand(-s, s)],
+        [rand(s / 3, s), rand(-s, 0)],
+        [rand(-s / 3, s / 2), rand(s / 3, s)],
+      ];
+      this.particles.push({
+        kind: "shard",
+        x: cx + Math.cos(angle) * 3,
+        y: cy + Math.sin(angle) * 3,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: s,
+        color: i % 3 === 0 ? second : main,
+        born: now,
+        life: rand(520, 760),
+        alpha: 1,
+        angle: rand(0, Math.PI * 2),
+        spin: rand(-0.02, 0.02),
+        points,
+      });
+    }
+    // Splinters: thin, fast, short-lived.
+    for (let i = 0; i < 6; i++) {
+      const angle = rand(0, Math.PI * 2);
+      const speed = rand(0.14, 0.22);
+      this.particles.push({
+        kind: "spark",
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed,
+        size: rand(3, 5),
+        color: second,
+        born: now,
+        life: rand(220, 320),
+        alpha: 0.9,
+      });
+    }
+    this.puffs(cx, cy, 0, 0, 4, p, now);
+    this.rings.push({ x: cx, y: cy, color: p.c.stripe, born: now, life: 220, radius: 14 });
+  }
+
+  /** Soft dust clouds that grow and fade, drifting away from (nx, ny). */
+  private puffs(
+    x: number,
+    y: number,
     nx: number,
     ny: number,
-    gate: boolean,
+    count: number,
     p: Palette,
     now: number,
   ) {
-    if (impact < 1.2) return;
-    // A flash is a colour change, not motion: it stays with reduced motion.
-    this.hits.set(id, { born: now, strength: Math.min(1, 0.35 + impact / 6) });
-    if (gate || this.reduced) return; // checkpoints are lines on the road, nothing to kick up
-    const contactX = car.x + car.width / 2 + (nx * car.width) / 2;
-    const contactY = car.y + car.height / 2 + (ny * car.height) / 2;
-    const count = Math.round(Math.min(10, impact * 1.6));
     for (let i = 0; i < count; i++) {
-      // Spray back from the wall, spread sideways along it.
-      const along = (Math.random() - 0.5) * 0.16;
-      const back = 0.03 + Math.random() * 0.06;
+      const angle = rand(0, Math.PI * 2);
+      const drift = rand(0.008, 0.025);
       this.particles.push({
-        x: contactX,
-        y: contactY,
-        vx: -nx * back + (nx === 0 ? along : 0),
-        vy: -ny * back + (ny === 0 ? along : 0),
-        size: 1.5 + Math.random() * 2,
-        color: p.muted,
-        shape: "square",
+        kind: "puff",
+        x: x + rand(-2, 2),
+        y: y + rand(-2, 2),
+        vx: -nx * 0.02 + Math.cos(angle) * drift,
+        vy: -ny * 0.02 + Math.sin(angle) * drift,
+        size: rand(3, 5),
+        color: p.c.dust,
         born: now,
-        life: 350 + Math.random() * 250,
-        alpha: 0.7,
+        life: rand(450, 700),
+        alpha: 0.55,
       });
     }
   }
 
-  /** Called every frame for a car on nitro: circles that shrink behind it. */
+  /** A wall hit: dust off the wall, more the harder it was; sparks on a big one. */
+  bump(car: Box, impact: number, nx: number, ny: number, gate: boolean, p: Palette, now: number) {
+    // Checkpoints are lines on the road: nothing to kick up there.
+    if (impact < 1.2 || gate || this.reduced) return;
+    const x = car.x + car.width / 2 + (nx * car.width) / 2;
+    const y = car.y + car.height / 2 + (ny * car.height) / 2;
+    this.puffs(x, y, nx, ny, Math.round(Math.min(5, 1 + impact * 0.7)), p, now);
+    const bits = Math.round(Math.min(8, impact * 1.3));
+    for (let i = 0; i < bits; i++) {
+      // Spray back from the wall, spread sideways along it.
+      const along = rand(-0.08, 0.08);
+      const back = rand(0.03, 0.08);
+      this.particles.push({
+        kind: "square",
+        x,
+        y,
+        vx: -nx * back + (nx === 0 ? along : 0),
+        vy: -ny * back + (ny === 0 ? along : 0),
+        size: rand(1.5, 2.8),
+        color: p.c.dust,
+        born: now,
+        life: rand(350, 550),
+        alpha: 0.85,
+      });
+    }
+    if (impact >= 3) {
+      for (let i = 0; i < 4; i++) {
+        const along = rand(-0.12, 0.12);
+        const back = rand(0.08, 0.14);
+        this.particles.push({
+          kind: "spark",
+          x,
+          y,
+          vx: -nx * back + (nx === 0 ? along : 0),
+          vy: -ny * back + (ny === 0 ? along : 0),
+          size: rand(3, 5),
+          color: p.c.spark,
+          born: now,
+          life: rand(160, 260),
+          alpha: 1,
+        });
+      }
+    }
+  }
+
+  /** Called every frame for a car on nitro: warm circles that shrink behind it. */
   trail(id: string, car: Box & { rotation: number }, p: Palette, now: number) {
     if (this.reduced || now - (this.lastTrail.get(id) ?? 0) < TRAIL_EVERY_MS) return;
     this.lastTrail.set(id, now);
     const facing = ((car.rotation + 180) * Math.PI) / 180;
-    const rearX = car.x + car.width / 2 - Math.cos(facing) * 11;
-    const rearY = car.y + car.height / 2 - Math.sin(facing) * 11;
+    const rearX = car.x + car.width / 2 - Math.cos(facing) * 12;
+    const rearY = car.y + car.height / 2 - Math.sin(facing) * 12;
     this.particles.push({
-      x: rearX + (Math.random() - 0.5) * 4,
-      y: rearY + (Math.random() - 0.5) * 4,
+      kind: "dot",
+      x: rearX + rand(-2, 2),
+      y: rearY + rand(-2, 2),
       vx: -Math.cos(facing) * 0.03,
       vy: -Math.sin(facing) * 0.03,
-      size: 4 + Math.random() * 1.5,
-      color: p.accent,
-      shape: "circle",
+      size: rand(3.5, 5),
+      color: Math.random() < 0.6 ? p.c.bolt : p.accent,
       born: now,
       life: 380,
-      alpha: 0.45,
+      alpha: 0.6,
     });
   }
 
-  /** How strongly to wash a car in light right now (0–1): a quick flash that fades. */
-  flash(id: string, now: number) {
-    const hit = this.hits.get(id);
-    if (!hit) return 0;
-    const t = (now - hit.born) / HIT_MS;
-    if (t >= 1) {
-      this.hits.delete(id);
-      return 0;
-    }
-    return hit.strength * (1 - t) ** 2;
-  }
-
   /** Particles and rings: drawn under the cars. */
-  drawBelow(ctx: CanvasRenderingContext2D, now: number) {
+  draw(ctx: CanvasRenderingContext2D, now: number) {
     ctx.save();
     this.particles = this.particles.filter((pt) => {
       const age = now - pt.born;
       const t = age / pt.life;
       if (t >= 1) return false;
-      // Particles slow down as they go (ease-out), and fade.
+      // Everything slows down as it goes (ease-out).
       const travel = age * (1 - t / 2);
       const x = pt.x + pt.vx * travel;
       const y = pt.y + pt.vy * travel;
-      const size = pt.shape === "circle" ? pt.size * (1 - t) : pt.size;
-      ctx.globalAlpha = pt.alpha * (1 - t);
       ctx.fillStyle = pt.color;
-      if (pt.shape === "circle") {
+      ctx.strokeStyle = pt.color;
+      if (pt.kind === "puff") {
+        ctx.globalAlpha = pt.alpha * (1 - t) ** 1.5;
         ctx.beginPath();
-        ctx.arc(x, y, Math.max(0, size), 0, Math.PI * 2);
+        ctx.arc(x, y, pt.size * (1 + t * 1.4), 0, Math.PI * 2);
         ctx.fill();
+      } else if (pt.kind === "dot") {
+        ctx.globalAlpha = pt.alpha * (1 - t);
+        ctx.beginPath();
+        ctx.arc(x, y, Math.max(0, pt.size * (1 - t)), 0, Math.PI * 2);
+        ctx.fill();
+      } else if (pt.kind === "square") {
+        ctx.globalAlpha = pt.alpha * (1 - t);
+        ctx.fillRect(x - pt.size / 2, y - pt.size / 2, pt.size, pt.size);
+      } else if (pt.kind === "spark") {
+        // A short streak along its own motion.
+        const len = pt.size * (1 - t);
+        const speed = Math.hypot(pt.vx, pt.vy) || 1;
+        ctx.globalAlpha = pt.alpha * (1 - t);
+        ctx.lineWidth = 1.2;
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        ctx.lineTo(x - (pt.vx / speed) * len, y - (pt.vy / speed) * len);
+        ctx.stroke();
       } else {
-        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        // Shard: solid until 60% of its life, then fades and shrinks a little.
+        ctx.globalAlpha = t < 0.6 ? pt.alpha : pt.alpha * (1 - (t - 0.6) / 0.4);
+        const scale = 1 - t * 0.3;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(pt.angle! + pt.spin! * travel);
+        ctx.scale(scale, scale);
+        ctx.beginPath();
+        pt.points!.forEach(([px, py], i) => (i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py)));
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
       }
       return true;
     });
@@ -189,30 +286,6 @@ export class Effects {
       ctx.beginPath();
       ctx.arc(r.x, r.y, 6 + r.radius * (1 - (1 - t) ** 3), 0, Math.PI * 2);
       ctx.stroke();
-      return true;
-    });
-    ctx.restore();
-  }
-
-  /** Floating labels: drawn over everything. */
-  drawAbove(ctx: CanvasRenderingContext2D, p: Palette, now: number, locate: Locate) {
-    ctx.save();
-    ctx.font = `600 11px ${p.font}`;
-    ctx.textAlign = "center";
-    ctx.lineJoin = "round";
-    this.floaters = this.floaters.filter((f) => {
-      const t = (now - f.born) / f.life;
-      const car = locate(f.id);
-      if (t >= 1 || !car) return false;
-      const x = car.x + car.width / 2;
-      const y = car.y - 20;
-      const rise = this.reduced ? 0 : 16 * (1 - (1 - t) ** 2);
-      ctx.globalAlpha = t < 0.6 ? 1 : 1 - (t - 0.6) / 0.4;
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = p.bg;
-      ctx.strokeText(f.text, x, y - rise);
-      ctx.fillStyle = f.color;
-      ctx.fillText(f.text, x, y - rise);
       return true;
     });
     ctx.restore();

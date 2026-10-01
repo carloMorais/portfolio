@@ -71,6 +71,7 @@ test("the keyboard starts, pauses, resumes and restarts the race", async ({ page
 
   await page.keyboard.press("Escape");
   await expect(game(page)).toHaveAttribute("data-phase", "paused");
+  await page.waitForTimeout(250); // the HUD refreshes every 100 ms: let it settle
   const frozen = await game(page).getAttribute("data-tick");
   await page.waitForTimeout(500);
   await expect(game(page)).toHaveAttribute("data-tick", frozen!);

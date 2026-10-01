@@ -1,6 +1,10 @@
 import type { Box, Car, ItemSpawn, Track } from "race-engine";
+import { DARK, LIGHT, type GameColors } from "./colors";
 
-/** The site's colour tokens, read from CSS so the track follows light/dark mode. */
+/**
+ * Colours for the canvas: the site's tokens, read from CSS so the track
+ * follows light/dark mode, plus the game's own set (`c`).
+ */
 export type Palette = {
   bg: string;
   surface: string;
@@ -10,8 +14,7 @@ export type Palette = {
   accent: string;
   /** The page's text font, for labels drawn on the canvas. */
   font: string;
-  /** Whichever of paper and ink is lighter: the colour of a hit flash. */
-  light: string;
+  c: GameColors;
 };
 
 export function readPalette(el: Element): Palette {
@@ -20,39 +23,39 @@ export function readPalette(el: Element): Palette {
   const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
   return {
     font: css.fontFamily,
-    light: dark ? v("--ink") : v("--bg"),
     bg: v("--bg"),
     surface: v("--surface"),
     ink: v("--ink"),
     muted: v("--muted"),
     line: v("--line"),
     accent: v("--accent"),
+    c: dark ? DARK : LIGHT,
   };
 }
 
 /**
  * The track, drawn from the engine's own collision boxes so what you see is
- * exactly what you hit: the road is paper, everything off it is hatched like
- * the site's photo placeholders, and the racing line is a faint dashed path.
+ * exactly what you hit: the road is the site's paper, everything off it is
+ * pastel grass with the site's fine diagonal hatch, edged by a soft kerb.
  */
 export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palette) {
   const { width, height } = track;
   ctx.fillStyle = p.bg;
   ctx.fillRect(0, 0, width, height);
 
-  // A soft kerb: the walls, grown by a pixel and a half, in the line colour.
-  ctx.fillStyle = p.line;
+  // Kerb: the walls grown by a pixel and a half.
+  ctx.fillStyle = p.c.kerb;
   for (const w of track.walls) ctx.fillRect(w.x - 1.5, w.y - 1.5, w.width + 3, w.height + 3);
 
-  // Off-track: surface with a fine diagonal hatch, clipped to the walls.
+  // Grass, clipped to the walls.
   ctx.save();
   ctx.beginPath();
   for (const w of track.walls) ctx.rect(w.x, w.y, w.width, w.height);
   ctx.clip();
-  ctx.fillStyle = p.surface;
+  ctx.fillStyle = p.c.grass;
   ctx.fillRect(0, 0, width, height);
-  ctx.strokeStyle = p.line;
-  ctx.lineWidth = 1;
+  ctx.strokeStyle = p.c.grassLine;
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
   for (let d = -height; d < width; d += 9) {
     ctx.moveTo(d, height);
@@ -101,11 +104,6 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
       ctx.fillRect(f.x + col * cell, f.y + row * cell, cell, Math.min(cell, f.height - row * cell));
     }
   }
-
-  // Borders: a thin ink outline around the whole map.
-  ctx.strokeStyle = p.muted;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(1, 1, width - 2, height - 2);
 }
 
 /** A soft contact shadow under things that sit on the road. */
@@ -118,7 +116,7 @@ function shadow(
   p: Palette,
 ) {
   ctx.save();
-  ctx.globalAlpha = 0.12;
+  ctx.globalAlpha = 0.13;
   ctx.fillStyle = p.ink;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -139,13 +137,25 @@ export function boltPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.closePath();
 }
 
+/** The main colour of each item, for the particles it leaves behind. */
+export const itemColors = (type: ItemSpawn["type"], p: Palette): [string, string] =>
+  type === 1
+    ? [p.accent, p.c.bolt]
+    : type === 2
+      ? [p.c.barrel, p.c.barrelHoop]
+      : type === 3
+        ? [p.c.log, p.c.logBark]
+        : [p.c.cone, p.c.coneBand];
+
 /**
- * Items in a flat, rounded, top-down style: nitro is a glossy badge with a
- * bolt that floats a little (`bob`, −1…1), the obstacles sit on soft shadows.
+ * Items in a flat, rounded 2D style: nitro is a glossy badge with a bolt that
+ * floats a little (`bob`, −1…1); barrel and cone are seen from the side, the
+ * log from above, all on soft shadows.
  */
 export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Palette, bob = 0) {
   const cx = item.x + item.width / 2;
   const cy = item.y + item.height / 2;
+  const c = p.c;
   ctx.save();
   if (item.type === 1) {
     const y = cy + bob * 1.5;
@@ -154,18 +164,17 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
     ctx.beginPath();
     ctx.arc(cx, y, 8.5, 0, Math.PI * 2);
     ctx.fill();
-    // Gloss on the top left.
-    ctx.globalAlpha = 0.28;
-    ctx.fillStyle = p.bg;
+    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.ellipse(cx - 3, y - 3.5, 3.5, 2, -0.6, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    ctx.fillStyle = p.bg;
+    ctx.fillStyle = c.bolt;
     boltPath(ctx, cx + 0.3, y + 0.3, 11);
     ctx.fill();
   } else if (item.type === 2) {
-    // Barrel, a little from the side: chubby staves, two hoops, a shine.
+    // Barrel: chubby staves, two hoops, a shine, a lid.
     shadow(ctx, cx, cy + 8.5, 8.5, 2.2, p);
     const body = () => {
       ctx.beginPath();
@@ -175,29 +184,26 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
       ctx.quadraticCurveTo(cx + 9, cy, cx + 6, cy - 8.5);
       ctx.closePath();
     };
-    ctx.fillStyle = p.muted;
+    ctx.fillStyle = c.barrel;
     body();
     ctx.fill();
     ctx.save();
     body();
     ctx.clip();
-    ctx.fillStyle = p.ink;
-    ctx.globalAlpha = 0.28;
+    ctx.fillStyle = c.barrelHoop;
     ctx.fillRect(cx - 9, cy - 5, 18, 2);
     ctx.fillRect(cx - 9, cy + 3, 18, 2);
-    ctx.fillStyle = p.bg;
-    ctx.globalAlpha = 0.3;
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = 0.28;
     ctx.fillRect(cx - 4.5, cy - 8.5, 2, 17);
     ctx.restore();
-    // Lid.
-    ctx.fillStyle = p.muted;
+    ctx.fillStyle = c.barrelHoop;
     ctx.beginPath();
     ctx.ellipse(cx, cy - 8.5, 6, 1.6, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = p.bg;
-    ctx.globalAlpha = 0.35;
+    ctx.fillStyle = c.barrel;
     ctx.beginPath();
-    ctx.ellipse(cx, cy - 8.5, 4.5, 0.9, 0, 0, Math.PI * 2);
+    ctx.ellipse(cx, cy - 8.5, 4.6, 1, 0, 0, Math.PI * 2);
     ctx.fill();
   } else if (item.type === 3) {
     // Log: bark with two grooves, rings on the cut end. Lies along the long side.
@@ -207,13 +213,12 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
     ctx.translate(cx, cy);
     if (vertical) ctx.rotate(Math.PI / 2);
     shadow(ctx, 1, 3, len / 2, thick / 2, p);
-    ctx.fillStyle = p.muted;
+    ctx.fillStyle = c.log;
     ctx.beginPath();
     ctx.roundRect(-len / 2, -thick / 2, len, thick, thick / 2);
     ctx.fill();
-    ctx.strokeStyle = p.ink;
-    ctx.globalAlpha = 0.18;
-    ctx.lineWidth = 1;
+    ctx.strokeStyle = c.logBark;
+    ctx.lineWidth = 1.1;
     ctx.lineCap = "round";
     ctx.beginPath();
     ctx.moveTo(-len / 2 + 5, -2);
@@ -221,20 +226,18 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
     ctx.moveTo(-len / 2 + 8, 2.2);
     ctx.lineTo(len / 2 - 12, 2.2);
     ctx.stroke();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = p.surface;
+    ctx.fillStyle = c.logEnd;
     ctx.beginPath();
     ctx.arc(len / 2 - thick / 2, 0, thick / 2 - 1.2, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = p.muted;
-    ctx.globalAlpha = 0.6;
+    ctx.strokeStyle = c.logRing;
     ctx.beginPath();
     ctx.arc(len / 2 - thick / 2, 0, 2, 0, Math.PI * 2);
     ctx.stroke();
   } else {
-    // Cone, from the side: a rounded peak with a paper band on a flat base.
+    // Cone: a rounded peak with a white band, on a flat base.
     shadow(ctx, cx, cy + 8.5, 9, 2.2, p);
-    ctx.fillStyle = p.muted;
+    ctx.fillStyle = c.coneBase;
     ctx.beginPath();
     ctx.roundRect(cx - 8.5, cy + 6, 17, 3.5, 1.75);
     ctx.fill();
@@ -246,14 +249,15 @@ export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Pale
       ctx.lineTo(cx + 6, cy + 6.5);
       ctx.closePath();
     };
-    ctx.fillStyle = p.ink;
+    ctx.fillStyle = c.cone;
     cone();
     ctx.fill();
     ctx.save();
     cone();
     ctx.clip();
-    ctx.fillStyle = p.bg;
+    ctx.fillStyle = c.coneBand;
     ctx.fillRect(cx - 7, cy - 2.5, 14, 3.2);
+    ctx.fillStyle = "#ffffff";
     ctx.globalAlpha = 0.25;
     ctx.fillRect(cx - 3.2, cy - 9, 1.6, 16);
     ctx.restore();
@@ -265,8 +269,8 @@ export type CarLook = { body: string; stripe: boolean };
 
 /**
  * A small, rounded top-down car pointing where it drives (the engine faces
- * rotation + 180°): wheels peeking out, a roof, windscreen and headlights.
- * `flash` (0–1) washes it in light for a hit; `boosted` adds a flame.
+ * rotation + 180°): wheels peeking out, a glass windscreen, a roof, small
+ * lamps on the nose corners. `boosted` adds a flame.
  */
 export function drawCar(
   ctx: CanvasRenderingContext2D,
@@ -274,8 +278,8 @@ export function drawCar(
   look: CarLook,
   p: Palette,
   boosted: boolean,
-  flash = 0,
 ) {
+  const c = p.c;
   const cx = car.x + car.width / 2;
   const cy = car.y + car.height / 2;
   ctx.save();
@@ -284,17 +288,22 @@ export function drawCar(
   ctx.rotate(((car.rotation + 180) * Math.PI) / 180);
 
   if (boosted) {
-    ctx.fillStyle = p.accent;
-    ctx.globalAlpha = 0.5;
+    ctx.fillStyle = c.bolt;
+    ctx.globalAlpha = 0.75;
     ctx.beginPath();
     ctx.moveTo(-10.5, -3.5);
-    ctx.quadraticCurveTo(-19, 0, -10.5, 3.5);
+    ctx.quadraticCurveTo(-20, 0, -10.5, 3.5);
+    ctx.fill();
+    ctx.fillStyle = p.accent;
+    ctx.globalAlpha = 0.6;
+    ctx.beginPath();
+    ctx.moveTo(-10.5, -2);
+    ctx.quadraticCurveTo(-15.5, 0, -10.5, 2);
     ctx.fill();
     ctx.globalAlpha = 1;
   }
 
-  // Wheels.
-  ctx.fillStyle = p.ink;
+  ctx.fillStyle = c.wheel;
   for (const [x, y] of [
     [-7, -7.2],
     [5, -7.2],
@@ -318,34 +327,28 @@ export function drawCar(
     ctx.save();
     body();
     ctx.clip();
-    ctx.fillStyle = p.bg;
-    ctx.globalAlpha = 0.55;
-    ctx.fillRect(-11, -1.3, 22, 2.6);
+    ctx.fillStyle = c.stripe;
+    ctx.globalAlpha = 0.85;
+    ctx.fillRect(-11, -1.2, 22, 2.4);
     ctx.restore();
   }
 
-  // Roof and windscreen.
-  ctx.fillStyle = p.bg;
+  // Roof, then the windscreen in front of it.
+  ctx.fillStyle = "#ffffff";
   ctx.globalAlpha = 0.22;
   ctx.beginPath();
-  ctx.roundRect(-5.5, -4.5, 9, 9, 3);
+  ctx.roundRect(-5.5, -4.5, 8.5, 9, 3);
   ctx.fill();
-  ctx.globalAlpha = 0.85;
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = c.glass;
   ctx.beginPath();
-  ctx.roundRect(3, -4.5, 3.5, 9, [1, 2.5, 2.5, 1]);
+  ctx.roundRect(3, -4.3, 3.6, 8.6, [1, 2.5, 2.5, 1]);
   ctx.fill();
-  // Headlights.
-  ctx.globalAlpha = 0.95;
-  for (const y of [-3.8, 3.8]) {
+  // Lamps: two small warm dashes tucked into the nose's corners.
+  ctx.fillStyle = c.headlight;
+  for (const y of [-5, 3]) {
     ctx.beginPath();
-    ctx.arc(9.3, y, 1.1, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
-  if (flash > 0) {
-    ctx.globalAlpha = Math.min(1, flash) * 0.85;
-    ctx.fillStyle = p.light;
-    body();
+    ctx.roundRect(9, y, 1.6, 2, 0.8);
     ctx.fill();
   }
   ctx.restore();
