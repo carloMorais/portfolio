@@ -283,6 +283,94 @@ body {
   }
 }
 
+/* RaceGame: the veil that comes up when you cross the line. */
+.race-fade-in {
+  animation: race-fade-in 0.7s ease-out both;
+}
+@keyframes race-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* RaceGame: a quick pop for texts that mark a moment (lights out, last lap, results). */
+.race-pop-in {
+  animation: race-pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes race-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(6px);
+  }
+}
+
+/* RaceGame: the starting lights zoom in large at the start of the countdown... */
+.race-lights-zoom {
+  animation: race-lights-zoom 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.3) both;
+}
+@keyframes race-lights-zoom {
+  from {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+}
+/* ...and zoom back out, flashing, the moment they go out. */
+.race-lights-out {
+  animation: race-lights-out 0.45s ease-in both;
+}
+@keyframes race-lights-out {
+  to {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* RaceGame: finish-screen texts spring up from below instead of just fading. */
+.race-elastic-in {
+  animation: race-elastic-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes race-elastic-in {
+  0% {
+    opacity: 0;
+    transform: translateY(26px) scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: translateY(-6px) scale(1.04);
+  }
+  70% {
+    transform: translateY(3px) scale(0.98);
+  }
+  85% {
+    transform: translateY(-1px) scale(1.01);
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* RaceGame: a small confetti burst over the track when you finish 1st. */
+.race-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.race-confetti span {
+  position: absolute;
+  top: -8%;
+  width: 6px;
+  height: 10px;
+  border-radius: 1px;
+  animation: race-confetti-fall 1.6s ease-in forwards;
+}
+@keyframes race-confetti-fall {
+  to {
+    transform: translateY(650%) rotate(260deg);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brush-mark::before {
     animation: none;
@@ -291,9 +379,17 @@ body {
   .reveal,
   .tech-graph-cluster,
   .tech-graph-caret,
-  .scroll-hint-dot {
+  .scroll-hint-dot,
+  .race-fade-in,
+  .race-pop-in,
+  .race-lights-zoom,
+  .race-lights-out,
+  .race-elastic-in {
     animation: none;
     opacity: 1;
+  }
+  .race-confetti {
+    display: none;
   }
 }
 

@@ -13,6 +13,8 @@ type Props = {
   study: CaseStudy;
   /** Cover: a screenshot or clip of the real thing. */
   media: ReactNode;
+  /** Optional call to action under the facts (e.g. a playable demo). */
+  actions?: ReactNode;
 };
 
 function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
@@ -33,7 +35,7 @@ function Section({ id, title, children }: { id: string; title: string; children:
  * The shared shape of every case study page:
  * context → problem → my part → decisions → architecture → result.
  */
-export function CaseStudyLayout({ item, study, media }: Props) {
+export function CaseStudyLayout({ item, study, media, actions }: Props) {
   const locale = useLocale();
   const t = useTranslations("Case");
   const common = useTranslations("Common");
@@ -63,16 +65,19 @@ export function CaseStudyLayout({ item, study, media }: Props) {
               </div>
             ))}
           </dl>
-          {item.repo && (
-            <a
-              href={item.repo}
-              target="_blank"
-              rel="noreferrer"
-              className="link-underline mt-8 inline-block text-sm text-muted hover:text-ink"
-            >
-              {common("sourceCode")} ↗
-            </a>
-          )}
+          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+            {actions}
+            {item.repo && (
+              <a
+                href={item.repo}
+                target="_blank"
+                rel="noreferrer"
+                className="link-underline text-sm text-muted hover:text-ink"
+              >
+                {common("sourceCode")} ↗
+              </a>
+            )}
+          </div>
         </header>
 
         <div className="container-page">{media}</div>

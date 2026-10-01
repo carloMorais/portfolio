@@ -1,0 +1,18 @@
+{
+  "name": "race-engine",
+  "version": "0.1.0",
+  "private": true,
+  "description": "RaceGame's deterministic engine: physics, collisions, race rules and bots, shared by the browser and the server.",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "typescript": "^5"
+  }
+}

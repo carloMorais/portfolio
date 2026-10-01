@@ -2,7 +2,8 @@
   "name": "portfolio",
   "private": true,
   "workspaces": [
-    "apps/*"
+    "apps/*",
+    "packages/*"
   ],
   "engines": {
     "node": ">=24"
@@ -11,8 +12,8 @@
     "dev": "npm run dev -w web",
     "build": "npm run build -w web",
     "lint": "npm run lint -w web",
-    "typecheck": "npm run typecheck -w web",
-    "test": "npm run test -w web",
+    "typecheck": "npm run typecheck -w web && npm run typecheck -w race-engine",
+    "test": "npm run test -w web && npm run test -w race-engine",
     "test:e2e": "npm run test:e2e -w web",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
