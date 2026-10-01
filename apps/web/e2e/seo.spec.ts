@@ -56,6 +56,14 @@ for (const locale of ["pt", "en"]) {
   });
 }
 
+test("the home page keeps the Search Console verification tag", async ({ page }) => {
+  await page.goto("/pt");
+  await expect(page.locator('head meta[name="google-site-verification"]')).toHaveAttribute(
+    "content",
+    "6t6CvcfIJsfkaNk3qF6KyrFaYSeVa1h7iKZXLpjd3Ac",
+  );
+});
+
 test("the home page describes its owner as structured data", async ({ page }) => {
   await page.goto("/en");
   const json = JSON.parse(

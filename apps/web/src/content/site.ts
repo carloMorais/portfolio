@@ -11,6 +11,8 @@ export const site = {
   // Canonical origin: every Vercel deployment (previews too) points search engines here.
   url: "https://portfolio-carlomorais.vercel.app",
   sourceRepo: "https://github.com/carloMorais/portfolio",
+  // Google Search Console (URL-prefix property). Google asks to keep it after verifying.
+  googleSiteVerification: "6t6CvcfIJsfkaNk3qF6KyrFaYSeVa1h7iKZXLpjd3Ac",
 } as const;
 
 export const contactLinks = [

@@ -3,6 +3,7 @@ import { Fraunces, Geist } from "next/font/google";
 import { NextIntlClientProvider } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { routing } from "@/i18n/routing";
+import { site } from "@/content/site";
 import { siteUrl } from "@/lib/seo";
 import { SiteHeader } from "@/components/SiteHeader";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -26,6 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
     metadataBase: new URL(siteUrl()),
     title: { default: t("title"), template: `%s · Carlos Morais` },
     description: t("description"),
+    verification: { google: site.googleSiteVerification },
   };
 }
 
