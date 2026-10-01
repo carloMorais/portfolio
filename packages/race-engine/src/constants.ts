@@ -26,9 +26,11 @@ export const PHYSICS = {
   /** 3000 ms at 30 ticks/s. */
   itemRespawnTicks: 90,
   /** Share of an axis's speed kept (and reversed) when it hits a wall. Not in the original. */
-  wallBounce: 0.4,
+  wallBounce: 0.25,
   /** Degrees per tick the nose turns towards the wall it's sliding along. Not in the original. */
-  alignStep: 4,
+  alignStep: 2,
+  /** Hitting a barrel or a log costs this share of the speed on both axes. Not in the original (it took a fixed 5). */
+  obstaclePenalty: 0.7,
   /**
    * With throttle or brake held, steering works as if the car were at least
    * this fast, so a car stopped against a wall can always turn away. Not in the original.

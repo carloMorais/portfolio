@@ -185,8 +185,8 @@ describe("stepRace", () => {
     let s = createRace(track, ["a"]);
     s.cars[0] = { ...s.cars[0]!, x: barrel.x, y: barrel.y, vx: 0, vy: -5.5 };
     s = stepRace(s, track, { a: NO_KEYS });
-    // Gentler than the 2024 game (−5): it takes 2 off, plus the coasting drag.
-    assert.ok(Math.abs(s.cars[0]!.vy) < 3.6 && Math.abs(s.cars[0]!.vy) > 3);
+    // Coasting drag first (−5.5 → −5.42), then 70% of what is left (the 2024 game took a fixed 5).
+    assert.equal(s.cars[0]!.vy, -1.63);
   });
 
   test("leaving the map sends the car back to the start", () => {

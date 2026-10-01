@@ -9,7 +9,7 @@ export const NO_KEYS: Keys = { up: false, down: false, left: false, right: false
 /** 1 = nitro (stored, used with the nitro key); 2 = barrel and 3 = log slow you down on contact. */
 export type ItemType = 1 | 2 | 3;
 
-export type ItemSpawn = Box & { id: string; type: ItemType; velocityEffect: number };
+export type ItemSpawn = Box & { id: string; type: ItemType };
 
 export type Checkpoint = Box & { order: number };
 

@@ -132,7 +132,7 @@ function pickItems(car: Car, track: Track, state: RaceState) {
     if (car.nitro >= PHYSICS.maxNitro) return; // full: the nitro stays on the track
     car.nitro += 1;
   } else {
-    applySlowdown(car, item.velocityEffect);
+    applySlowdown(car);
   }
   state.itemRespawnAt[item.id] = state.tick + PHYSICS.itemRespawnTicks;
 }

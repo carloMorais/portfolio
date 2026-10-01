@@ -15,14 +15,14 @@ describe("overlaps", () => {
 });
 
 describe("moveCar", () => {
-  test("hitting a ceiling reverses only y, with a loss: X=5, Y=−5 → X=5, Y=2", () => {
+  test("hitting a ceiling reverses only y, keeping a quarter of it: X=5, Y=−4 → X=5, Y=1", () => {
     const car = createCar("a", 50, 22);
     car.vx = 5;
-    car.vy = -5;
+    car.vy = -4;
     const bump = moveCar(car, [ceiling]);
     assert.deepEqual(bump, { x: false, y: true });
     assert.equal(car.vx, 5);
-    assert.equal(car.vy, 2);
+    assert.equal(car.vy, 1);
     assert.equal(car.y, ceiling.height); // flush against it
   });
 
@@ -32,7 +32,7 @@ describe("moveCar", () => {
     const bump = moveCar(car, [wall]);
     assert.deepEqual(bump, { x: true, y: false });
     assert.equal(car.x + car.width, wall.x);
-    assert.equal(car.vx, -1.6);
+    assert.equal(car.vx, -1);
   });
 
   test("a blocker the car already overlaps doesn't trap it", () => {

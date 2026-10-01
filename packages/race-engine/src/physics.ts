@@ -98,10 +98,9 @@ function clampVelocity(car: Car, maxVelocity: number) {
   car.vy = Math.max(-maxVelocity, Math.min(maxVelocity, car.vy));
 }
 
-/** Barrels and logs pull each axis towards zero by `effect` (negative), never past it. */
-export function applySlowdown(car: Car, effect: number): void {
-  if (car.vx > 0) car.vx = Math.max(0, car.vx + effect);
-  else if (car.vx < 0) car.vx = Math.min(0, car.vx - effect);
-  if (car.vy > 0) car.vy = Math.max(0, car.vy + effect);
-  else if (car.vy < 0) car.vy = Math.min(0, car.vy - effect);
+/** Barrels and logs cost a share of the speed (`obstaclePenalty`), whatever it is. */
+export function applySlowdown(car: Car): void {
+  const keep = 1 - P.obstaclePenalty;
+  car.vx = round2(car.vx * keep);
+  car.vy = round2(car.vy * keep);
 }

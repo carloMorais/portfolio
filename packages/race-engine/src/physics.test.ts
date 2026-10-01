@@ -43,7 +43,8 @@ describe("stepCarPhysics", () => {
     car.align = 270;
     stepCarPhysics(car, keys({ up: true }), 1);
     assert.equal(car.rotation, 225 + PHYSICS.alignStep);
-    for (let t = 2; t < 20; t++) stepCarPhysics(car, keys({ up: true }), t);
+    // 45° at alignStep per tick: about 23 ticks, under a second.
+    for (let t = 2; t < 40; t++) stepCarPhysics(car, keys({ up: true }), t);
     assert.equal(car.rotation, 270);
     assert.equal(car.align, null);
   });
@@ -91,12 +92,12 @@ describe("stepCarPhysics", () => {
 });
 
 describe("applySlowdown", () => {
-  test("pulls each axis towards zero without crossing it", () => {
+  test("costs 70% of the speed on both axes, whatever the speed", () => {
     const car = createCar("a", 0, 0);
     car.vx = -6;
-    car.vy = 3;
-    applySlowdown(car, -5);
-    assert.equal(car.vx, -1);
-    assert.equal(car.vy, 0);
+    car.vy = 2;
+    applySlowdown(car);
+    assert.equal(car.vx, -1.8);
+    assert.equal(car.vy, 0.6);
   });
 });
