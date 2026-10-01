@@ -155,8 +155,8 @@
     "standings": "Classificação",
     "notFinished": "na pista",
     "controlsTitle": "Controles",
-    "controlsKeys": "Setas ou WASD para dirigir, espaço para o nitro, Enter para começar, R para recomeçar e Esc para pausar. Os losangos azuis são nitro; barris e troncos custam 70% da velocidade. A linha azul tracejada marca o próximo checkpoint.",
-    "controlsTouch": "No celular, use os botões abaixo da pista: setas para dirigir, ◆ para o nitro.",
+    "controlsKeys": "Setas ou WASD para dirigir, espaço para o nitro, Enter para começar, R para recomeçar e Esc para pausar. Os raios azuis são nitro; barris, troncos e cones custam 70% da velocidade. A linha azul tracejada marca o próximo checkpoint.",
+    "controlsTouch": "No celular, use os botões abaixo da pista.",
     "canvasLabel": "Pista vista de cima com o seu carro, em azul, e três bots.",
     "left": "Esquerda",
     "right": "Direita",
@@ -168,11 +168,11 @@
     "drive": "Dirigir",
     "space": "Espaço",
     "nitroKey": "Nitro",
-    "itemNitro": "Nitro (guarda até 3)",
-    "itemObstacles": "Obstáculos: −70% da velocidade",
+    "itemNitro": "Nitro",
+    "itemObstacles": "−70%",
     "nitroCount": "{n, plural, =0 {sem nitro} one {# nitro} other {# nitros}}",
     "done": "Terminou",
-    "waiting": "Esperando os outros pilotos…",
+    "waiting": "Aguardando outros jogadores",
     "skip": "Ver resultado",
     "place": "Pos.",
     "driver": "Piloto",
@@ -195,9 +195,6 @@
     "difficulty": "Dificuldade",
     "easy": "Fácil",
     "normal": "Normal",
-    "hard": "Difícil",
-    "startKey": "Começar",
-    "restartKey": "Recomeçar",
-    "pauseKey": "Pausar"
+    "hard": "Difícil"
   }
 }

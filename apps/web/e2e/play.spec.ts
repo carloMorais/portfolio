@@ -93,3 +93,15 @@ test("the difficulty is remembered in this browser", async ({ page }) => {
   await page.reload();
   await expect(page.getByRole("button", { name: "Hard" })).toHaveAttribute("aria-pressed", "true");
 });
+
+test("a pause button on the track pauses the race at any time", async ({ page }) => {
+  await page.goto("/en/projects/racegame/play");
+  const pause = page.getByRole("button", { name: "Pause" });
+  await expect(pause).toBeHidden();
+  await page.getByRole("button", { name: "Start race" }).click();
+  await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
+  await pause.click();
+  await expect(game(page)).toHaveAttribute("data-phase", "paused");
+  await page.getByRole("button", { name: "Resume" }).click();
+  await expect(game(page)).toHaveAttribute("data-phase", "racing");
+});

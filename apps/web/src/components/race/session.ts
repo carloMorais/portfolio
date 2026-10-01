@@ -7,8 +7,8 @@ export const DIFFICULTIES = ["easy", "normal", "hard"] as const;
 export type Difficulty = (typeof DIFFICULTIES)[number];
 
 /**
- * The three bots for each difficulty. Measured over 2 laps: easy ~70–77 s,
- * normal ~57–63 s, hard ~48 s (no speed cap, and they use nitro).
+ * The three bots for each difficulty. Measured over 2 laps: easy ~68–76 s,
+ * normal ~58–64 s, hard ~50 s (no speed cap, and they use nitro).
  */
 export const BOTS: Record<Difficulty, { id: string; style: BotStyle }[]> = {
   easy: [

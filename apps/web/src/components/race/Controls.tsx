@@ -1,4 +1,5 @@
 import { useTranslations } from "next-intl";
+import { BarrelIcon, ConeIcon, LogIcon, NitroIcon } from "./icons";
 
 /** Keyboard keys and track items, drawn instead of described. */
 export function Controls() {
@@ -21,36 +22,15 @@ export function Controls() {
           <Key wide>{t("space")}</Key>
           <figcaption>{t("nitroKey")}</figcaption>
         </figure>
-        <div className="hidden items-end gap-4 lg:flex">
-          {(
-            [
-              ["Enter", "startKey"],
-              ["R", "restartKey"],
-              ["Esc", "pauseKey"],
-            ] as const
-          ).map(([key, caption]) => (
-            <figure key={key} className="flex flex-col items-center gap-2">
-              <Key medium={key !== "R"}>{key}</Key>
-              <figcaption>{t(caption)}</figcaption>
-            </figure>
-          ))}
-        </div>
         <figure className="flex flex-col items-center gap-2">
-          <svg viewBox="0 0 20 20" className="size-8">
-            <path d="M10 1 17 10 10 19 3 10Z" className="fill-accent" />
-          </svg>
+          <NitroIcon className="size-8" />
           <figcaption>{t("itemNitro")}</figcaption>
         </figure>
         <figure className="flex flex-col items-center gap-2">
-          <div className="flex h-8 items-center gap-2">
-            <svg viewBox="0 0 20 20" className="size-6">
-              <circle cx="10" cy="10" r="8" className="fill-muted" />
-              <circle cx="10" cy="10" r="4.5" fill="none" strokeWidth="1.5" className="stroke-bg" />
-            </svg>
-            <svg viewBox="0 0 40 16" className="h-4 w-10">
-              <rect x="1" y="2" width="38" height="12" rx="6" className="fill-muted" />
-              <circle cx="32" cy="8" r="3" className="fill-bg" />
-            </svg>
+          <div className="flex h-8 items-center gap-2.5">
+            <BarrelIcon className="size-6" />
+            <LogIcon className="h-4 w-8" />
+            <ConeIcon className="size-6" />
           </div>
           <figcaption>{t("itemObstacles")}</figcaption>
         </figure>
@@ -74,18 +54,10 @@ function KeyCluster({ keys: [up, left, down, right] }: { keys: [string, string, 
   );
 }
 
-function Key({
-  children,
-  wide = false,
-  medium = false,
-}: {
-  children: string;
-  wide?: boolean;
-  medium?: boolean;
-}) {
+function Key({ children, wide = false }: { children: string; wide?: boolean }) {
   return (
     <kbd
-      className={`grid h-8 place-items-center rounded-md bg-surface font-sans text-xs text-ink shadow-[0_2px_0_var(--line)] ring-1 ring-line ${wide ? "w-36" : medium ? "w-12" : "w-8"}`}
+      className={`grid h-8 place-items-center rounded-md bg-surface font-sans text-xs text-ink shadow-[0_2px_0_var(--line)] ring-1 ring-line ${wide ? "w-36" : "w-8"}`}
     >
       {children}
     </kbd>

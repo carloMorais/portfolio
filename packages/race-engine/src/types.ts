@@ -6,8 +6,11 @@ export type Keys = { up: boolean; down: boolean; left: boolean; right: boolean; 
 
 export const NO_KEYS: Keys = { up: false, down: false, left: false, right: false, nitro: false };
 
-/** 1 = nitro (stored, used with the nitro key); 2 = barrel and 3 = log slow you down on contact. */
-export type ItemType = 1 | 2 | 3;
+/**
+ * 1 = nitro (stored, used with the nitro key); 2 = barrel, 3 = log and
+ * 4 = cone (new in 2026) slow you down on contact.
+ */
+export type ItemType = 1 | 2 | 3 | 4;
 
 export type ItemSpawn = Box & { id: string; type: ItemType };
 

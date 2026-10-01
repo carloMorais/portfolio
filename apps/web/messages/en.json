@@ -155,8 +155,8 @@
     "standings": "Standings",
     "notFinished": "still racing",
     "controlsTitle": "Controls",
-    "controlsKeys": "Arrow keys or WASD to drive, space for nitro, Enter to start, R to restart and Esc to pause. Blue diamonds are nitro; barrels and logs cost 70% of your speed. The dashed blue line marks the next checkpoint.",
-    "controlsTouch": "On a phone, use the buttons below the track: arrows to drive, ◆ for nitro.",
+    "controlsKeys": "Arrow keys or WASD to drive, space for nitro, Enter to start, R to restart and Esc to pause. Blue bolts are nitro; barrels, logs and cones cost 70% of your speed. The dashed blue line marks the next checkpoint.",
+    "controlsTouch": "On a phone, use the buttons below the track.",
     "canvasLabel": "Top-down track with your car, in blue, and three bots.",
     "left": "Left",
     "right": "Right",
@@ -168,11 +168,11 @@
     "drive": "Drive",
     "space": "Space",
     "nitroKey": "Nitro",
-    "itemNitro": "Nitro (hold up to 3)",
-    "itemObstacles": "Obstacles: −70% speed",
+    "itemNitro": "Nitro",
+    "itemObstacles": "−70%",
     "nitroCount": "{n, plural, =0 {no nitro} one {# nitro} other {# nitros}}",
     "done": "Finished",
-    "waiting": "Waiting for the other drivers…",
+    "waiting": "Waiting for the other players",
     "skip": "See results",
     "place": "Pos.",
     "driver": "Driver",
@@ -195,9 +195,6 @@
     "difficulty": "Difficulty",
     "easy": "Easy",
     "normal": "Normal",
-    "hard": "Hard",
-    "startKey": "Start",
-    "restartKey": "Restart",
-    "pauseKey": "Pause"
+    "hard": "Hard"
   }
 }

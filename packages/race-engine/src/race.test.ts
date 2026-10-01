@@ -83,7 +83,7 @@ describe("stepRace", () => {
     s.cars[0] = {
       ...s.cars[0]!,
       x: 166.85,
-      y: 294.25,
+      y: 290, // recorded at 294.25; the rounded wall tip now starts 4 px higher
       vx: 1.71,
       vy: 6,
       rotation: 182.5,
@@ -273,5 +273,17 @@ describe("botKeys", () => {
     };
     const [easy, normal, hard] = [time(3.75), time(5), time()];
     assert.ok(easy > normal && normal > hard, `easy ${easy}, normal ${normal}, hard ${hard}`);
+  });
+});
+
+describe("classicTrack", () => {
+  test("items and the spawn point sit clear of the rounded walls", () => {
+    for (const box of [...track.items, { ...track.spawn, width: 25, height: 25 }]) {
+      assert.equal(
+        track.walls.some((w) => overlaps(box, w)),
+        false,
+        JSON.stringify(box),
+      );
+    }
   });
 });

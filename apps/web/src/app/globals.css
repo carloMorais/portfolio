@@ -283,6 +283,16 @@ body {
   }
 }
 
+/* RaceGame: the veil that comes up when you cross the line. */
+.race-fade-in {
+  animation: race-fade-in 0.7s ease-out both;
+}
+@keyframes race-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brush-mark::before {
     animation: none;
@@ -291,7 +301,8 @@ body {
   .reveal,
   .tech-graph-cluster,
   .tech-graph-caret,
-  .scroll-hint-dot {
+  .scroll-hint-dot,
+  .race-fade-in {
     animation: none;
     opacity: 1;
   }

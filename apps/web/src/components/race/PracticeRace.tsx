@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
@@ -19,6 +19,7 @@ import {
 import {
   drawCar,
   drawItem,
+  type CarLook,
   drawLabel,
   drawTarget,
   drawTrack,
@@ -27,6 +28,7 @@ import {
   type Palette,
 } from "./draw";
 import { Effects } from "./effects";
+import { BoltIcon } from "./icons";
 import {
   BOTS,
   DIFFICULTIES,
@@ -407,7 +409,10 @@ export function PracticeRace() {
       ctx.drawImage(trackLayer.current, 0, 0);
 
       const s = race.current;
-      for (const item of activeItems(track, s)) drawItem(ctx, item, p);
+      // Nitro badges float gently, each at its own beat.
+      activeItems(track, s).forEach((item, i) =>
+        drawItem(ctx, item, p, reduced ? 0 : Math.sin(now / 450 + i * 1.7)),
+      );
 
       // Where you need to go next.
       const me = s.cars.find((c) => c.id === PLAYER)!;
@@ -431,17 +436,16 @@ export function PracticeRace() {
         if (car.nitroUntil !== null && running()) fx.trail(car.id, at, p, now);
       }
       fx.drawBelow(ctx, now);
-      const bodies = [p.ink, p.muted, p.ink];
+      // Only the site's tokens: you in the accent, bots in ink and grey, told apart by a stripe.
+      const looks: CarLook[] = [
+        { body: p.ink, stripe: false },
+        { body: p.muted, stripe: false },
+        { body: p.ink, stripe: true },
+      ];
       for (const { car, at } of ordered) {
-        const body = car.id === PLAYER ? p.accent : bodies[BOT_IDS.indexOf(car.id)]!;
-        const { dx, dy, dr } = fx.shake(car.id, now);
-        drawCar(
-          ctx,
-          { ...at, x: at.x + dx, y: at.y + dy, rotation: at.rotation + dr },
-          body,
-          p,
-          car.nitroUntil !== null,
-        );
+        const look =
+          car.id === PLAYER ? { body: p.accent, stripe: true } : looks[BOT_IDS.indexOf(car.id)]!;
+        drawCar(ctx, at, look, p, car.nitroUntil !== null, fx.flash(car.id, now));
       }
       for (const { car, at } of ordered) {
         const boost =
@@ -588,7 +592,7 @@ export function PracticeRace() {
         </tbody>
       </table>
 
-      <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start text-right tabular-nums lg:col-start-3">
+      <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3">
         <div>
           <dt className="text-xs text-muted">{t("lap")}</dt>
           <dd className="font-display text-3xl tracking-tight">
@@ -649,23 +653,44 @@ export function PracticeRace() {
                 {t("lastLap")}
               </p>
             )}
-            {phase === "finishing" && hud.place > 0 && (
-              <div
-                role="status"
-                className="pointer-events-auto flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-full bg-bg/90 px-4 py-2 text-sm ring-1 ring-line"
-              >
-                <span>{t("finished", { n: hud.place })}</span>
-                <span className="text-muted">{t("waiting")}</span>
-                <button
-                  type="button"
-                  onClick={skip}
-                  className="text-muted underline underline-offset-4 hover:text-ink"
-                >
-                  {t("skip")}
-                </button>
-              </div>
-            )}
           </div>
+
+          {/* You're done: a soft veil, the race still visible behind it. */}
+          {phase === "finishing" && hud.place > 0 && (
+            <div
+              role="status"
+              className="race-fade-in pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/60 p-4 text-center"
+            >
+              <p className="font-display text-4xl tracking-tight sm:text-6xl">
+                {t("finished", { n: hud.place })}
+              </p>
+              <p className="text-sm text-muted motion-safe:animate-pulse sm:text-base">
+                {t("waiting")}
+              </p>
+              <button
+                type="button"
+                onClick={skip}
+                className="pointer-events-auto mt-2 text-xs text-muted underline underline-offset-4 hover:text-ink"
+              >
+                {t("skip")}
+              </button>
+            </div>
+          )}
+
+          {/* Pause, any time: top left, out of the way of the banners. */}
+          {(phase === "racing" || phase === "finishing") && (
+            <button
+              type="button"
+              aria-label={t("pause")}
+              onClick={pause}
+              className="absolute top-2.5 left-2.5 grid size-8 place-items-center rounded-full bg-bg/85 text-muted ring-1 ring-line transition-colors hover:text-ink"
+            >
+              <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
+                <rect x="2.5" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
+                <rect x="7" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
+              </svg>
+            </button>
+          )}
 
           {(phase === "ready" ||
             phase === "countdown" ||
@@ -732,21 +757,13 @@ export function PracticeRace() {
               →
             </TouchButton>
           </div>
-          <button
-            type="button"
-            aria-label={t("pause")}
-            onClick={() => (phase === "paused" ? resume() : pause())}
-            className="size-10 rounded-full text-sm text-muted ring-1 ring-line"
-          >
-            ❚❚
-          </button>
           <div className="flex gap-3">
             <TouchButton
               label={t("nitroButton")}
               onDown={() => press("nitro", true)}
               onUp={() => press("nitro", false)}
             >
-              ◆
+              <BoltIcon className="mx-auto size-5 text-accent" />
             </TouchButton>
             <TouchButton
               label={t("brake")}
@@ -800,12 +817,13 @@ function DifficultyPicker({
   );
 }
 
-/** Nitro charges as filled diamonds out of the tank's size. */
+/** Nitro charges as filled bolts out of the tank's size. */
 function Nitro({ count, label }: { count: number; label: string }) {
   return (
-    <span role="img" aria-label={label} className="text-xs tracking-wider text-accent">
-      {"◆".repeat(count)}
-      <span className="text-line">{"◆".repeat(PHYSICS.maxNitro - count)}</span>
+    <span role="img" aria-label={label} className="inline-flex gap-0.5">
+      {Array.from({ length: PHYSICS.maxNitro }, (_, i) => (
+        <BoltIcon key={i} className={`size-3 ${i < count ? "text-accent" : "text-line"}`} />
+      ))}
     </span>
   );
 }
@@ -828,7 +846,7 @@ function TouchButton({
   label: string;
   onDown: () => void;
   onUp: () => void;
-  children: string;
+  children: ReactNode;
 }) {
   return (
     <button

@@ -6,7 +6,7 @@ import type { Palette } from "./draw";
  * (not ticks) so they stay smooth at any frame rate. Inspired by the 2024
  * game, which burst picked items into 4 px squares and left a trail of
  * shrinking circles behind a car on nitro; here the bursts follow the item's
- * colour, wall hits kick up dust and shake the car, and pickups float a label.
+ * colour, wall hits kick up dust and flash the car, and pickups float a label.
  * With reduced motion only the labels show, without moving.
  */
 
@@ -27,16 +27,16 @@ type Ring = { x: number; y: number; color: string; born: number; life: number; r
 type Floater = { id: string; text: string; color: string; born: number; life: number };
 /** Where a car is drawn this frame (its top-left corner and width). */
 export type Locate = (id: string) => { x: number; y: number; width: number } | undefined;
-type Shake = { born: number; life: number; amp: number; nx: number; ny: number };
+type Hit = { born: number; strength: number };
 
-const SHAKE_MS = 300;
+const HIT_MS = 280;
 const TRAIL_EVERY_MS = 18;
 
 export class Effects {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private floaters: Floater[] = [];
-  private shakes = new Map<string, Shake>();
+  private hits = new Map<string, Hit>();
   private lastTrail = new Map<string, number>();
 
   constructor(private readonly reduced: boolean) {}
@@ -45,7 +45,7 @@ export class Effects {
     this.particles = [];
     this.rings = [];
     this.floaters = [];
-    this.shakes.clear();
+    this.hits.clear();
     this.lastTrail.clear();
   }
 
@@ -86,7 +86,7 @@ export class Effects {
     }
   }
 
-  /** A wall hit: the car shakes along the impact and dust flies off the wall. */
+  /** A wall hit: the car flashes, harder the faster it hit, and dust flies off the wall. */
   bump(
     id: string,
     car: Box,
@@ -97,9 +97,10 @@ export class Effects {
     p: Palette,
     now: number,
   ) {
-    if (impact < 1.2 || this.reduced) return;
-    this.shakes.set(id, { born: now, life: SHAKE_MS, amp: Math.min(3, impact * 0.5), nx, ny });
-    if (gate) return; // checkpoints are lines on the road, nothing to kick up
+    if (impact < 1.2) return;
+    // A flash is a colour change, not motion: it stays with reduced motion.
+    this.hits.set(id, { born: now, strength: Math.min(1, 0.35 + impact / 6) });
+    if (gate || this.reduced) return; // checkpoints are lines on the road, nothing to kick up
     const contactX = car.x + car.width / 2 + (nx * car.width) / 2;
     const contactY = car.y + car.height / 2 + (ny * car.height) / 2;
     const count = Math.round(Math.min(10, impact * 1.6));
@@ -143,22 +144,16 @@ export class Effects {
     });
   }
 
-  /** How far to nudge a car that just hit something: a quick, decaying wobble. */
-  shake(id: string, now: number) {
-    const s = this.shakes.get(id);
-    if (!s) return { dx: 0, dy: 0, dr: 0 };
-    const t = (now - s.born) / s.life;
+  /** How strongly to wash a car in light right now (0–1): a quick flash that fades. */
+  flash(id: string, now: number) {
+    const hit = this.hits.get(id);
+    if (!hit) return 0;
+    const t = (now - hit.born) / HIT_MS;
     if (t >= 1) {
-      this.shakes.delete(id);
-      return { dx: 0, dy: 0, dr: 0 };
+      this.hits.delete(id);
+      return 0;
     }
-    const decay = (1 - t) ** 2;
-    const wave = Math.sin(t * Math.PI * 7);
-    return {
-      dx: s.amp * decay * wave * (s.nx === 0 ? 0.35 : 1),
-      dy: s.amp * decay * wave * (s.ny === 0 ? 0.35 : 1),
-      dr: s.amp * decay * Math.sin(t * Math.PI * 5) * 2,
-    };
+    return hit.strength * (1 - t) ** 2;
   }
 
   /** Particles and rings: drawn under the cars. */
