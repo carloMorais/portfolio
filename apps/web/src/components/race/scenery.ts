@@ -11,7 +11,8 @@ import type { Palette } from "./draw";
 export type Stand = Box & { facing: "up" | "down" | "right" };
 export type Tree = { x: number; y: number; r: number };
 export type Rock = { x: number; y: number; r: number };
-export type Shed = { x: number; y: number; w: number; h: number };
+export type Tire = { x: number; y: number };
+export type OilBarrel = { x: number; y: number };
 
 export const STANDS: Stand[] = [
   // Above the S's long middle straight, and over the start straight.
@@ -48,10 +49,11 @@ export const TREES: Tree[] = [
   // Small patch by the last corner.
   { x: 532, y: 499, r: 5.5 },
   { x: 563, y: 498, r: 6 },
-  // The top-middle strip and the right-middle lane, both bare until now.
+  // The top-middle strip and the right lane, clear of the grandstands.
   { x: 260, y: 210, r: 7 },
-  { x: 400, y: 205, r: 7 },
-  { x: 628, y: 180, r: 7 },
+  { x: 300, y: 175, r: 7 },
+  { x: 628, y: 100, r: 7 },
+  { x: 625, y: 420, r: 7 },
 ];
 
 export const ROCKS: Rock[] = [
@@ -61,8 +63,8 @@ export const ROCKS: Rock[] = [
   { x: 38, y: 440, r: 6 },
   { x: 730, y: 70, r: 5 },
   { x: 735, y: 300, r: 6 },
-  { x: 330, y: 220, r: 6 },
-  { x: 628, y: 380, r: 6 },
+  { x: 315, y: 225, r: 6 },
+  { x: 628, y: 392, r: 6 },
   { x: 300, y: 390, r: 6 },
   { x: 350, y: 388, r: 5.5 },
   { x: 260, y: 448, r: 6 },
@@ -70,9 +72,41 @@ export const ROCKS: Rock[] = [
   { x: 440, y: 415, r: 5 },
 ];
 
-export const SHEDS: Shed[] = [
-  { x: 140, y: 336, w: 32, h: 20 },
-  { x: 14, y: 470, w: 26, h: 20 },
+/**
+ * Tire stacks and oil barrels: small trackside detail, scattered for texture
+ * and, where there's an obstacle on the road, echoed just off it on the
+ * grass (like the barriers around a real corner). All clear of the road,
+ * the stands and each other (a test checks it).
+ */
+export const TIRES: Tire[] = [
+  // Near an obstacle on the road.
+  { x: 301, y: 242 },
+  { x: 444, y: 7 },
+  { x: 642, y: 470 },
+  { x: 728, y: 430 },
+  // General detail along the map.
+  { x: 300, y: 10 },
+  { x: 50, y: 20 },
+  { x: 30, y: 130 },
+  { x: 730, y: 150 },
+  { x: 10, y: 230 },
+  { x: 170, y: 330 },
+  { x: 730, y: 330 },
+  { x: 630, y: 490 },
+  { x: 30, y: 570 },
+];
+
+export const OIL_BARRELS: OilBarrel[] = [
+  // Near an obstacle on the road.
+  { x: 46, y: 463 },
+  { x: 220, y: 170 },
+  { x: 390, y: 235 },
+  { x: 730, y: 269 },
+  { x: 142, y: 302 },
+  // General detail along the map.
+  { x: 450, y: 470 },
+  { x: 590, y: 490 },
+  { x: 530, y: 270 },
 ];
 
 const SEAT = 6;
@@ -197,26 +231,56 @@ export function drawScenery(ctx: CanvasRenderingContext2D, p: Palette) {
     ctx.restore();
   }
 
-  for (const s of SHEDS) {
+  for (const t of TIRES) {
     ctx.save();
     ctx.globalAlpha = 0.15;
     ctx.fillStyle = p.ink;
     ctx.beginPath();
-    ctx.roundRect(s.x + 2, s.y + 3, s.w, s.h, 2);
+    ctx.ellipse(t.x + 1, t.y + 2, 6.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.globalAlpha = 1;
-    // A small flat-roofed hut: walls, a darker roof slab, a door.
-    ctx.fillStyle = c.shedWall;
+    // A stacked tire, seen from above: a dark ring with a lighter rim.
+    ctx.fillStyle = c.tire;
     ctx.beginPath();
-    ctx.roundRect(s.x, s.y + 4, s.w, s.h - 4, 1.5);
+    ctx.ellipse(t.x, t.y, 6, 4.5, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = c.shedRoof;
+    ctx.fillStyle = c.tireRim;
     ctx.beginPath();
-    ctx.roundRect(s.x - 1.5, s.y, s.w + 3, 6, 1.5);
+    ctx.ellipse(t.x, t.y, 2.6, 2, 0, 0, Math.PI * 2);
     ctx.fill();
-    ctx.fillStyle = c.shedDoor;
+    ctx.restore();
+  }
+
+  for (const b of OIL_BARRELS) {
+    ctx.save();
+    ctx.globalAlpha = 0.15;
+    ctx.fillStyle = p.ink;
     ctx.beginPath();
-    ctx.roundRect(s.x + s.w / 2 - 3, s.y + s.h - 10, 6, 10, [1, 1, 0, 0]);
+    ctx.ellipse(b.x + 1, b.y + 2.5, 6.5, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    // A weathered oil drum: a dark body, a near-black band, a dull lid.
+    const body = () => {
+      ctx.beginPath();
+      ctx.moveTo(b.x - 5.5, b.y - 7.5);
+      ctx.quadraticCurveTo(b.x - 8, b.y, b.x - 5.5, b.y + 7.5);
+      ctx.lineTo(b.x + 5.5, b.y + 7.5);
+      ctx.quadraticCurveTo(b.x + 8, b.y, b.x + 5.5, b.y - 7.5);
+      ctx.closePath();
+    };
+    ctx.fillStyle = c.oilBarrel;
+    body();
+    ctx.fill();
+    ctx.save();
+    body();
+    ctx.clip();
+    ctx.fillStyle = c.oilBarrelBand;
+    ctx.fillRect(b.x - 8, b.y - 4, 16, 1.8);
+    ctx.fillRect(b.x - 8, b.y + 2.2, 16, 1.8);
+    ctx.restore();
+    ctx.fillStyle = c.oilBarrelBand;
+    ctx.beginPath();
+    ctx.ellipse(b.x, b.y - 7.5, 5.5, 1.5, 0, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
   }

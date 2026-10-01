@@ -46,6 +46,22 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.fillStyle = c.road;
   ctx.fillRect(0, 0, width, height);
 
+  // A light asphalt grain (kerb and grass are painted over it everywhere
+  // but the actual road, so no clipping needed here).
+  const grain = seeded(29);
+  ctx.save();
+  for (let gy = 0; gy < height; gy += 5) {
+    for (let gx = 0; gx < width; gx += 5) {
+      if (grain() < 0.6) continue;
+      const x = gx + grain() * 4;
+      const y = gy + grain() * 4;
+      ctx.globalAlpha = 0.05 + grain() * 0.05;
+      ctx.fillStyle = grain() < 0.5 ? "#000000" : "#ffffff";
+      ctx.fillRect(x, y, 1.4, 1.4);
+    }
+  }
+  ctx.restore();
+
   // Kerb: the walls grown by a few pixels, a light outer band and a near-white inner line.
   ctx.fillStyle = c.kerbOuter;
   for (const w of track.walls) ctx.fillRect(w.x - 3, w.y - 3, w.width + 6, w.height + 6);
@@ -76,7 +92,10 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.globalAlpha = 1;
   ctx.restore();
 
-  // The racing line, as a dashed centreline (like the 2024 map's).
+  // The racing line, as a dashed centreline (like the 2024 map's). Curved
+  // through the waypoints (quadratic segments via their midpoints) rather
+  // than joined by straight lines, so it bends smoothly through the rounded
+  // corners instead of cutting across them as a crooked chord.
   ctx.save();
   ctx.strokeStyle = c.roadDash;
   ctx.globalAlpha = 0.8;
@@ -84,7 +103,19 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.setLineDash([10, 12]);
   ctx.lineJoin = "round";
   ctx.beginPath();
-  track.waypoints.forEach((wp, i) => (i === 0 ? ctx.moveTo(wp.x, wp.y) : ctx.lineTo(wp.x, wp.y)));
+  const wps = track.waypoints;
+  const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
+    x: (a.x + b.x) / 2,
+    y: (a.y + b.y) / 2,
+  });
+  const start = mid(wps[wps.length - 1]!, wps[0]!);
+  ctx.moveTo(start.x, start.y);
+  for (let i = 0; i < wps.length; i++) {
+    const cur = wps[i]!;
+    const next = wps[(i + 1) % wps.length]!;
+    const m = mid(cur, next);
+    ctx.quadraticCurveTo(cur.x, cur.y, m.x, m.y);
+  }
   ctx.closePath();
   ctx.stroke();
   ctx.restore();
