@@ -5,6 +5,8 @@ import { racegame } from "@/content/cases/racegame";
 import { site } from "@/content/site";
 import { work } from "@/content/work";
 import { pageMetadata } from "@/lib/seo";
+import { Link } from "@/i18n/navigation";
+import { ArrowIcon } from "@/components/icons";
 import { CaseStudyLayout } from "@/components/case/CaseStudyLayout";
 import { LoopVideo } from "@/components/case/LoopVideo";
 
@@ -23,11 +25,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default function RaceGamePage() {
   const t = useTranslations("Case");
+  const play = useTranslations("Play");
 
   return (
     <CaseStudyLayout
       item={item}
       study={racegame}
+      actions={
+        <Link href="/projects/racegame/play" className="btn btn-primary">
+          {play("playCta")}
+          <ArrowIcon className="size-4" />
+        </Link>
+      }
       media={
         <LoopVideo
           webm="/media/racegame/race.webm"

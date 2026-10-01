@@ -30,6 +30,7 @@ export const indexablePaths = [
   "/cases/omnichannel-ai",
   "/cases/bayer",
   "/projects/racegame",
+  "/projects/racegame/play",
 ] as const;
 
 export type IndexablePath = (typeof indexablePaths)[number];
