@@ -5,11 +5,16 @@
   "description": "RaceGame's deterministic engine: physics, collisions, race rules and bots, shared by the browser and the server.",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./node": {
+      "types": "./dist/index.d.ts",
+      "require": "./dist/index.js"
+    }
   },
   "scripts": {
     "test": "node --test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json && node scripts/postbuild.mjs"
   },
   "devDependencies": {
     "@types/node": "^20",

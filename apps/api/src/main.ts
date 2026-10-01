@@ -1,5 +1,7 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { ExpressAdapter } from "@nestjs/platform-express";
+import { WsAdapter } from "@nestjs/platform-ws";
 import { AppModule } from "./app.module";
 
 // Local dev stays in the 17xxx range (see CLAUDE.md); Render injects its own PORT in production.
@@ -14,7 +16,12 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  // Passed explicitly (rather than left for Nest to auto-detect) because npm's
+  // workspace hoisting can nest @nestjs/platform-express under apps/api/node_modules
+  // while @nestjs/core sits at the repo root; a bare dynamic require from core's own
+  // location would then miss it. An import from our own file always finds it.
+  const app = await NestFactory.create(AppModule, new ExpressAdapter());
+  app.useWebSocketAdapter(new WsAdapter(app));
 
   const extraOrigins = process.env.WEB_ORIGIN?.split(",")
     .map((origin) => origin.trim())

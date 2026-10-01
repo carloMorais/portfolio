@@ -11,10 +11,11 @@
   "scripts": {
     "dev": "npm run dev -w web",
     "build": "npm run build -w web",
-    "build:api": "npm run build -w api",
+    "build:race-engine": "npm run build -w race-engine",
+    "build:api": "npm run build:race-engine && npm run build -w api",
     "lint": "npm run lint -w web && npm run lint -w api",
-    "typecheck": "npm run typecheck -w web && npm run typecheck -w race-engine && npm run typecheck -w api",
-    "test": "npm run test -w web && npm run test -w race-engine && npm run test -w api",
+    "typecheck": "npm run typecheck -w web && npm run typecheck -w race-engine && npm run build:race-engine && npm run typecheck -w api",
+    "test": "npm run test -w web && npm run test -w race-engine && npm run build:race-engine && npm run test -w api",
     "test:e2e": "npm run test:e2e -w web",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
