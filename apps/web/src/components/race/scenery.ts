@@ -156,40 +156,65 @@ const distanceToBox = (x: number, y: number, b: Box) =>
   Math.hypot(Math.max(b.x - x, 0, x - (b.x + b.width)), Math.max(b.y - y, 0, y - (b.y + b.height)));
 
 /**
- * The crowd, every frame. Fans sway gently; when a car passes close to their
- * stand they jump, a wave running along the stand. `still` (reduced motion)
- * keeps them seated.
+ * The crowd's excitement per stand, eased rather than switched on the spot:
+ * it winds up over ~0.5s as a car approaches and winds down over ~0.7s once
+ * it's gone, so cheering starts and stops as a ramp, not a jump cut.
  */
-export function drawFans(
-  ctx: CanvasRenderingContext2D,
-  fans: Fan[],
-  colors: string[],
-  cars: Pick<Car, "x" | "y" | "width" | "height">[],
-  now: number,
-  still: boolean,
-) {
-  const excited = STANDS.map((s) =>
-    cars.some((car) => distanceToBox(car.x + car.width / 2, car.y + car.height / 2, s) < 70),
-  );
-  ctx.save();
-  for (const f of fans) {
-    const hype = !still && excited[f.stand];
-    const hop = still
-      ? 0
-      : hype
-        ? Math.abs(Math.sin(now / 130 - f.phase)) * 2.4
-        : Math.max(0, Math.sin(now / 900 + f.phase * 3)) * 0.5;
-    // Shadow stays on the seat; the fan rises above it.
-    ctx.globalAlpha = 0.18;
-    ctx.fillStyle = "#000000";
-    ctx.beginPath();
-    ctx.arc(f.x + 0.6, f.y + 0.8, 2, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    ctx.fillStyle = colors[f.color % colors.length]!;
-    ctx.beginPath();
-    ctx.arc(f.x, f.y - hop, 2.1 + hop * 0.12, 0, Math.PI * 2);
-    ctx.fill();
+export class Crowd {
+  private intensity: number[];
+  private lastUpdate = 0;
+
+  constructor(standCount: number) {
+    this.intensity = new Array(standCount).fill(0);
   }
-  ctx.restore();
+
+  private update(stands: Stand[], cars: Pick<Car, "x" | "y" | "width" | "height">[], now: number) {
+    const dt = this.lastUpdate ? Math.min(now - this.lastUpdate, 100) : 16;
+    this.lastUpdate = now;
+    stands.forEach((s, i) => {
+      const near = cars.some(
+        (car) => distanceToBox(car.x + car.width / 2, car.y + car.height / 2, s) < 70,
+      );
+      const target = near ? 1 : 0;
+      const rate = (target > this.intensity[i]! ? 1 : 0.65) / 450; // winds up a bit faster than down
+      const diff = target - this.intensity[i]!;
+      this.intensity[i] += Math.sign(diff) * Math.min(Math.abs(diff), rate * dt);
+    });
+  }
+
+  /**
+   * Fans sway gently at rest; as their stand's excitement rises they sway
+   * less and hop more, a wave running along the row. `still` (reduced
+   * motion) freezes the crowd seated, excitement included.
+   */
+  draw(
+    ctx: CanvasRenderingContext2D,
+    fans: Fan[],
+    colors: string[],
+    stands: Stand[],
+    cars: Pick<Car, "x" | "y" | "width" | "height">[],
+    now: number,
+    still: boolean,
+  ) {
+    if (!still) this.update(stands, cars, now);
+    ctx.save();
+    for (const f of fans) {
+      const hype = still ? 0 : this.intensity[f.stand]!;
+      const cheer = Math.abs(Math.sin(now / 130 - f.phase)) * 2.4;
+      const sway = Math.max(0, Math.sin(now / 900 + f.phase * 3)) * 0.5;
+      const hop = still ? 0 : hype * cheer + (1 - hype) * sway;
+      // Shadow stays on the seat; the fan rises above it.
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = "#000000";
+      ctx.beginPath();
+      ctx.arc(f.x + 0.6, f.y + 0.8, 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = colors[f.color % colors.length]!;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y - hop, 2.1 + hop * 0.12, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
 }

@@ -7,6 +7,7 @@ export {
   createCar,
   createRace,
   gridPosition,
+  raceProgress,
   standings,
   stepRace,
   wrongWay,

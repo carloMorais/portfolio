@@ -3,7 +3,7 @@ import { describe, test } from "node:test";
 import { botKeys } from "./bot.ts";
 import { overlaps } from "./collision.ts";
 import { PHYSICS, TICK_RATE } from "./constants.ts";
-import { activeItems, createRace, standings, stepRace, wrongWay } from "./race.ts";
+import { activeItems, createRace, raceProgress, standings, stepRace, wrongWay } from "./race.ts";
 import { classicTrack as track } from "./track.ts";
 import { NO_KEYS, type Keys, type RaceState } from "./types.ts";
 
@@ -285,5 +285,46 @@ describe("classicTrack", () => {
         JSON.stringify(box),
       );
     }
+  });
+});
+
+describe("checkpoint and respawn events", () => {
+  test("crossing a checkpoint reports the order and the time since the lap started", () => {
+    let s = createRace(track, ["a"]);
+    const cp1 = track.checkpoints[0]!;
+    s.cars[0] = { ...s.cars[0]!, x: cp1.x, y: cp1.y, lapStartedAt: 10 };
+    s.tick = 10;
+    s = stepRace(s, track, { a: NO_KEYS });
+    const ev = s.events.find((e) => e.type === "checkpoint");
+    assert.ok(ev && ev.type === "checkpoint");
+    assert.deepEqual([ev.car, ev.order, ev.ticks], ["a", 1, s.tick - 10]);
+  });
+
+  test("a picked item reports when it comes back", () => {
+    const barrel = track.items.find((it) => it.type === 2)!;
+    let s = createRace(track, ["a"]);
+    s.cars[0] = { ...s.cars[0]!, x: barrel.x, y: barrel.y };
+    s = stepRace(s, track, { a: NO_KEYS });
+    assert.ok(!s.events.some((e) => e.type === "respawn"));
+    s.cars[0] = { ...s.cars[0]!, x: 300, y: 540 };
+    for (let i = 0; i < PHYSICS.itemRespawnTicks - 1; i++) s = stepRace(s, track, { a: NO_KEYS });
+    assert.ok(!s.events.some((e) => e.type === "respawn"));
+    s = stepRace(s, track, { a: NO_KEYS });
+    assert.deepEqual(
+      s.events.filter((e) => e.type === "respawn"),
+      [{ type: "respawn", item: barrel.id }],
+    );
+  });
+});
+
+describe("raceProgress", () => {
+  test("goes from 0 on the grid to 1 once finished, matching the standings order", () => {
+    const s = createRace(track, ["a", "b"], 2);
+    assert.equal(raceProgress(s.cars[0]!, track, 2), 0);
+    const ahead = { ...s.cars[0]!, laps: 1, waypoint: 3 };
+    const behind = { ...s.cars[1]!, laps: 0, waypoint: 1 };
+    assert.ok(raceProgress(ahead, track, 2) > raceProgress(behind, track, 2));
+    const done = { ...s.cars[0]!, finishedAt: 500 };
+    assert.equal(raceProgress(done, track, 2), 1);
   });
 });

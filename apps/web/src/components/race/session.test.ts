@@ -46,15 +46,31 @@ describe("race session helpers", () => {
 
   test("a personal best is kept per difficulty and only improves", () => {
     const storage = memoryStorage();
-    expect(loadBest(storage, "normal")).toEqual({ race: null, lap: null });
+    expect(loadBest(storage, "normal")).toEqual({ race: null, lap: null, splits: null });
 
-    const first = updateBest(loadBest(storage, "normal"), 1800, 880);
+    const first = updateBest(loadBest(storage, "normal"), 1800, 880, [200, 420, 640, 760, 880]);
     expect(first).toMatchObject({ newRace: true, newLap: true });
     saveBest(storage, "normal", first.best);
 
-    const slower = updateBest(loadBest(storage, "normal"), 1900, 860);
-    expect(slower).toEqual({ best: { race: 1800, lap: 860 }, newRace: false, newLap: true });
-    expect(loadBest(storage, "hard")).toEqual({ race: null, lap: null });
+    const slower = updateBest(loadBest(storage, "normal"), 1900, 860, [190, 400, 620, 740, 860]);
+    expect(slower).toEqual({
+      best: { race: 1800, lap: 860, splits: [190, 400, 620, 740, 860] },
+      newRace: false,
+      newLap: true,
+    });
+    expect(loadBest(storage, "hard")).toEqual({ race: null, lap: null, splits: null });
+  });
+
+  test("a faster race without a faster lap keeps the old splits", () => {
+    const storage = memoryStorage();
+    const first = updateBest(loadBest(storage, "normal"), 1800, 880, [880]);
+    saveBest(storage, "normal", first.best);
+    const faster = updateBest(loadBest(storage, "normal"), 1700, 890, null);
+    expect(faster).toEqual({
+      best: { race: 1700, lap: 880, splits: [880] },
+      newRace: true,
+      newLap: false,
+    });
   });
 
   test("broken or blocked storage just means no record", () => {
@@ -63,10 +79,10 @@ describe("race session helpers", () => {
         throw new Error("blocked");
       },
     } as unknown as Storage;
-    expect(loadBest(broken, "easy")).toEqual({ race: null, lap: null });
+    expect(loadBest(broken, "easy")).toEqual({ race: null, lap: null, splits: null });
     expect(loadDifficulty(broken)).toBe("normal");
     const garbage = memoryStorage();
     garbage.setItem("racegame:best:easy", "{oops");
-    expect(loadBest(garbage, "easy")).toEqual({ race: null, lap: null });
+    expect(loadBest(garbage, "easy")).toEqual({ race: null, lap: null, splits: null });
   });
 });

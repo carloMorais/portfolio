@@ -195,6 +195,10 @@
     "difficulty": "Difficulty",
     "easy": "Easy",
     "normal": "Normal",
-    "hard": "Hard"
+    "hard": "Hard",
+    "delta": "Delta",
+    "speed": "Speed",
+    "gainedPlace": "Gained a place",
+    "lostPlace": "Lost a place"
   }
 }

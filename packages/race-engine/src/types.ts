@@ -69,7 +69,11 @@ export type RaceEvent =
   | { type: "bump"; car: string; impact: number; nx: -1 | 0 | 1; ny: -1 | 0 | 1; gate: boolean }
   | { type: "pickup"; car: string; item: string; itemType: ItemType }
   /** Completed lap number `lap` in `ticks`; `finished` on the last one. */
-  | { type: "lap"; car: string; lap: number; ticks: number; finished: boolean };
+  | { type: "lap"; car: string; lap: number; ticks: number; finished: boolean }
+  /** Crossed checkpoint `order`, `ticks` after the lap started (for live splits). */
+  | { type: "checkpoint"; car: string; order: number; ticks: number }
+  /** An item came back onto the track after being picked up. */
+  | { type: "respawn"; item: string };
 
 export type RaceState = {
   tick: number;

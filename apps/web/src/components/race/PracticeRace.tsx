@@ -10,6 +10,7 @@ import {
   botKeys,
   classicTrack as track,
   createRace,
+  raceProgress,
   standings,
   stepRace,
   wrongWay,
@@ -21,6 +22,7 @@ import {
   drawItem,
   type CarLook,
   drawLabel,
+  drawStartLights,
   drawTarget,
   drawTrack,
   interpolateCar,
@@ -28,7 +30,7 @@ import {
   type Palette,
 } from "./draw";
 import { Effects } from "./effects";
-import { STANDS, drawFans, drawScenery, seatFans } from "./scenery";
+import { Crowd, STANDS, drawScenery, seatFans } from "./scenery";
 import { BoltIcon } from "./icons";
 import {
   BOTS,
@@ -59,7 +61,13 @@ const LAST_LAP_MS = 2200;
 
 /** "finishing": you're done, the bots are still racing. */
 type Phase = "ready" | "countdown" | "racing" | "finishing" | "paused" | "finished";
-type Driver = { id: string; nitro: number; done: boolean };
+type Driver = {
+  id: string;
+  nitro: number;
+  done: boolean;
+  /** Gained or lost a place in the last ~1.6s, for a small arrow in the standings. */
+  change: "up" | "down" | null;
+};
 type Hud = {
   tick: number;
   time: number;
@@ -71,8 +79,27 @@ type Hud = {
   board: Driver[];
   wrongWay: boolean;
   lastLap: boolean;
+  justStarted: boolean;
+  /** Ticks ahead (negative) or behind your reference lap at the last checkpoint crossed. */
+  delta: number | null;
+  /** 0–1 of the current speed cap (higher while boosted). */
+  speed: number;
+  /** Every car's fraction of the whole race done, in no particular order. */
+  progress: { id: string; value: number }[];
 };
 type Outcome = { newRace: boolean; newLap: boolean };
+type ChangeMark = { dir: "up" | "down"; until: number };
+type ConfettiPiece = { id: number; left: number; delay: number; color: string; rotate: number };
+
+/** A one-off handful of confetti pieces, randomised once when you take 1st. */
+const makeConfetti = (colors: string[]): ConfettiPiece[] =>
+  Array.from({ length: 22 }, (_, i) => ({
+    id: i,
+    left: Math.random() * 100,
+    delay: Math.random() * 0.4,
+    color: colors[i % colors.length]!,
+    rotate: Math.round(Math.random() * 360),
+  }));
 
 const KEY_MAP: Record<string, keyof Keys> = {
   ArrowUp: "up",
@@ -89,7 +116,12 @@ const KEY_MAP: Record<string, keyof Keys> = {
 const newRace = () => createRace(track, [PLAYER, ...BOT_IDS], LAPS);
 
 const board = (s: RaceState): Driver[] =>
-  standings(s, track).map((c) => ({ id: c.id, nitro: c.nitro, done: c.finishedAt !== null }));
+  standings(s, track).map((c) => ({
+    id: c.id,
+    nitro: c.nitro,
+    done: c.finishedAt !== null,
+    change: null,
+  }));
 
 const initialHud = (): Hud => ({
   tick: 0,
@@ -101,6 +133,10 @@ const initialHud = (): Hud => ({
   board: board(newRace()),
   wrongWay: false,
   lastLap: false,
+  justStarted: false,
+  delta: null,
+  speed: 0,
+  progress: [PLAYER, ...BOT_IDS].map((id) => ({ id, value: 0 })),
 });
 
 const storage = () => {
@@ -135,16 +171,30 @@ export function PracticeRace() {
   const wrongTicks = useRef(0);
   const gateAt = useRef<number | null>(null);
   const lastLapUntil = useRef(0);
+  const startFlashUntil = useRef(0);
   const position = useRef({ candidate: 0, since: 0, announced: 0 });
+  // Your checkpoint splits this lap, every completed lap's splits, and the
+  // live delta against your best lap's splits (sticky between checkpoints).
+  const splitsRef = useRef<number[]>([]);
+  const lapHistoryRef = useRef<number[][]>([]);
+  const deltaRef = useRef<number | null>(null);
+  const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
+  const prevOrderRef = useRef<string[]>([]);
+  const changeUntilRef = useRef(new Map<string, ChangeMark>());
+  const celebratedRef = useRef(false);
 
   const [phase, setPhaseState] = useState<Phase>("ready");
-  const [count, setCount] = useState(3);
   const [hud, setHud] = useState<Hud>(initialHud);
   const [result, setResult] = useState<RaceState | null>(null);
   const [difficulty, setDifficultyState] = useState<Difficulty>("normal");
-  const [best, setBest] = useState<PersonalBest>({ race: null, lap: null });
+  const [best, setBest] = useState<PersonalBest>({ race: null, lap: null, splits: null });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [announcement, setAnnouncement] = useState("");
+  const [confetti, setConfetti] = useState<ConfettiPiece[] | null>(null);
+
+  useEffect(() => {
+    bestRef.current = best;
+  }, [best]);
 
   const setPhase = useCallback((p: Phase) => {
     phaseRef.current = p;
@@ -178,11 +228,18 @@ export function PracticeRace() {
     wrongTicks.current = 0;
     gateAt.current = null;
     lastLapUntil.current = 0;
+    startFlashUntil.current = 0;
     position.current = { candidate: 0, since: 0, announced: 0 };
+    splitsRef.current = [];
+    lapHistoryRef.current = [];
+    deltaRef.current = null;
+    prevOrderRef.current = [];
+    changeUntilRef.current.clear();
+    celebratedRef.current = false;
     setResult(null);
     setOutcome(null);
+    setConfetti(null);
     countdownEnd.current = performance.now() + COUNTDOWN_MS;
-    setCount(3);
     setPhase("countdown");
     canvasRef.current?.focus({ preventScroll: true });
     // Bring the whole track into view: you can't drive what you can't see.
@@ -288,6 +345,7 @@ export function PracticeRace() {
     effects.current ??= new Effects(reduced);
     const fx = effects.current;
     const fans = seatFans(STANDS, 7);
+    const crowd = new Crowd(STANDS.length);
     const running = () => phaseRef.current === "racing" || phaseRef.current === "finishing";
     const moving = () => running() || phaseRef.current === "paused";
 
@@ -297,7 +355,10 @@ export function PracticeRace() {
       const me = s.cars.find((c) => c.id === PLAYER)!;
       if (me.finishedAt === null) return;
       const d = difficultyRef.current;
-      const next = updateBest(loadBest(storage(), d), me.finishedAt, bestLap(me));
+      const lap = bestLap(me);
+      const lapIndex = lap !== null ? me.lapTicks.indexOf(lap) : -1;
+      const splits = lapIndex >= 0 ? (lapHistoryRef.current[lapIndex] ?? null) : null;
+      const next = updateBest(loadBest(storage(), d), me.finishedAt, lap, splits);
       saveBest(storage(), d, next.best);
       setBest(next.best);
       setOutcome({ newRace: next.newRace, newLap: next.newLap });
@@ -323,9 +384,23 @@ export function PracticeRace() {
               (Math.max(car.y, item.y) + Math.min(car.y + car.height, item.y + item.height)) / 2;
             fx.impact(x, y, now);
           }
-        } else if (ev.car === PLAYER && !ev.finished && ev.lap === LAPS - 1) {
-          lastLapUntil.current = now + LAST_LAP_MS;
-          setAnnouncement(t("announceLastLap"));
+        } else if (ev.type === "respawn") {
+          const item = track.items.find((it) => it.id === ev.item);
+          if (item) fx.respawn(item, p, now);
+        } else if (ev.type === "checkpoint" && ev.car === PLAYER) {
+          // Sector delta: sticky until the next checkpoint updates it.
+          splitsRef.current[ev.order - 1] = ev.ticks;
+          const ref = bestRef.current.splits;
+          deltaRef.current =
+            ref && ref[ev.order - 1] !== undefined ? ev.ticks - ref[ev.order - 1]! : null;
+        } else if (ev.type === "lap" && ev.car === PLAYER) {
+          lapHistoryRef.current.push([...splitsRef.current]);
+          splitsRef.current = [];
+          deltaRef.current = null;
+          if (!ev.finished && ev.lap === LAPS - 1) {
+            lastLapUntil.current = now + LAST_LAP_MS;
+            setAnnouncement(t("announceLastLap"));
+          }
         }
       }
       const me = s.cars.find((c) => c.id === PLAYER)!;
@@ -337,10 +412,10 @@ export function PracticeRace() {
       const dt = Math.min(now - last, 250);
       last = now;
 
-      if (phaseRef.current === "countdown") {
-        const left = Math.ceil((countdownEnd.current - now) / 1000);
-        setCount(left);
-        if (now >= countdownEnd.current) setPhase("racing");
+      if (phaseRef.current === "countdown" && now >= countdownEnd.current) {
+        setPhase("racing");
+        startFlashUntil.current = now + 500;
+        setAnnouncement(t("go"));
       }
 
       if (running()) {
@@ -359,7 +434,14 @@ export function PracticeRace() {
           react(next, now);
 
           const me = next.cars.find((c) => c.id === PLAYER)!;
-          if (phaseRef.current === "racing" && me.finishedAt !== null) setPhase("finishing");
+          if (phaseRef.current === "racing" && me.finishedAt !== null) {
+            setPhase("finishing");
+            if (!celebratedRef.current && next.finished[0] === PLAYER) {
+              celebratedRef.current = true;
+              const p = palette.current;
+              if (p) setConfetti(makeConfetti([p.accent, p.c.bolt, ...p.c.bots]));
+            }
+          }
           const allDone = next.finished.length === next.cars.length;
           if (me.finishedAt !== null && (allDone || next.tick - me.finishedAt >= WAIT_TICKS)) {
             finish(next);
@@ -374,8 +456,32 @@ export function PracticeRace() {
         hudAt = now;
         const s = race.current;
         const me = s.cars.find((c) => c.id === PLAYER)!;
-        const ranked = board(s);
-        const place = ranked.findIndex((d) => d.id === PLAYER) + 1;
+        const ranked = standings(s, track);
+        const order = ranked.map((c) => c.id);
+        const place = order.indexOf(PLAYER) + 1;
+
+        // A small up/down arrow for ~1.6s wherever a driver's place just changed.
+        const prevOrder = prevOrderRef.current;
+        if (prevOrder.length === order.length) {
+          order.forEach((id, i) => {
+            const was = prevOrder.indexOf(id);
+            if (was !== -1 && was !== i) {
+              changeUntilRef.current.set(id, { dir: was > i ? "up" : "down", until: now + 1600 });
+            }
+          });
+        }
+        prevOrderRef.current = order;
+        const boardRows: Driver[] = ranked.map((c) => {
+          const mark = changeUntilRef.current.get(c.id);
+          return {
+            id: c.id,
+            nitro: c.nitro,
+            done: c.finishedAt !== null,
+            change: mark && now < mark.until ? mark.dir : null,
+          };
+        });
+
+        const topSpeed = me.nitroUntil !== null ? PHYSICS.nitroMaxVelocity : PHYSICS.maxVelocity;
         setHud({
           tick: s.tick,
           time: me.finishedAt ?? s.tick,
@@ -383,12 +489,16 @@ export function PracticeRace() {
           laps: me.lapTicks,
           place: s.finished.indexOf(PLAYER) + 1,
           playerX: Math.round(me.x),
-          board: ranked,
+          board: boardRows,
           wrongWay:
             me.finishedAt === null &&
             (wrongTicks.current >= WRONG_WAY_TICKS ||
               (gateAt.current !== null && s.tick - gateAt.current < GATE_WARNING_TICKS)),
           lastLap: now < lastLapUntil.current,
+          justStarted: now < startFlashUntil.current,
+          delta: deltaRef.current,
+          speed: Math.max(0, Math.min(1, Math.hypot(me.vx, me.vy) / topSpeed)),
+          progress: ranked.map((c) => ({ id: c.id, value: raceProgress(c, track, LAPS) })),
         });
         // Say the position once it has held for a moment, not at every overtake.
         const pos = position.current;
@@ -423,11 +533,24 @@ export function PracticeRace() {
 
       const s = race.current;
       // The crowd cheers when a car goes past its stand.
-      drawFans(ctx, fans, p.c.fans, s.cars, now, reduced);
-      // Nitro badges float gently, each at its own beat.
+      crowd.draw(ctx, fans, p.c.fans, STANDS, s.cars, now, reduced);
+      // Nitro badges float gently, each at its own beat; a just-respawned item pops in.
       activeItems(track, s).forEach((item, i) =>
-        drawItem(ctx, item, p, reduced ? 0 : Math.sin(now / 450 + i * 1.7)),
+        drawItem(
+          ctx,
+          item,
+          p,
+          reduced ? 0 : Math.sin(now / 450 + i * 1.7),
+          reduced ? null : fx.respawnProgress(item.id, now),
+        ),
       );
+
+      if (phaseRef.current === "countdown") {
+        const elapsed = now - (countdownEnd.current - COUNTDOWN_MS);
+        const lit = Math.max(0, Math.min(5, Math.floor(elapsed / 500) + 1));
+        const f = track.finishLine;
+        drawStartLights(ctx, p, lit, f.x + f.width / 2, f.y - 25);
+      }
 
       // Where you need to go next.
       const me = s.cars.find((c) => c.id === PLAYER)!;
@@ -493,8 +616,8 @@ export function PracticeRace() {
 
   const results = (focus: boolean) =>
     result && (
-      <div className="my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
-        <p className="font-display text-2xl tracking-tight sm:text-3xl">
+      <div className="race-fade-in my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
+        <p className="race-pop-in font-display text-2xl tracking-tight sm:text-3xl">
           {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
         </p>
         {myTime !== null && (
@@ -503,7 +626,7 @@ export function PracticeRace() {
           </p>
         )}
         {(outcome?.newRace || outcome?.newLap) && (
-          <p className="mt-2 text-sm text-accent">
+          <p className="race-pop-in mt-2 text-sm text-accent">
             {outcome.newRace ? t("newRecord") : t("newBestLap")}
           </p>
         )}
@@ -597,6 +720,12 @@ export function PracticeRace() {
               >
                 <span className="inline-flex items-center gap-1.5">
                   {names(d.id)}
+                  {d.change && (
+                    <ChangeIcon
+                      dir={d.change}
+                      label={t(d.change === "up" ? "gainedPlace" : "lostPlace")}
+                    />
+                  )}
                   {d.done && <FlagIcon label={t("done")} />}
                 </span>
               </th>
@@ -620,6 +749,26 @@ export function PracticeRace() {
           <dt className="text-xs text-muted">{t("time")}</dt>
           <dd className="font-display text-3xl tracking-tight">{formatTime(hud.time)}</dd>
         </div>
+        <div>
+          <dt className="text-xs text-muted">{t("speed")}</dt>
+          <dd className="mt-1.5 h-1.5 w-full max-w-20 overflow-hidden rounded-full bg-line">
+            <div
+              className="h-full rounded-full bg-accent"
+              style={{ width: `${hud.speed * 100}%` }}
+            />
+          </dd>
+        </div>
+        {hud.delta !== null && (
+          <div>
+            <dt className="text-xs text-muted">{t("delta")}</dt>
+            <dd
+              className={`font-display text-xl tracking-tight tabular-nums ${hud.delta <= 0 ? "text-accent" : "text-ink"}`}
+            >
+              {hud.delta <= 0 ? "−" : "+"}
+              {Math.abs(hud.delta / TICK_RATE).toFixed(1)}
+            </dd>
+          </div>
+        )}
         {hud.laps.length > 0 && (
           <div>
             <dt className="text-xs text-muted">{t("lapTimes")}</dt>
@@ -645,6 +794,17 @@ export function PracticeRace() {
 
       {/* Never taller than the window: the whole track stays in view while you drive. */}
       <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
+        {/* Where everyone is on the lap; the standings table already covers this for a reader. */}
+        <div aria-hidden className="relative mb-2 h-1.5 rounded-full bg-line">
+          {hud.progress.map((p) => (
+            <span
+              key={p.id}
+              className={`absolute top-1/2 size-2.5 -translate-y-1/2 rounded-full ring-2 ring-bg ${p.id === PLAYER ? "bg-accent" : "bg-muted"}`}
+              style={{ left: `calc(${Math.min(100, p.value * 100)}% - 5px)` }}
+            />
+          ))}
+        </div>
+
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -653,6 +813,22 @@ export function PracticeRace() {
             aria-label={t("canvasLabel")}
             className="block aspect-[760/600] w-full bg-bg outline-none"
           />
+
+          {confetti && (phase === "finishing" || phase === "finished") && (
+            <div className="race-confetti" aria-hidden>
+              {confetti.map((piece) => (
+                <span
+                  key={piece.id}
+                  style={{
+                    left: `${piece.left}%`,
+                    backgroundColor: piece.color,
+                    animationDelay: `${piece.delay}s`,
+                    transform: `rotate(${piece.rotate}deg)`,
+                  }}
+                />
+              ))}
+            </div>
+          )}
 
           {/* Banners over the race, never blocking it. */}
           <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
@@ -665,8 +841,13 @@ export function PracticeRace() {
               </p>
             )}
             {hud.lastLap && phase === "racing" && (
-              <p className="font-display text-3xl tracking-tight text-accent drop-shadow-[0_1px_0_var(--bg)]">
+              <p className="race-pop-in font-display text-3xl tracking-tight text-accent drop-shadow-[0_1px_0_var(--bg)]">
                 {t("lastLap")}
+              </p>
+            )}
+            {hud.justStarted && (
+              <p className="race-pop-in font-display text-3xl tracking-tight text-accent drop-shadow-[0_1px_0_var(--bg)]">
+                {t("go")}
               </p>
             )}
           </div>
@@ -677,7 +858,7 @@ export function PracticeRace() {
               role="status"
               className="race-fade-in pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/60 p-4 text-center"
             >
-              <p className="font-display text-4xl tracking-tight sm:text-6xl">
+              <p className="race-pop-in font-display text-4xl tracking-tight sm:text-6xl">
                 {t("finished", { n: hud.place })}
               </p>
               <p className="text-sm text-muted motion-safe:animate-pulse sm:text-base">
@@ -708,10 +889,8 @@ export function PracticeRace() {
             </button>
           )}
 
-          {(phase === "ready" ||
-            phase === "countdown" ||
-            phase === "paused" ||
-            phase === "finished") && (
+          {/* The countdown has no veil: the grid and the lights stay in full view. */}
+          {(phase === "ready" || phase === "paused" || phase === "finished") && (
             <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]">
               {phase === "ready" && (
                 <div className="flex flex-col items-center gap-5">
@@ -721,11 +900,6 @@ export function PracticeRace() {
                   </button>
                   <p className="hidden text-xs text-muted lg:block">{t("startHint")}</p>
                 </div>
-              )}
-              {phase === "countdown" && (
-                <p className="font-display text-7xl tabular-nums" aria-live="assertive">
-                  {count > 0 ? count : t("go")}
-                </p>
               )}
               {phase === "paused" && (
                 <div className="flex flex-col items-center gap-4 text-center">
@@ -849,6 +1023,20 @@ function FlagIcon({ label }: { label: string }) {
     <svg role="img" aria-label={label} viewBox="0 0 12 12" className="size-3 text-muted">
       <path d="M2 1v10" stroke="currentColor" strokeWidth="1.2" />
       <path d="M2.5 1.5h7l-1.5 2.5 1.5 2.5h-7z" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** A small arrow for a place just gained (up, accent) or lost (down, muted). */
+function ChangeIcon({ dir, label }: { dir: "up" | "down"; label: string }) {
+  return (
+    <svg
+      role="img"
+      aria-label={label}
+      viewBox="0 0 10 10"
+      className={`size-2.5 ${dir === "up" ? "text-accent" : "text-muted"}`}
+    >
+      <path d={dir === "up" ? "M5 1 9 7H1Z" : "M5 9 1 3H9Z"} fill="currentColor" />
     </svg>
   );
 }

@@ -31,6 +31,10 @@ export type GameColors = {
   coneBand: string;
   dust: string;
   spark: string;
+  /** The starting gantry: a dark panel, same in both themes (it's a physical rig). */
+  rig: string;
+  /** A lit starting light. Off ones are drawn in `wheel`, so they sit dark until lit. */
+  lightOn: string;
 };
 
 export const LIGHT: GameColors = {
@@ -60,22 +64,30 @@ export const LIGHT: GameColors = {
   coneBand: "#fff7ea",
   dust: "#d6c9ae",
   spark: "#ffc94d",
+  rig: "#2a2826",
+  lightOn: "#e8432f",
 };
 
+/**
+ * Noticeably brighter than the first pass (01/10/2026): the grass, kerb and
+ * stands sat only a shade above the near-black road and the whole map read
+ * as too dark. Raised across the board; the vivid tones (bots, items) were
+ * fine and are unchanged.
+ */
 export const DARK: GameColors = {
-  grass: "#1c2a1f",
-  grassLine: "#243628",
-  kerb: "#2d2b27",
+  grass: "#33543a",
+  grassLine: "#3f6a46",
+  kerb: "#5c5544",
   bots: ["#e86a67", "#e8a93a", "#38a385"],
   wheel: "#0b0b0b",
   stripe: "#f6efe2",
   helmet: "#f6efe2",
-  standFront: "#4a453c",
-  standRow: "#2f2c27",
-  standRowAlt: "#36332d",
-  standRoof: "#57514a",
-  tree: "#2f5a35",
-  treeLight: "#3f7246",
+  standFront: "#655d4e",
+  standRow: "#423d33",
+  standRowAlt: "#4b4438",
+  standRoof: "#746b5a",
+  tree: "#3f7245",
+  treeLight: "#528758",
   fans: ["#e86a67", "#e8a93a", "#38a385", "#6f9cf2", "#e6843f", "#b98ad0", "#f6efe2"],
   bolt: "#ffd166",
   barrel: "#d0705a",
@@ -87,6 +99,8 @@ export const DARK: GameColors = {
   cone: "#e6843f",
   coneBase: "#b25f25",
   coneBand: "#f4ece0",
-  dust: "#5a5345",
+  dust: "#6f6758",
   spark: "#ffc94d",
+  rig: "#2a2826",
+  lightOn: "#e8432f",
 };

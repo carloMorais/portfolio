@@ -195,6 +195,10 @@
     "difficulty": "Dificuldade",
     "easy": "Fácil",
     "normal": "Normal",
-    "hard": "Difícil"
+    "hard": "Difícil",
+    "delta": "Diferença",
+    "speed": "Velocidade",
+    "gainedPlace": "Subiu uma posição",
+    "lostPlace": "Desceu uma posição"
   }
 }

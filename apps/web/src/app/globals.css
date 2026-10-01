@@ -293,6 +293,39 @@ body {
   }
 }
 
+/* RaceGame: a quick pop for texts that mark a moment (lights out, last lap, results). */
+.race-pop-in {
+  animation: race-pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+}
+@keyframes race-pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85) translateY(6px);
+  }
+}
+
+/* RaceGame: a small confetti burst over the track when you finish 1st. */
+.race-confetti {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.race-confetti span {
+  position: absolute;
+  top: -8%;
+  width: 6px;
+  height: 10px;
+  border-radius: 1px;
+  animation: race-confetti-fall 1.6s ease-in forwards;
+}
+@keyframes race-confetti-fall {
+  to {
+    transform: translateY(650%) rotate(260deg);
+    opacity: 0;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .brush-mark::before {
     animation: none;
@@ -302,9 +335,13 @@ body {
   .tech-graph-cluster,
   .tech-graph-caret,
   .scroll-hint-dot,
-  .race-fade-in {
+  .race-fade-in,
+  .race-pop-in {
     animation: none;
     opacity: 1;
+  }
+  .race-confetti {
+    display: none;
   }
 }
 

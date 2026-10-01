@@ -62,10 +62,15 @@ export function resultRows(ordered: Car[]): ResultRow[] {
   }));
 }
 
-/** Your best race and best lap for a difficulty, in ticks. */
-export type PersonalBest = { race: number | null; lap: number | null };
+/**
+ * Your best race and best lap for a difficulty, in ticks. `splits` are the
+ * ticks-since-lap-start at each checkpoint of that best lap, the reference
+ * the live delta compares against (null until a lap has been timed).
+ */
+export type PersonalBest = { race: number | null; lap: number | null; splits: number[] | null };
 
 const storageKey = (d: Difficulty) => `racegame:best:${d}`;
+const EMPTY_BEST: PersonalBest = { race: null, lap: null, splits: null };
 
 /** Read from this browser only; any storage error means no record yet. */
 export function loadBest(storage: Storage | undefined, d: Difficulty): PersonalBest {
@@ -73,25 +78,37 @@ export function loadBest(storage: Storage | undefined, d: Difficulty): PersonalB
     const raw = storage?.getItem(storageKey(d));
     const parsed = raw ? (JSON.parse(raw) as Partial<PersonalBest>) : {};
     const ticks = (v: unknown) => (typeof v === "number" && v > 0 ? v : null);
-    return { race: ticks(parsed.race), lap: ticks(parsed.lap) };
+    const splits =
+      Array.isArray(parsed.splits) && parsed.splits.every((n) => typeof n === "number");
+    return {
+      race: ticks(parsed.race),
+      lap: ticks(parsed.lap),
+      splits: splits ? parsed.splits! : null,
+    };
   } catch {
-    return { race: null, lap: null };
+    return { ...EMPTY_BEST };
   }
 }
 
 /**
- * Folds a finished race into the record. Returns the new record and which
- * parts of it this race beat.
+ * Folds a finished race into the record. `lapSplits` are this race's own
+ * best lap's checkpoint splits, kept only when that lap is a new record.
+ * Returns the new record and which parts of it this race beat.
  */
 export function updateBest(
   best: PersonalBest,
   race: number,
   lap: number | null,
+  lapSplits: number[] | null = null,
 ): { best: PersonalBest; newRace: boolean; newLap: boolean } {
   const newRace = best.race === null || race < best.race;
   const newLap = lap !== null && (best.lap === null || lap < best.lap);
   return {
-    best: { race: newRace ? race : best.race, lap: newLap ? lap : best.lap },
+    best: {
+      race: newRace ? race : best.race,
+      lap: newLap ? lap : best.lap,
+      splits: newLap ? lapSplits : best.splits,
+    },
     newRace,
     newLap,
   };

@@ -10,6 +10,8 @@ import { itemColors, type Palette } from "./draw";
  * - rigid ones (barrel, log) shatter: spinning shards, a crack ring, dust;
  * - wall hits puff dust off the wall, and strong ones throw sparks;
  * - hitting an obstacle flashes a little impact star where the two touched;
+ * - an item coming back onto the track pops in with a ring (see `draw.ts`'s
+ *   overshoot scale, driven by `respawnProgress`);
  * - nitro leaves a trail.
  * With reduced motion none of this is drawn.
  */
@@ -38,12 +40,14 @@ const IMPACT_MS = 240;
 type Ring = { x: number; y: number; color: string; born: number; life: number; radius: number };
 
 const TRAIL_EVERY_MS = 18;
+const RESPAWN_MS = 420;
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
 export class Effects {
   private particles: Particle[] = [];
   private rings: Ring[] = [];
   private impacts: Impact[] = [];
+  private respawns = new Map<string, number>();
   private lastTrail = new Map<string, number>();
 
   constructor(private readonly reduced: boolean) {}
@@ -52,7 +56,35 @@ export class Effects {
     this.particles = [];
     this.rings = [];
     this.impacts = [];
+    this.respawns.clear();
     this.lastTrail.clear();
+  }
+
+  /** An item came back: a quick ring, and `drawItem` pops it in (see `respawnProgress`). */
+  respawn(item: ItemSpawn, p: Palette, now: number) {
+    this.respawns.set(item.id, now);
+    if (this.reduced) return;
+    const [main] = itemColors(item.type, p);
+    this.rings.push({
+      x: item.x + item.width / 2,
+      y: item.y + item.height / 2,
+      color: main,
+      born: now,
+      life: RESPAWN_MS,
+      radius: 16,
+    });
+  }
+
+  /** 0–1 while `item` is popping back in, or null once it's settled. */
+  respawnProgress(id: string, now: number): number | null {
+    const born = this.respawns.get(id);
+    if (born === undefined) return null;
+    const t = (now - born) / RESPAWN_MS;
+    if (t >= 1) {
+      this.respawns.delete(id);
+      return null;
+    }
+    return t;
   }
 
   /** Where a car met an obstacle (the middle of their overlap): a quick impact star. */

@@ -70,7 +70,10 @@ export function stepRace(state: RaceState, track: Track, inputs: Record<string, 
   const tick = next.tick;
 
   for (const [id, at] of Object.entries(next.itemRespawnAt)) {
-    if (at <= tick) delete next.itemRespawnAt[id];
+    if (at <= tick) {
+      delete next.itemRespawnAt[id];
+      next.events.push({ type: "respawn", item: id });
+    }
   }
 
   for (const car of next.cars) {
@@ -90,7 +93,7 @@ export function stepRace(state: RaceState, track: Track, inputs: Record<string, 
     }
     keepInside(car, track);
   }
-  for (const car of next.cars) crossCheckpoints(car, track);
+  for (const car of next.cars) crossCheckpoints(car, track, next);
   for (const car of next.cars) crossFinishLine(car, track, next);
   for (const car of next.cars) pickItems(car, track, next);
   for (const car of next.cars) followWaypoints(car, track);
@@ -125,9 +128,17 @@ function keepInside(car: Car, track: Track) {
 }
 
 /** Checkpoints count only in order (out-of-order ones are solid, see blockersFor). */
-function crossCheckpoints(car: Car, track: Track) {
+function crossCheckpoints(car: Car, track: Track, state: RaceState) {
   const box = track.checkpoints.find((cp) => overlaps(car, cp));
-  if (box && car.checkpoint === box.order - 1) car.checkpoint += 1;
+  if (box && car.checkpoint === box.order - 1) {
+    car.checkpoint += 1;
+    state.events.push({
+      type: "checkpoint",
+      car: car.id,
+      order: car.checkpoint,
+      ticks: state.tick - car.lapStartedAt,
+    });
+  }
 }
 
 function crossFinishLine(car: Car, track: Track, state: RaceState) {
@@ -171,19 +182,36 @@ function followWaypoints(car: Car, track: Track) {
 }
 
 /**
+ * Laps·waypoints plus progress along the current one. Waypoint 0 sits just
+ * past the finish line, so a car heading to it with every checkpoint done is
+ * about to complete the lap, not at its start.
+ */
+function waypointProgress(car: Car, track: Track): number {
+  const n = track.waypoints.length;
+  const aboutToFinish = car.waypoint === 0 && car.checkpoint === track.checkpoints.length;
+  return car.laps * n + (aboutToFinish ? n : car.waypoint);
+}
+
+/**
  * Race order: laps, then checkpoints, then progress along the racing line.
  * Finished cars keep their finishing order at the top.
  */
 export function standings(state: RaceState, track: Track): Car[] {
-  const n = track.waypoints.length;
-  const progress = (car: Car) => {
-    if (car.finishedAt !== null) return Number.MAX_SAFE_INTEGER - state.finished.indexOf(car.id);
-    // Waypoint 0 sits just past the finish line: a car heading to it with every
-    // checkpoint done is about to complete the lap, not at its start.
-    const aboutToFinish = car.waypoint === 0 && car.checkpoint === track.checkpoints.length;
-    return car.laps * n + (aboutToFinish ? n : car.waypoint);
-  };
-  return [...state.cars].sort((a, b) => progress(b) - progress(a));
+  const rank = (car: Car) =>
+    car.finishedAt !== null
+      ? Number.MAX_SAFE_INTEGER - state.finished.indexOf(car.id)
+      : waypointProgress(car, track);
+  return [...state.cars].sort((a, b) => rank(b) - rank(a));
+}
+
+/**
+ * How far through the whole race a car is, from 0 (the grid) to 1 (finished):
+ * the same measure `standings` ranks by, scaled to the race's length. For a
+ * progress bar, not for ordering (ties among finished cars collapse to 1).
+ */
+export function raceProgress(car: Car, track: Track, laps: number): number {
+  if (car.finishedAt !== null) return 1;
+  return Math.min(1, waypointProgress(car, track) / (laps * track.waypoints.length));
 }
 
 /**

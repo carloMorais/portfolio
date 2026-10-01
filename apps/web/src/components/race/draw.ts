@@ -137,6 +137,51 @@ export function boltPath(ctx: CanvasRenderingContext2D, cx: number, cy: number, 
   ctx.closePath();
 }
 
+/** Standard overshoot easing: used for an item popping back onto the track. */
+const easeOutBack = (x: number) => {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * (x - 1) ** 3 + c1 * (x - 1) ** 2;
+};
+
+/**
+ * The starting gantry: five lights on a dark rig, lit left to right, held, then
+ * all out together ("lights out") when the race starts. `lit` is 0–5.
+ */
+export function drawStartLights(
+  ctx: CanvasRenderingContext2D,
+  p: Palette,
+  lit: number,
+  cx: number,
+  y: number,
+) {
+  const spacing = 17;
+  const r = 6;
+  const left = cx - spacing * 2;
+  ctx.save();
+  ctx.fillStyle = p.c.rig;
+  ctx.beginPath();
+  ctx.roundRect(left - r - 6, y - r - 6, spacing * 4 + (r + 6) * 2, (r + 6) * 2, 6);
+  ctx.fill();
+  for (let i = 0; i < 5; i++) {
+    const x = left + i * spacing;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = i < lit ? p.c.lightOn : p.c.wheel;
+    ctx.fill();
+    if (i < lit) {
+      ctx.save();
+      ctx.globalAlpha = 0.35;
+      ctx.fillStyle = p.c.lightOn;
+      ctx.beginPath();
+      ctx.arc(x, y, r + 2.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
 /** The main colour of each item, for the particles it leaves behind. */
 export const itemColors = (type: ItemSpawn["type"], p: Palette): [string, string] =>
   type === 1
@@ -150,13 +195,26 @@ export const itemColors = (type: ItemSpawn["type"], p: Palette): [string, string
 /**
  * Items in a flat, rounded 2D style: nitro is a glossy badge with a bolt that
  * floats a little (`bob`, −1…1); barrel and cone are seen from the side, the
- * log from above, all on soft shadows.
+ * log from above, all on soft shadows. `spawn` (0–1, just after it respawns)
+ * pops the item in with a little overshoot instead of it just appearing.
  */
-export function drawItem(ctx: CanvasRenderingContext2D, item: ItemSpawn, p: Palette, bob = 0) {
+export function drawItem(
+  ctx: CanvasRenderingContext2D,
+  item: ItemSpawn,
+  p: Palette,
+  bob = 0,
+  spawn: number | null = null,
+) {
   const cx = item.x + item.width / 2;
   const cy = item.y + item.height / 2;
   const c = p.c;
   ctx.save();
+  if (spawn !== null) {
+    const scale = Math.max(0.05, easeOutBack(spawn));
+    ctx.translate(cx, cy);
+    ctx.scale(scale, scale);
+    ctx.translate(-cx, -cy);
+  }
   if (item.type === 1) {
     const y = cy + bob * 1.5;
     shadow(ctx, cx, cy + 8, 6 - bob, 2, p);
