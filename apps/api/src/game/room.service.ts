@@ -22,17 +22,29 @@ export const isRoomCode = (code: unknown): code is string =>
  * Joining with a code puts you in that room if it's still waiting and has a
  * seat; if no room has that code (it finished, or the server restarted), one
  * is opened under it, so friends who all press "play again" land together.
- * A room that's already racing or full falls back to the usual matchmaking.
+ * A room that's already racing is watched instead (with your seat token, you
+ * take your car back); a full one falls back to the usual matchmaking.
  */
 @Injectable()
 export class RoomService {
   private readonly rooms = new Map<string, Room>();
   private readonly clientRoom = new Map<RoomClient, string>();
 
-  join(client: RoomClient, code?: string) {
+  join(client: RoomClient, code?: string, seat?: string) {
     let room: Room | undefined;
     if (isRoomCode(code)) {
       const invited = this.rooms.get(code);
+      // Back after a dropped connection: the same car, if the race is still on.
+      if (invited && seat && invited.rejoin(client, seat)) {
+        this.clientRoom.set(client, invited.id);
+        return;
+      }
+      // Too late to race in it: watch it instead of being sent elsewhere.
+      if (invited?.isRacing) {
+        invited.watch(client);
+        this.clientRoom.set(client, invited.id);
+        return;
+      }
       if (!invited) room = this.open(code);
       else if (invited.state === "waiting" && !invited.isFull) room = invited;
     }

@@ -2,14 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { ModeSwitch, type RaceMode, type SlideFrom } from "./hud";
+import { ModeSwitch, RACE_MODES, type RaceMode, type SlideFrom } from "./hud";
 import { PracticeRace } from "./PracticeRace";
 import { OnlineRace } from "./OnlineRace";
 import { isRoomCode } from "./online";
 
 /**
- * Practice mode (everything runs in the browser) or online mode (a
- * server-authoritative room via `apps/api`'s WebSocket gateway). The switch
+ * Practice mode (you against bots, all in the browser), time trial (you
+ * alone against the clock and your ghost, also in the browser) or online
+ * mode (a server-authoritative room via `apps/api`'s WebSocket gateway). The switch
  * lives on top of each mode's card over the track, and the card's content
  * slides in from the side you're heading to. An invite link
  * (`?mode=online&room=<code>`) opens straight into that room.
@@ -47,8 +48,8 @@ export function RaceModeSwitcher() {
     // Leaving online drops its invite from the address bar; joining picks any open room.
     window.history.replaceState(null, "", window.location.pathname);
     setInvite(null);
-    // Online sits to the right of Practice, as in the switch.
-    setSlideFrom(next === "online" ? "right" : "left");
+    // The card slides in from the side you head to, as in the switch (practice, time trial, online).
+    setSlideFrom(RACE_MODES.indexOf(next) > RACE_MODES.indexOf(mode) ? "right" : "left");
     setMode(next);
   };
 
@@ -57,8 +58,14 @@ export function RaceModeSwitcher() {
   return (
     // The game gets more room than the text column: as wide as the window allows.
     <div className="mx-auto mt-6 w-full max-w-[96rem] px-5 sm:px-8">
-      {mode === "training" ? (
-        <PracticeRace modeSwitch={modeSwitch} slideFrom={slideFrom} />
+      {mode !== "online" ? (
+        // Keyed by mode: practice and time trial each start from a clean slate.
+        <PracticeRace
+          key={mode}
+          variant={mode === "trial" ? "trial" : "practice"}
+          modeSwitch={modeSwitch}
+          slideFrom={slideFrom}
+        />
       ) : (
         <OnlineRace
           key={invite ?? "any"}

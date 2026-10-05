@@ -206,7 +206,21 @@
       "cyan": "Ciano",
       "lime": "Lima",
       "white": "Branco"
-    }
+    },
+    "idleHint": "Segure ↑ para acelerar",
+    "idleHintKeys": "Segure ↑ ou W para acelerar",
+    "autoGas": "Acelerar sozinho",
+    "soundOn": "Ligar o som",
+    "soundOff": "Desligar o som",
+    "medals": "Medalhas",
+    "gold": "Ouro",
+    "silver": "Prata",
+    "bronze": "Bronze",
+    "medalWon": "Medalha de {medal}",
+    "missedBy": "Faltou {gap} s para {medal}",
+    "ghostLegend": "O carro translúcido é a sua melhor corrida",
+    "trialRecord": "Seu recorde",
+    "gamepadHint": "Também dá para jogar com um controle (gatilho acelera, X é o nitro)."
   },
   "Online": {
     "modeTraining": "Treino",
@@ -232,6 +246,10 @@
     "inviteCopied": "Link copiado",
     "inviteMissed": "A sala do convite já tinha começado, então você entrou numa sala nova.",
     "room": "Sala",
-    "botDifficulty": "Dificuldade de {name}"
+    "botDifficulty": "Dificuldade de {name}",
+    "modeTrial": "Contra o relógio",
+    "spectating": "Assistindo: a corrida já tinha começado",
+    "reconnecting": "Reconectando…",
+    "playNext": "Correr na próxima"
   }
 }

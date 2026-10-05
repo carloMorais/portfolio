@@ -145,3 +145,6 @@ export const CAR_COLORS: {
 /** A car colour by index (online: the server's), wrapping just in case. */
 export const carColor = (i: number) =>
   CAR_COLORS[((i % CAR_COLORS.length) + CAR_COLORS.length) % CAR_COLORS.length]!;
+
+/** Time-trial medals, in the game's own palette. */
+export const MEDAL_COLORS = { gold: "#d9a521", silver: "#a9b0b8", bronze: "#c47a45" } as const;

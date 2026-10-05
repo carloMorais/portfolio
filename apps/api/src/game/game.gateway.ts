@@ -42,6 +42,9 @@ import { RoomService } from "./room.service";
  * `MAX_PAYLOAD_BYTES` are refused by `ws` itself; sockets from other sites,
  * past the connection caps, flooding messages or ignoring pings are closed.
  */
+/** Seat tokens as the room makes them (9 random bytes, base64url). */
+const SEAT_PATTERN = /^[A-Za-z0-9_-]{12}$/;
+
 @WebSocketGateway({ maxPayload: MAX_PAYLOAD_BYTES })
 export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, OnModuleDestroy {
   /** Admitted sockets and their IP (for the per-IP cap). */
@@ -73,9 +76,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.budgets.set(client, new MessageBudget());
     this.alive.add(client);
     client.on("pong", () => this.alive.add(client));
-    // An invite link connects with ?room=<code> (validated by the service).
-    const code = new URL(req?.url ?? "/", "http://localhost").searchParams.get("room");
-    this.rooms.join(client, code ?? undefined);
+    // An invite link connects with ?room=<code> (validated by the service);
+    // coming back after a drop adds &seat=<token>.
+    const params = new URL(req?.url ?? "/", "http://localhost").searchParams;
+    const seat = params.get("seat");
+    this.rooms.join(
+      client,
+      params.get("room") ?? undefined,
+      seat && SEAT_PATTERN.test(seat) ? seat : undefined,
+    );
   }
 
   handleDisconnect(client: WebSocket) {

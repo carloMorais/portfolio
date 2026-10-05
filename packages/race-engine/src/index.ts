@@ -21,4 +21,12 @@ export {
   type Difficulty,
 } from "./bot.ts";
 export { classicTrack } from "./track.ts";
-export { RaceDecoder, encodeCar, encodeTick, type WireCar, type WireTick } from "./wire.ts";
+export {
+  RaceDecoder,
+  encodeCar,
+  encodeSync,
+  encodeTick,
+  type RaceSync,
+  type WireCar,
+  type WireTick,
+} from "./wire.ts";

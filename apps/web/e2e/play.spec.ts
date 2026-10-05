@@ -40,12 +40,8 @@ test("a race counts down, then the car answers the throttle", async ({ page, isM
 
   const start = await playerX(page);
   if (isMobile) {
-    // Hold the on-screen accelerator.
-    const gas = page.getByRole("button", { name: "Accelerate" });
-    await gas.hover();
-    await page.mouse.down();
+    // Phones accelerate for you by default: the car pulls away on its own.
     await page.waitForTimeout(1200);
-    await page.mouse.up();
   } else {
     await page.keyboard.down("ArrowUp");
     await page.waitForTimeout(1200);
@@ -95,9 +91,20 @@ test("touch controls show on phones and stay out of the way on desktop", async (
   isMobile,
 }) => {
   await page.goto(GAME);
-  const gas = page.getByRole("button", { name: "Accelerate" });
-  if (isMobile) await expect(gas).toBeVisible();
-  else await expect(gas).toBeHidden();
+  const gas = page.getByRole("button", { name: "Accelerate", exact: true });
+  const steer = page.getByRole("button", { name: "Left", exact: true });
+  const autoGas = page.getByRole("checkbox", { name: "Accelerate for me" });
+  if (isMobile) {
+    // Accelerating is automatic on phones by default; turning it off brings the button back.
+    await expect(steer).toBeVisible();
+    await expect(autoGas).toBeChecked();
+    await expect(gas).toBeHidden();
+    await autoGas.uncheck();
+    await expect(gas).toBeVisible();
+  } else {
+    await expect(steer).toBeHidden();
+    await expect(autoGas).toBeHidden();
+  }
 });
 
 test("the keyboard starts, pauses, resumes and restarts the race", async ({ page, isMobile }) => {
@@ -155,4 +162,27 @@ test("an invite link opens online mode", async ({ page }) => {
   await page.getByRole("button", { name: "Practice" }).click();
   await expect(page).toHaveURL(/\/en\/projects\/racegame$/);
   await expect(game(page)).toHaveAttribute("data-phase", "ready");
+});
+
+test("time trial races you alone against the clock, with the medals beside the track", async ({
+  page,
+  isMobile,
+}) => {
+  await page.goto(GAME);
+  await page.getByRole("button", { name: "Time trial" }).click();
+  await expect(page.getByText("Medals").first()).toBeVisible();
+  await expect(page.getByRole("group", { name: "Difficulty" })).toHaveCount(0);
+  await page.getByRole("button", { name: "Start race" }).click();
+  await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
+  // No bots: the standings never show up, the medals do (desktop).
+  await expect(page.getByRole("table", { name: "Standings" })).toBeHidden();
+  if (!isMobile) await expect(page.getByText("Gold", { exact: true })).toBeVisible();
+});
+
+test("sitting still after the start shows how to accelerate", async ({ page, isMobile }) => {
+  test.skip(isMobile, "phones accelerate on their own by default");
+  await page.goto(GAME);
+  await page.getByRole("button", { name: "Start race" }).click();
+  await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
+  await expect(page.getByText("Hold ↑ or W to accelerate")).toBeVisible({ timeout: 4000 });
 });

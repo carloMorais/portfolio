@@ -235,7 +235,7 @@ describe("Room", () => {
     expect(bots.map((p) => p.difficulty)).toEqual(["hard", "normal"]);
   });
 
-  test("once every human is gone the race ends, instead of ticking on for nobody", () => {
+  test("once every human is gone the race ends (after a moment to come back), not ticking on for nobody", () => {
     jest.useFakeTimers();
     const onDone = jest.fn();
     const room = new Room("r15", jest.fn(), onDone);
@@ -246,9 +246,61 @@ describe("Room", () => {
     jest.advanceTimersByTime(COUNTDOWN_MS + 100);
 
     room.leave(alice);
+    expect(room.state).toBe("racing");
+    jest.advanceTimersByTime(10_000);
 
     expect(room.state).toBe("done");
     expect(onDone).toHaveBeenCalledWith(room);
+    jest.useRealTimers();
+  });
+
+  test("coming back mid-race: same car, and the race so far right after the next state", () => {
+    jest.useFakeTimers();
+    const room = new Room("r15b", jest.fn(), jest.fn());
+    const alice = fakeClient();
+    room.join(alice);
+    room.addBot(alice);
+    room.startRace(alice);
+    jest.advanceTimersByTime(COUNTDOWN_MS + 1000);
+    const { seat, playerId } = alice.messages[0] as { seat: string; playerId: string };
+    room.leave(alice);
+
+    const back = fakeClient();
+    expect(room.rejoin(back, "nope-nope-no")).toBe(false);
+    expect(room.rejoin(back, seat)).toBe(true);
+    // The seat is taken again: nobody else can claim it.
+    expect(room.rejoin(fakeClient(), seat)).toBe(false);
+    jest.advanceTimersByTime(200);
+
+    expect(back.messages[0]).toEqual(expect.objectContaining({ playerId, rejoined: true }));
+    const sync = ofType(back, "sync")[0]!;
+    expect(sync.carIds).toEqual([playerId, expect.any(String)]);
+    // From the sync on, the decoder follows the race like everyone else's.
+    const decoder = new RaceDecoder(classicTrack, sync.carIds as string[], 2);
+    const state = decoder.resume(sync as unknown as Parameters<RaceDecoder["resume"]>[0]);
+    expect(state.tick).toBeGreaterThan(0);
+    const after = ofType(back, "state").filter((m) => (m.t as number) > state.tick);
+    expect(after.length).toBeGreaterThan(0);
+    jest.useRealTimers();
+  });
+
+  test("a spectator gets the race but can't drive", () => {
+    jest.useFakeTimers();
+    const room = new Room("r15c", jest.fn(), jest.fn());
+    const alice = fakeClient();
+    room.join(alice);
+    room.addBot(alice);
+    room.startRace(alice);
+    jest.advanceTimersByTime(COUNTDOWN_MS + 500);
+    const viewer = fakeClient();
+
+    room.watch(viewer);
+    room.setInput(viewer, { up: true, down: false, left: false, right: false, nitro: false });
+    jest.advanceTimersByTime(200);
+
+    expect(viewer.messages[0]).toEqual(expect.objectContaining({ type: "spectate" }));
+    expect(ofType(viewer, "sync")).toHaveLength(1);
+    expect(ofType(viewer, "state").length).toBeGreaterThan(0);
     jest.useRealTimers();
   });
 

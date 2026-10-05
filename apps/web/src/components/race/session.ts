@@ -68,8 +68,8 @@ export function resultRows(ordered: Car[]): ResultRow[] {
  */
 export type PersonalBest = { race: number | null; lap: number | null; splits: number[] | null };
 
-/** Practice records are per difficulty; online races share one record. */
-export type RecordKey = Difficulty | "online";
+/** Practice records are per difficulty; time trial and online races have one each. */
+export type RecordKey = Difficulty | "trial" | "online";
 
 const storageKey = (d: RecordKey) => `racegame:best:${d}`;
 const EMPTY_BEST: PersonalBest = { race: null, lap: null, splits: null };
@@ -142,6 +142,30 @@ export function saveDifficulty(storage: Storage | undefined, d: Difficulty) {
 }
 
 /** Ticks of driving the wrong way before we say so (a bounce flips the velocity for a moment). */
+/**
+ * On/off preferences kept in this browser: `sound` (off by default) and
+ * `autogas` (the throttle held for you on touch screens; on by default).
+ */
+export type Pref = "sound" | "autogas";
+const PREF_DEFAULTS: Record<Pref, boolean> = { sound: false, autogas: true };
+
+export function loadPref(storage: Storage | undefined, pref: Pref): boolean {
+  try {
+    const raw = storage?.getItem(`racegame:${pref}`);
+    return raw === "1" ? true : raw === "0" ? false : PREF_DEFAULTS[pref];
+  } catch {
+    return PREF_DEFAULTS[pref];
+  }
+}
+
+export function savePref(storage: Storage | undefined, pref: Pref, on: boolean) {
+  try {
+    storage?.setItem(`racegame:${pref}`, on ? "1" : "0");
+  } catch {
+    // Not remembered: the default comes back next time.
+  }
+}
+
 /** Your car colour (an index into CAR_COLORS), shared by practice and online; null until you pick one. */
 export function loadColor(storage: Storage | undefined): number | null {
   try {

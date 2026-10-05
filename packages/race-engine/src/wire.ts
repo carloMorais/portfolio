@@ -106,6 +106,19 @@ export class RaceDecoder {
     return createRace(this.track, this.carIds, this.laps);
   }
 
+  /**
+   * Picks up a race already under way (see `RaceSync`): restores what the
+   * missed events built, then applies the latest tick. Keep feeding it the
+   * state messages that follow.
+   */
+  resume(sync: RaceSync): RaceState {
+    this.lapTicks.forEach((laps, i) => laps.splice(0, laps.length, ...(sync.lapTicks[i] ?? [])));
+    this.finished = [...sync.finished];
+    this.picked.clear();
+    for (const [id, at] of Object.entries(sync.picked)) this.picked.set(id, at);
+    return this.apply(sync.state);
+  }
+
   /** Applies one message and returns a fresh state (never mutated later). */
   apply(msg: WireTick): RaceState {
     const events = msg.e ?? [];
@@ -150,3 +163,25 @@ export class RaceDecoder {
     };
   }
 }
+
+/**
+ * What a client that wasn't there from the start needs (someone reconnecting
+ * mid-race, or watching a race already under way): everything the decoder
+ * would otherwise have rebuilt from the events it missed — lap times, the
+ * finishing order, the items off the track — plus the latest tick. The
+ * server sends it right after a state message, so the events in that message
+ * are already counted here and the next message carries only newer ones.
+ */
+export type RaceSync = {
+  lapTicks: number[][];
+  finished: string[];
+  picked: Record<string, number>;
+  state: WireTick;
+};
+
+export const encodeSync = (state: RaceState): RaceSync => ({
+  lapTicks: state.cars.map((c) => [...c.lapTicks]),
+  finished: [...state.finished],
+  picked: { ...state.itemRespawnAt },
+  state: encodeTick(state, []),
+});

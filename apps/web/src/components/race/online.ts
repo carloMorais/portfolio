@@ -1,4 +1,4 @@
-import type { Difficulty, Keys, WireTick } from "race-engine";
+import type { Difficulty, Keys, RaceSync, WireTick } from "race-engine";
 
 /**
  * Mirrors `apps/api/src/game/protocol.ts` — keep them in sync by hand when
@@ -34,7 +34,13 @@ export type ServerMessage =
       roomId: string;
       laps: number;
       tickRate: number;
+      /** Connecting again with it (`?room=…&seat=…`) takes the same car back mid-race. */
+      seat: string;
+      /** You're back in your car after a dropped connection (a `start` or `sync` follows). */
+      rejoined?: boolean;
     }
+  /** The invite's race had already started: you watch it (a `start` or `sync` follows). */
+  | { type: "spectate"; roomId: string; laps: number; tickRate: number }
   | {
       type: "lobby";
       participants: LobbyParticipant[];
@@ -48,6 +54,13 @@ export type ServerMessage =
       countdownMs: number;
     }
   | StateMessage
+  /** Joining a race under way: the grid as in `start`, plus the race so far. */
+  | ({
+      type: "sync";
+      carIds: string[];
+      numbers: Record<string, number>;
+      colors: Record<string, number>;
+    } & RaceSync)
   | { type: "finished"; standings: StandingEntry[] }
   /** `code: "busy"`: the server is at its race limit (the visitor is told). */
   | { type: "error"; message: string; code?: "busy" }
@@ -77,12 +90,17 @@ export type LocalAction =
   | { type: "you-finished" }
   | { type: "skip" }
   /** A fresh connection (play again, reconnect): back to square one. */
-  | { type: "reconnect" };
+  | { type: "reconnect" }
+  /** The connection dropped mid-race: trying to take the car back, the race kept on screen. */
+  | { type: "reconnecting" };
 
 /** The Render free tier sleeps after 15 min idle, so a first connect can take up to ~1 min. */
-export function apiWsUrl(room?: string | null): string {
+export function apiWsUrl(room?: string | null, seat?: string | null): string {
   const base = process.env.NEXT_PUBLIC_API_URL ?? "ws://localhost:17100";
-  return room ? `${base}/?room=${encodeURIComponent(room)}` : base;
+  if (!room) return base;
+  const query = new URLSearchParams({ room });
+  if (seat) query.set("seat", seat);
+  return `${base}/?${query}`;
 }
 
 /**
@@ -112,7 +130,14 @@ export function inviteUrl(href: string, room: string): string {
 
 /** Same phases as practice mode's (but no pause: the race goes on for everyone), plus the lobby. */
 export type OnlinePhase =
-  "connecting" | "lobby" | "countdown" | "racing" | "finishing" | "finished" | "disconnected";
+  | "connecting"
+  | "lobby"
+  | "countdown"
+  | "racing"
+  | "finishing"
+  | "finished"
+  | "disconnected"
+  | "reconnecting";
 
 export type OnlineState = {
   phase: OnlinePhase;
@@ -134,6 +159,8 @@ export type OnlineState = {
   busy: boolean;
   /** Set once the server says the race is over (skipping to the results doesn't). */
   standings: StandingEntry[] | null;
+  /** Watching a race you joined too late to drive in. */
+  spectating: boolean;
 };
 
 export const initialOnlineState: OnlineState = {
@@ -151,6 +178,7 @@ export const initialOnlineState: OnlineState = {
   countdownMs: 0,
   busy: false,
   standings: null,
+  spectating: false,
 };
 
 /**
@@ -172,8 +200,28 @@ export function applyServerMessage(
         roomId: msg.roomId,
         laps: msg.laps,
         tickRate: msg.tickRate,
-        phase: "lobby",
+        // Back in your car: the race goes on (a start or a sync follows); otherwise the lobby.
+        phase: msg.rejoined ? state.phase : "lobby",
       };
+    case "spectate":
+      return {
+        ...state,
+        roomId: msg.roomId,
+        laps: msg.laps,
+        tickRate: msg.tickRate,
+        spectating: true,
+      };
+    case "sync":
+      return {
+        ...state,
+        carIds: msg.carIds,
+        numbers: msg.numbers,
+        colors: msg.colors,
+        phase: "racing",
+        standings: null,
+      };
+    case "reconnecting":
+      return { ...state, phase: "reconnecting" };
     case "lobby":
       // A lobby broadcast can arrive after the race has already started (a
       // late straggler's disconnect, say); once racing, the roster is frozen.

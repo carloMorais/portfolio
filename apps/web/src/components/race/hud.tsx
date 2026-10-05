@@ -3,7 +3,8 @@
 import type { CSSProperties, ReactNode, Ref } from "react";
 import { useTranslations } from "next-intl";
 import { TICK_RATE, type Keys } from "race-engine";
-import { CAR_COLORS, COLORS, type CarColorId } from "./colors";
+import { CAR_COLORS, COLORS, MEDAL_COLORS, type CarColorId } from "./colors";
+import { MEDALS, medalFor, type MedalId } from "./ghost";
 import { BoltIcon } from "./icons";
 import { TouchButton } from "./TouchControls";
 import { DIFFICULTIES, formatGap, formatTime, type Difficulty, type ResultRow } from "./session";
@@ -302,6 +303,16 @@ export function TrackOverlays({
             {t("go")}
           </p>
         )}
+        {/* Sitting still after the start: say how to drive (keys on desktop, the button on phones). */}
+        {hud.idle && racing && !hud.justStarted && (
+          <p
+            role="status"
+            className="race-pop-in rounded-full bg-bg/90 px-4 py-1.5 text-sm text-ink ring-1 ring-line"
+          >
+            <span className="lg:hidden">{t("idleHint")}</span>
+            <span className="max-lg:hidden">{t("idleHintKeys")}</span>
+          </p>
+        )}
       </div>
     </>
   );
@@ -335,15 +346,58 @@ export function FinishingVeil({ place, onSkip, t }: { place: number; onSkip: () 
   );
 }
 
-/** Pause, any time: top left, out of the way of the banners. */
-export function PauseButton({ onClick, t }: { onClick: () => void; t: T }) {
+const ROUND_BUTTON =
+  "grid size-8 cursor-pointer place-items-center rounded-full bg-bg/85 text-muted ring-1 ring-line transition-colors hover:text-ink";
+
+/** The small buttons over the track's top-left corner (pause, sound), out of the way of the banners. */
+export function TrackButtons({
+  children,
+  phoneHidden = false,
+}: {
+  children: ReactNode;
+  /** Phones: the start card covers nearly all the track, so the buttons wait for the race. */
+  phoneHidden?: boolean;
+}) {
+  return (
+    <div
+      className={`absolute top-2.5 left-2.5 z-10 flex gap-2 ${phoneHidden ? "max-lg:hidden" : ""}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Sound on or off (off by default; remembered). */
+export function SoundButton({ on, onToggle, t }: { on: boolean; onToggle: () => void; t: T }) {
   return (
     <button
       type="button"
-      aria-label={t("pause")}
-      onClick={onClick}
-      className="absolute top-2.5 left-2.5 grid size-8 place-items-center rounded-full bg-bg/85 text-muted ring-1 ring-line transition-colors hover:text-ink"
+      aria-pressed={on}
+      aria-label={on ? t("soundOff") : t("soundOn")}
+      title={on ? t("soundOff") : t("soundOn")}
+      onClick={onToggle}
+      className={ROUND_BUTTON}
     >
+      <svg viewBox="0 0 16 16" className="size-3.5" aria-hidden fill="none" stroke="currentColor">
+        <path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z" fill="currentColor" stroke="none" />
+        {on ? (
+          <path
+            d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.6a6 6 0 0 1 0 8.8"
+            strokeWidth="1.4"
+            strokeLinecap="round"
+          />
+        ) : (
+          <path d="M11 6l3.5 4M14.5 6L11 10" strokeWidth="1.4" strokeLinecap="round" />
+        )}
+      </svg>
+    </button>
+  );
+}
+
+/** Pause, any time (inside `TrackButtons`). */
+export function PauseButton({ onClick, t }: { onClick: () => void; t: T }) {
+  return (
+    <button type="button" aria-label={t("pause")} onClick={onClick} className={ROUND_BUTTON}>
       <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
         <rect x="2.5" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
         <rect x="7" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
@@ -364,6 +418,7 @@ export function ResultsCard({
   t,
   header,
   children,
+  extra,
 }: {
   rows: ResultRow[];
   me: string;
@@ -378,6 +433,8 @@ export function ResultsCard({
   header?: ReactNode;
   /** The actions under the table (race again, difficulty…). */
   children: ReactNode;
+  /** Under the time (time trial: the medal won, or how far the next one was). */
+  extra?: ReactNode;
 }) {
   return (
     <div className="race-fade-in my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
@@ -392,6 +449,11 @@ export function ResultsCard({
         >
           {t("finishedTime", { time: formatTime(myTime) })}
         </p>
+      )}
+      {extra && (
+        <div className="race-elastic-in mt-3" style={{ animationDelay: "0.15s" }}>
+          {extra}
+        </div>
       )}
       {(outcome?.newRace || outcome?.newLap) && (
         <p className="race-elastic-in mt-2 text-sm text-accent" style={{ animationDelay: "0.2s" }}>
@@ -477,56 +539,72 @@ export function RestartButton({
 export function TouchPad({
   press,
   hidden,
+  autoGas,
+  onAutoGas,
   t,
 }: {
   press: (key: keyof Keys, down: boolean) => void;
   hidden: boolean;
+  /** The throttle is held for you: no accelerator button, steering is all you do. */
+  autoGas: boolean;
+  onAutoGas: (on: boolean) => void;
   t: T;
 }) {
   return (
-    <div
-      className={`mt-4 flex select-none items-center justify-between gap-3 lg:hidden ${hidden ? "hidden" : ""}`}
-    >
-      <div className="flex gap-3">
-        <TouchButton
-          label={t("left")}
-          onDown={() => press("left", true)}
-          onUp={() => press("left", false)}
-        >
-          ←
-        </TouchButton>
-        <TouchButton
-          label={t("right")}
-          onDown={() => press("right", true)}
-          onUp={() => press("right", false)}
-        >
-          →
-        </TouchButton>
+    <div className={`lg:hidden ${hidden ? "hidden" : ""}`}>
+      <div className="mt-4 flex select-none items-center justify-between gap-3">
+        <div className="flex gap-3">
+          <TouchButton
+            label={t("left")}
+            onDown={() => press("left", true)}
+            onUp={() => press("left", false)}
+          >
+            ←
+          </TouchButton>
+          <TouchButton
+            label={t("right")}
+            onDown={() => press("right", true)}
+            onUp={() => press("right", false)}
+          >
+            →
+          </TouchButton>
+        </div>
+        <div className="flex gap-3">
+          <TouchButton
+            label={t("nitroButton")}
+            onDown={() => press("nitro", true)}
+            onUp={() => press("nitro", false)}
+          >
+            <BoltIcon className="mx-auto size-5 text-accent" />
+          </TouchButton>
+          <TouchButton
+            label={t("brake")}
+            onDown={() => press("down", true)}
+            onUp={() => press("down", false)}
+          >
+            ↓
+          </TouchButton>
+          {!autoGas && (
+            <TouchButton
+              label={t("gas")}
+              primary
+              onDown={() => press("up", true)}
+              onUp={() => press("up", false)}
+            >
+              ↑
+            </TouchButton>
+          )}
+        </div>
       </div>
-      <div className="flex gap-3">
-        <TouchButton
-          label={t("nitroButton")}
-          onDown={() => press("nitro", true)}
-          onUp={() => press("nitro", false)}
-        >
-          <BoltIcon className="mx-auto size-5 text-accent" />
-        </TouchButton>
-        <TouchButton
-          label={t("brake")}
-          onDown={() => press("down", true)}
-          onUp={() => press("down", false)}
-        >
-          ↓
-        </TouchButton>
-        <TouchButton
-          label={t("gas")}
-          primary
-          onDown={() => press("up", true)}
-          onUp={() => press("up", false)}
-        >
-          ↑
-        </TouchButton>
-      </div>
+      <label className="mt-3 flex cursor-pointer items-center justify-center gap-2 text-xs text-muted">
+        <input
+          type="checkbox"
+          checked={autoGas}
+          onChange={(e) => onAutoGas(e.target.checked)}
+          className="size-4 cursor-pointer accent-(--accent)"
+        />
+        {t("autoGas")}
+      </label>
     </div>
   );
 }
@@ -586,20 +664,25 @@ export function CompactHud({
   hud,
   me,
   laps,
+  showPlace = true,
   t,
 }: {
   hud: Hud;
   me: string | null;
   laps: number;
+  /** Time trial races alone: no place to show. */
+  showPlace?: boolean;
   t: T;
 }) {
   const place = hud.board.findIndex((d) => d.id === me) + 1;
   return (
     <p className="mb-2 flex items-baseline justify-between gap-3 text-sm text-muted tabular-nums lg:hidden">
-      <span>
-        {t("place")} <span className="font-display text-xl text-ink">{place || "–"}</span>/
-        {hud.board.length}
-      </span>
+      {showPlace && (
+        <span>
+          {t("place")} <span className="font-display text-xl text-ink">{place || "–"}</span>/
+          {hud.board.length}
+        </span>
+      )}
       <span>
         {t("lap")} <span className="font-display text-xl text-ink">{hud.lap}</span>/{laps}
       </span>
@@ -608,11 +691,13 @@ export function CompactHud({
   );
 }
 
-export type RaceMode = "training" | "online";
+export type RaceMode = "training" | "trial" | "online";
+/** Left to right, as in the switch (the card slides in from the side you head to). */
+export const RACE_MODES: RaceMode[] = ["training", "trial", "online"];
 /** Which side a mode's card slides in from (null: no animation, e.g. on page load). */
 export type SlideFrom = "left" | "right" | null;
 
-/** Practice or online: the switch on top of the race's card. */
+/** Practice, time trial or online: the switch on top of the race's card. */
 export function ModeSwitch({
   mode,
   onChange,
@@ -628,21 +713,21 @@ export function ModeSwitch({
   return (
     <div
       role="group"
-      aria-label={`${t("modeTraining")} / ${t("modeOnline")}`}
+      aria-label={`${t("modeTraining")} / ${t("modeTrial")} / ${t("modeOnline")}`}
       className="inline-flex rounded-full bg-surface p-1 ring-1 ring-line"
     >
-      {(["training", "online"] as const).map((m) => (
+      {RACE_MODES.map((m) => (
         <button
           key={m}
           type="button"
           aria-pressed={mode === m}
           disabled={disabled}
           onClick={() => onChange(m)}
-          className={`cursor-pointer rounded-full px-4 py-1.5 text-sm transition-colors disabled:cursor-wait ${
+          className={`cursor-pointer rounded-full px-3 py-1.5 text-sm whitespace-nowrap transition-colors disabled:cursor-wait sm:px-4 ${
             mode === m ? "bg-ink text-bg" : "text-muted enabled:hover:text-ink disabled:opacity-60"
           }`}
         >
-          {m === "training" ? t("modeTraining") : t("modeOnline")}
+          {m === "training" ? t("modeTraining") : m === "trial" ? t("modeTrial") : t("modeOnline")}
         </button>
       ))}
     </div>
@@ -730,6 +815,64 @@ export function Spinner({ className = "" }: { className?: string }) {
       aria-hidden
       className={`inline-block size-5 rounded-full border-2 border-line border-t-accent motion-safe:animate-spin ${className}`}
     />
+  );
+}
+
+/** A medal as a small coloured disc with a ribbon notch. */
+export function MedalIcon({ id, className = "size-4" }: { id: MedalId; className?: string }) {
+  return (
+    <svg viewBox="0 0 16 16" className={className} aria-hidden>
+      <path d="M5 1h2.5l1 4H6zM8.5 1H11L10 5H7.5z" fill={MEDAL_COLORS[id]} opacity="0.6" />
+      <circle cx="8" cy="10" r="5" fill={MEDAL_COLORS[id]} />
+      <circle cx="8" cy="10" r="3" fill="none" stroke="#ffffff" strokeOpacity="0.55" />
+    </svg>
+  );
+}
+
+/**
+ * Time trial's targets: the three medal times, the ones your record already
+ * earned ticked, and your record under them.
+ */
+export function MedalTargets({
+  record,
+  t,
+  className = "",
+}: {
+  record: number | null;
+  t: T;
+  className?: string;
+}) {
+  const earned = medalFor(record);
+  const rank = (id: MedalId) => MEDALS.findIndex((m) => m.id === id);
+  return (
+    <div className={`text-sm tabular-nums ${className}`}>
+      <p className="mb-2 text-xs text-muted">{t("medals")}</p>
+      <ul className="space-y-1.5">
+        {MEDALS.map((m) => {
+          const got = earned !== null && rank(earned) <= rank(m.id);
+          return (
+            <li key={m.id} className="flex items-center gap-2">
+              <MedalIcon id={m.id} className={`size-4 ${got ? "" : "opacity-40 grayscale"}`} />
+              <span className={got ? "text-ink" : "text-muted"}>{t(m.id)}</span>
+              <span className="ml-auto text-muted">{formatTime(m.ticks)}</span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-3 flex justify-between border-t border-line pt-2 text-xs text-muted">
+        {t("trialRecord")}
+        <span className="text-ink">{record !== null ? formatTime(record) : "—"}</span>
+      </p>
+    </div>
+  );
+}
+
+/** Time trial, beside the track during a run: the medal targets in a panel. */
+export function MedalPanel({ record, t }: { record: number | null; t: T }) {
+  return (
+    <div className={`${PANEL} col-start-1 row-start-1 max-lg:hidden`}>
+      <MedalTargets record={record} t={t} />
+    </div>
   );
 }
 

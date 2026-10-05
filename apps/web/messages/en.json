@@ -206,7 +206,21 @@
       "cyan": "Cyan",
       "lime": "Lime",
       "white": "White"
-    }
+    },
+    "idleHint": "Hold ↑ to accelerate",
+    "idleHintKeys": "Hold ↑ or W to accelerate",
+    "autoGas": "Accelerate for me",
+    "soundOn": "Turn sound on",
+    "soundOff": "Turn sound off",
+    "medals": "Medals",
+    "gold": "Gold",
+    "silver": "Silver",
+    "bronze": "Bronze",
+    "medalWon": "{medal} medal",
+    "missedBy": "{gap} s short of {medal}",
+    "ghostLegend": "The see-through car is your best run",
+    "trialRecord": "Your record",
+    "gamepadHint": "A game controller works too (trigger to accelerate, X for nitro)."
   },
   "Online": {
     "modeTraining": "Practice",
@@ -232,6 +246,10 @@
     "inviteCopied": "Link copied",
     "inviteMissed": "The invite's room had already started, so you're in a new room.",
     "room": "Room",
-    "botDifficulty": "{name}'s difficulty"
+    "botDifficulty": "{name}'s difficulty",
+    "modeTrial": "Time trial",
+    "spectating": "Watching: the race had already started",
+    "reconnecting": "Reconnecting…",
+    "playNext": "Race the next one"
   }
 }

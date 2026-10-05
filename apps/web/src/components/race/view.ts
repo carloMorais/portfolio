@@ -5,6 +5,7 @@ import {
   classicTrack as track,
   standings,
   wrongWay,
+  type Car,
   type Keys,
   type RaceState,
 } from "race-engine";
@@ -23,6 +24,7 @@ import {
 import { Effects } from "./effects";
 import { Crowd, STANDS, drawScenery, seatFans } from "./scenery";
 import { GATE_WARNING_TICKS, WRONG_WAY_TICKS } from "./session";
+import type { RaceSound } from "./sound";
 
 const LAST_LAP_MS = 2200;
 const START_FLASH_MS = 500;
@@ -54,6 +56,8 @@ export type Hud = {
   delta: number | null;
   /** Starting lights lit, 0–5 (only meaningful during the countdown). */
   lit: number;
+  /** You've sat still for a couple of seconds into the race: show how to drive. */
+  idle: boolean;
 };
 
 export const boardOf = (s: RaceState): Driver[] =>
@@ -77,11 +81,15 @@ export const emptyHud = (s: RaceState): Hud => ({
   justStarted: false,
   delta: null,
   lit: 0,
+  idle: false,
 });
 
-/** Lights lit `elapsed` ms into the countdown: one more every 500 ms, up to 5. */
-export const litLights = (elapsed: number) =>
-  Math.max(0, Math.min(5, Math.floor(elapsed / 500) + 1));
+/**
+ * Lights lit `elapsed` ms into a countdown of `total` ms: five lights, one
+ * more every sixth of it (500 ms in the full 3 s countdown), then lights out.
+ */
+export const litLights = (elapsed: number, total = 3000) =>
+  Math.max(0, Math.min(5, Math.floor(elapsed / (total / 6)) + 1));
 
 export const KEY_MAP: Record<string, keyof Keys> = {
   ArrowUp: "up",
@@ -129,7 +137,18 @@ type DrawOptions = {
   name: (id: string) => string;
   /** How much bigger than their boxes cars and items are drawn (phones: the map is tiny). */
   zoom?: number;
+  /** Follow your car with a zoomed-in camera, with the whole map in a corner (phones, in a race). */
+  follow?: boolean;
+  /** Time trial: your best run, replayed (faint, under the cars). */
+  ghost?: { car: Car; before: Car | null; look: CarLook } | null;
 };
+
+/** The phone camera: how close it gets, and how quickly it eases (ms). */
+const CAMERA_ZOOM = 1.9;
+const CAMERA_EASE_MS = 140;
+/** Sitting still this long (ticks) into a race brings up the "hold up" hint. */
+const IDLE_TICKS = 60;
+const MINIMAP_WIDTH = 210;
 
 /** A hard turn at speed, or heavy braking, marks the road. */
 const SKID_TURN = 5.5;
@@ -168,6 +187,12 @@ export class RaceView {
     string,
     { rotation: number; speed: number; boosting: boolean }
   >();
+  /** Ticks you've sat still since the lights went out. */
+  private stillTicks = 0;
+  /** The camera's centre and zoom, eased towards their targets every frame. */
+  private camera = { x: track.width / 2, y: track.height / 2, zoom: 1, at: 0 };
+  /** Optional sound, set by the race component (off unless switched on). */
+  sound: RaceSound | null = null;
 
   constructor(
     public me: string,
@@ -190,6 +215,12 @@ export class RaceView {
     this.prevOrder = [];
     this.changeUntil.clear();
     this.motion.clear();
+    this.stillTicks = 0;
+  }
+
+  /** A short buzz on phones that have it (Android), never with reduced motion. */
+  private buzz(ms: number) {
+    if (!this.reduced && typeof navigator !== "undefined") navigator.vibrate?.(ms);
   }
 
   /** The lights just went out: the "Go!" flash. */
@@ -210,10 +241,21 @@ export class RaceView {
         if (!car) continue;
         this.fx.bump(car, ev.impact, ev.nx, ev.ny, ev.gate, p, now);
         if (ev.car === this.me && ev.gate) this.gateAt = s.tick;
+        if (ev.car === this.me && !ev.gate && ev.impact >= 1.2) {
+          this.sound?.thud(ev.impact / 6);
+          this.buzz(ev.impact >= 3 ? 30 : 15);
+        }
       } else if (ev.type === "pickup") {
         const item = track.items.find((it) => it.id === ev.item);
         if (!item) continue;
         this.fx.pickup(item, p, now);
+        if (ev.car === this.me) {
+          if (item.type === 1) this.sound?.chirp();
+          else {
+            this.sound?.thud(0.8);
+            this.buzz(40);
+          }
+        }
         const car = s.cars.find((c) => c.id === ev.car);
         if (item.type !== 1 && car) {
           // The impact star goes exactly where the car met the obstacle.
@@ -249,7 +291,10 @@ export class RaceView {
       const boosting = car.nitroUntil !== null;
       this.motion.set(car.id, { rotation: car.rotation, speed, boosting });
       if (!last || car.finishedAt !== null) continue;
-      if (boosting && !last.boosting) this.fx.nitroBurst(car, p, now);
+      if (boosting && !last.boosting) {
+        this.fx.nitroBurst(car, p, now);
+        if (car.id === this.me) this.sound?.whoosh();
+      }
       let turn = Math.abs(car.rotation - last.rotation) % 360;
       if (turn > 180) turn = 360 - turn;
       const skids =
@@ -259,6 +304,8 @@ export class RaceView {
     }
 
     const me = s.cars.find((c) => c.id === this.me);
+    const still = me && me.finishedAt === null && s.tick > 0 && Math.hypot(me.vx, me.vy) < 0.3;
+    this.stillTicks = still ? this.stillTicks + 1 : 0;
     this.wrongTicks = me && me.finishedAt === null && wrongWay(me, track) ? this.wrongTicks + 1 : 0;
     return lastLap;
   }
@@ -274,7 +321,24 @@ export class RaceView {
     o: DrawOptions,
   ) {
     const { fx, reduced } = this;
-    const zoom = o.zoom ?? 1;
+    const me = s.cars.find((c) => c.id === this.me);
+    const meAt =
+      me && o.moving
+        ? interpolateCar(
+            prev?.cars.find((c) => c.id === me.id),
+            me,
+            alpha,
+          )
+        : me;
+    const cam = this.moveCamera(o.follow === true && !!meAt, meAt, now);
+    // Following, the camera already brings the cars close: no extra zoom on top.
+    const zoom = cam.zoom > 1.05 ? 1 : (o.zoom ?? 1);
+    if (me) this.sound?.engine(Math.hypot(me.vx, me.vy), o.running && me.finishedAt === null);
+
+    ctx.save();
+    ctx.translate(track.width / 2, track.height / 2);
+    ctx.scale(cam.zoom, cam.zoom);
+    ctx.translate(-cam.x, -cam.y);
     ctx.drawImage(layer, 0, 0);
     fx.drawSkids(ctx, now);
     // The crowd cheers when a car goes past its stand.
@@ -292,7 +356,6 @@ export class RaceView {
     );
 
     // Where you need to go next.
-    const me = s.cars.find((c) => c.id === this.me);
     if (me && me.finishedAt === null) {
       const done = me.checkpoint === track.checkpoints.length;
       const box = done
@@ -313,6 +376,12 @@ export class RaceView {
       if (car.nitroUntil !== null && o.running) fx.trail(car.id, at, p, now);
     }
     fx.draw(ctx, now);
+    // Time trial: your best run, faint, under everything else.
+    if (o.ghost) {
+      const g = o.ghost;
+      const at = o.moving ? interpolateCar(g.before ?? undefined, g.car, alpha) : g.car;
+      drawCar(ctx, at, { ...g.look, opacity: 0.35, highlight: false }, p, false, zoom);
+    }
     // Cars drive through each other: anyone overlapping another car fades
     // while they do, so it reads as a rule of the game, not a glitch. Yours never fades.
     for (const { car, at } of ordered) {
@@ -342,6 +411,82 @@ export class RaceView {
         if (boost !== null) drawBoost(ctx, at, boost, p, zoom);
       }
     }
+    ctx.restore();
+
+    if (cam.zoom > 1.05) this.drawMinimap(ctx, layer, ordered, o, cam);
+  }
+
+  /** Eases the camera towards your car (following) or the whole map. */
+  private moveCamera(follow: boolean, me: Car | undefined, now: number) {
+    const cam = this.camera;
+    const dt = cam.at ? Math.min(now - cam.at, 100) : 16;
+    cam.at = now;
+    const target = follow ? CAMERA_ZOOM : 1;
+    const k = this.reduced ? 1 : 1 - Math.exp(-dt / CAMERA_EASE_MS);
+    cam.zoom += (target - cam.zoom) * k;
+    // Keep the view inside the map at the current zoom.
+    const halfW = track.width / 2 / cam.zoom;
+    const halfH = track.height / 2 / cam.zoom;
+    const tx = follow && me ? me.x + me.width / 2 : track.width / 2;
+    const ty = follow && me ? me.y + me.height / 2 : track.height / 2;
+    cam.x += (Math.max(halfW, Math.min(track.width - halfW, tx)) - cam.x) * k;
+    cam.y += (Math.max(halfH, Math.min(track.height - halfH, ty)) - cam.y) * k;
+    return cam;
+  }
+
+  /** The whole map in the top-right corner while the camera follows you: everyone as a dot. */
+  private drawMinimap(
+    ctx: CanvasRenderingContext2D,
+    layer: HTMLCanvasElement,
+    cars: { car: Car; at: Car }[],
+    o: DrawOptions,
+    cam: { x: number; y: number; zoom: number },
+  ) {
+    const w = MINIMAP_WIDTH;
+    const scale = w / track.width;
+    const h = track.height * scale;
+    const x = track.width - w - 10;
+    const y = 10;
+    // Fades in with the zoom, so it doesn't pop.
+    const fade = Math.min(1, (cam.zoom - 1.05) / 0.5);
+    ctx.save();
+    ctx.globalAlpha = 0.92 * fade;
+    ctx.fillStyle = "rgba(20, 20, 18, 0.55)";
+    ctx.beginPath();
+    ctx.roundRect(x - 4, y - 4, w + 8, h + 8, 10);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, 7);
+    ctx.clip();
+    ctx.drawImage(layer, x, y, w, h);
+    // What the camera shows.
+    ctx.strokeStyle = "#ffffff";
+    ctx.globalAlpha = 0.7 * fade;
+    ctx.lineWidth = 1.5;
+    const vw = track.width / cam.zoom;
+    const vh = track.height / cam.zoom;
+    ctx.strokeRect(
+      x + (cam.x - vw / 2) * scale,
+      y + (cam.y - vh / 2) * scale,
+      vw * scale,
+      vh * scale,
+    );
+    ctx.globalAlpha = fade;
+    for (const { car, at } of cars) {
+      const cx = x + (at.x + at.width / 2) * scale;
+      const cy = y + (at.y + at.height / 2) * scale;
+      const mine = car.id === this.me;
+      ctx.fillStyle = o.look(car.id).body;
+      ctx.beginPath();
+      ctx.arc(cx, cy, mine ? 6 : 4.5, 0, Math.PI * 2);
+      ctx.fill();
+      if (mine) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   /**
@@ -402,6 +547,7 @@ export class RaceView {
         justStarted: now < this.startFlashUntil,
         delta: this.delta,
         lit,
+        idle: racing && me.finishedAt === null && this.stillTicks >= IDLE_TICKS,
       },
     };
   }

@@ -55,7 +55,7 @@ describe("RoomService", () => {
     expect(roomId(stranger)).not.toBe("race42");
   });
 
-  test("an invite to a room that's already racing falls back to matchmaking", () => {
+  test("an invite to a room that's already racing lets you watch it", () => {
     jest.useFakeTimers();
     const service = new RoomService();
     const alice = fakeClient();
@@ -66,7 +66,30 @@ describe("RoomService", () => {
 
     service.join(late, "race42");
 
-    expect(roomId(late)).not.toBe("race42");
+    expect(late.messages[0]).toEqual(
+      expect.objectContaining({ type: "spectate", roomId: "race42" }),
+    );
+    // The lights are still on: the start comes with what's left of them.
+    expect(late.messages[1]).toEqual(expect.objectContaining({ type: "start" }));
+    jest.useRealTimers();
+  });
+
+  test("with its seat token, a dropped player takes the same car back", () => {
+    jest.useFakeTimers();
+    const service = new RoomService();
+    const alice = fakeClient();
+    service.join(alice, "race43");
+    service.addBot(alice);
+    service.startRace(alice);
+    const { seat, playerId } = alice.messages[0] as { seat: string; playerId: string };
+    service.leave(alice);
+
+    const back = fakeClient();
+    service.join(back, "race43", seat);
+
+    expect(back.messages[0]).toEqual(
+      expect.objectContaining({ type: "welcome", playerId, rejoined: true }),
+    );
     jest.useRealTimers();
   });
 

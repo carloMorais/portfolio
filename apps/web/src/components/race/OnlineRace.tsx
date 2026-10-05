@@ -15,6 +15,8 @@ import {
 } from "race-engine";
 import { carColor } from "./colors";
 import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
+import { Pads, mergeKeys, sameKeys } from "./gamepad";
+import { RaceSound } from "./sound";
 import {
   CompactHud,
   FinishingVeil,
@@ -22,7 +24,9 @@ import {
   RACE_GRID,
   ResultsCard,
   RestartButton,
+  SoundButton,
   StandingsBoard,
+  TrackButtons,
   Spinner,
   ColorPicker,
   CAR_TEXT,
@@ -56,6 +60,8 @@ import {
   saveBest,
   saveColor,
   loadColor,
+  loadPref,
+  savePref,
   storage,
   updateBest,
   type PersonalBest,
@@ -63,6 +69,7 @@ import {
 import {
   KEY_MAP,
   RaceView,
+  boardOf,
   buildTrackLayer,
   emptyHud,
   litLights,
@@ -93,6 +100,34 @@ const COPIED_MS = 2000;
 const PING_MS = 2000;
 /** The server's "try again later" close code: it's at its connection limit (see the API's limits.ts). */
 const CLOSE_BUSY = 1013;
+/** Dropped mid-race: try to take the car back this many times (1 s, 2 s, 4 s apart). */
+const REJOIN_TRIES = 3;
+/** Touch controls show below lg; the same query decides auto gas and the follow camera. */
+const TOUCH_LAYOUT = "(max-width: 1023.98px)";
+/** Your seat in the room you're racing in, kept for this tab: a reload mid-race takes the car back. */
+const SEAT_KEY = "racegame:seat";
+
+function loadSeat(room: string | null): string | null {
+  if (!room) return null;
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(SEAT_KEY) ?? "null") as {
+      room: string;
+      seat: string;
+    } | null;
+    return saved?.room === room ? saved.seat : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveSeat(room: string | null, seat: string | null) {
+  try {
+    if (room && seat) sessionStorage.setItem(SEAT_KEY, JSON.stringify({ room, seat }));
+    else sessionStorage.removeItem(SEAT_KEY);
+  } catch {
+    // No session storage: a reload just won't take the car back.
+  }
+}
 
 const racerNumber = (s: OnlineState, id: string) =>
   s.numbers[id] ?? s.participants.find((p) => p.id === id)?.number ?? 0;
@@ -163,6 +198,16 @@ export function OnlineRace({
   /** The record is updated once per race, whether you skip to the results or not. */
   const recordedRef = useRef(false);
   const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
+  /** Your seat token (from `welcome`): connecting again with it takes your car back. */
+  const seatRef = useRef<string | null>(null);
+  /** The next connection picks up the race in progress (keep the race on screen). */
+  const resumingRef = useRef(false);
+  const triesRef = useRef(0);
+  const lastSent = useRef<Keys>({ ...NO_KEYS });
+  const padKeys = useRef<Keys>({ ...NO_KEYS });
+  const autoGasRef = useRef(true);
+  const touchRef = useRef(false);
+  const sound = useRef<RaceSound | null>(null);
 
   const [state, dispatch] = useReducer(applyServerMessage, initialOnlineState);
   /** The first connection waits for the mode's card to slide in; reconnecting doesn't. */
@@ -187,6 +232,22 @@ export function OnlineRace({
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const [confetti, setConfetti] = useState<ConfettiPiece[] | null>(null);
+  const [autoGas, setAutoGas] = useState(true);
+  const [soundOn, setSoundOn] = useState(false);
+
+  const chooseAutoGas = useCallback((on: boolean) => {
+    autoGasRef.current = on;
+    setAutoGas(on);
+    savePref(storage(), "autogas", on);
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    setSoundOn((on) => {
+      sound.current?.setEnabled(!on);
+      savePref(storage(), "sound", !on);
+      return !on;
+    });
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -196,11 +257,28 @@ export function OnlineRace({
     bestRef.current = best;
   }, [best]);
 
-  // Online races keep one record of their own, in this browser only.
+  // Online races keep one record of their own, in this browser only; the
+  // preferences are shared with practice mode.
   useEffect(() => {
-    const id = requestAnimationFrame(() => setBest(loadBest(storage(), "online")));
-    return () => cancelAnimationFrame(id);
-  }, []);
+    sound.current ??= new RaceSound();
+    const id = requestAnimationFrame(() => {
+      setBest(loadBest(storage(), "online"));
+      chooseAutoGas(loadPref(storage(), "autogas"));
+      const wantsSound = loadPref(storage(), "sound");
+      setSoundOn(wantsSound);
+      sound.current?.setEnabled(wantsSound);
+    });
+    const media = window.matchMedia(TOUCH_LAYOUT);
+    const onTouch = () => (touchRef.current = media.matches);
+    onTouch();
+    media.addEventListener("change", onTouch);
+    return () => {
+      cancelAnimationFrame(id);
+      media.removeEventListener("change", onTouch);
+      sound.current?.dispose();
+      sound.current = null;
+    };
+  }, [chooseAutoGas]);
 
   /** Everyone is "Piloto N" in your language, except you. The draw loop reads the latest state. */
   const names = useCallback((id: string) => nameIn(stateRef.current, id, tPlay), [tPlay]);
@@ -249,13 +327,17 @@ export function OnlineRace({
     setOutcome({ newRace: next.newRace, newLap: next.newLap });
   }, []);
 
-  // The WebSocket connection: one room per connection, no resume on reconnect yet.
+  // The WebSocket connection: one room per connection. Dropped mid-race, it
+  // reconnects with your seat token and takes your car back (`resumingRef`).
   useEffect(() => {
     let live = true;
-    race.current = EMPTY;
-    decoder.current = null;
-    buffer.current.clear();
-    predictor.current.clear();
+    const resuming = resumingRef.current;
+    if (!resuming) {
+      race.current = EMPTY;
+      decoder.current = null;
+      buffer.current.clear();
+      predictor.current.clear();
+    }
     const coldStartTimer = setTimeout(() => setShowColdStartHint(true), COLD_START_MS);
     const connectedAt = performance.now();
     const waitTimer = setInterval(
@@ -274,7 +356,9 @@ export function OnlineRace({
     // painted (and, when it slides in, once it has slid), never before.
     const connect = () => {
       if (!live) return;
-      const ws = new WebSocket(apiWsUrl(requested));
+      // Resuming, or a reload of the page you were racing on: ask for your seat.
+      const seat = resuming ? seatRef.current : loadSeat(requested);
+      const ws = new WebSocket(apiWsUrl(requested, seat));
       socket = ws;
       wsRef.current = ws;
       const ping = () =>
@@ -294,8 +378,32 @@ export function OnlineRace({
           clearInterval(waitTimer);
           setInviteMissed(requested !== null && requested !== msg.roomId);
           roomRef.current = msg.roomId;
+          seatRef.current = msg.seat;
+          saveSeat(msg.roomId, msg.seat);
+          resumingRef.current = false;
+          triesRef.current = 0;
+          if (v && msg.rejoined) v.me = msg.playerId;
           // The address bar is an invite too: copy it and send it.
           window.history.replaceState(null, "", inviteUrl(window.location.href, msg.roomId));
+        }
+        if (msg.type === "spectate") {
+          clearInterval(waitTimer);
+          roomRef.current = msg.roomId;
+          window.history.replaceState(null, "", inviteUrl(window.location.href, msg.roomId));
+        }
+        if (msg.type === "sync") {
+          // A race already under way (back in your car, or watching): pick it up here.
+          decoder.current = new RaceDecoder(track, msg.carIds, stateRef.current.laps);
+          race.current = decoder.current.resume(msg);
+          buffer.current.clear();
+          buffer.current.push(race.current, now);
+          timeline.current.clear();
+          predictor.current.clear();
+          smoother.current.clear();
+          keysRef.current = { ...NO_KEYS };
+          lastSent.current = { ...NO_KEYS };
+          doneRef.current = false;
+          countdownEnd.current = null;
         }
         if (msg.type === "lobby" && !colorAsked) {
           colorAsked = true;
@@ -353,6 +461,7 @@ export function OnlineRace({
           predictor.current.clear();
           smoother.current.clear();
           keysRef.current = { ...NO_KEYS };
+          lastSent.current = { ...NO_KEYS };
           v?.reset();
           doneRef.current = false;
           recordedRef.current = false;
@@ -365,16 +474,35 @@ export function OnlineRace({
           // Bring the whole track into view: you can't drive what you can't see.
           rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
         }
-        if (msg.type === "finished") finish(race.current);
+        if (msg.type === "finished") {
+          finish(race.current);
+          saveSeat(null, null);
+        }
         dispatch(msg);
       });
-      ws.addEventListener(
-        "close",
-        (e) => live && dispatch({ type: "room-closed", busy: e.code === CLOSE_BUSY }),
-      );
-      ws.addEventListener("error", () => live && dispatch({ type: "room-closed" }));
+      // ("error" is always followed by "close": handled there.)
+      ws.addEventListener("close", (e) => {
+        if (!live) return;
+        const s = stateRef.current;
+        const midRace =
+          s.phase === "countdown" ||
+          s.phase === "racing" ||
+          s.phase === "finishing" ||
+          s.phase === "reconnecting";
+        if (midRace && seatRef.current && !s.spectating && triesRef.current < REJOIN_TRIES) {
+          // Dropped mid-race: keep the race on screen and take the car back.
+          const wait = 1000 * 2 ** triesRef.current;
+          triesRef.current += 1;
+          resumingRef.current = true;
+          dispatch({ type: "reconnecting" });
+          setTimeout(() => live && setConnectAttempt((n) => n + 1), wait);
+          return;
+        }
+        resumingRef.current = false;
+        dispatch({ type: "room-closed", busy: e.code === CLOSE_BUSY });
+      });
     };
-    const delay = connectDelay.current;
+    const delay = resuming ? 0 : connectDelay.current;
     connectDelay.current = 0;
     let delayTimer: ReturnType<typeof setTimeout> | undefined;
     const cancelPaint = afterPaint(() => (delayTimer = setTimeout(connect, delay)));
@@ -401,12 +529,30 @@ export function OnlineRace({
    */
   const sendKeys = useCallback(() => {
     const ws = wsRef.current;
-    if (ws?.readyState !== WebSocket.OPEN) return;
-    ws.send(JSON.stringify({ event: "input", data: keysRef.current }));
-    timeline.current.record(performance.now(), keysRef.current);
+    const p = stateRef.current.phase;
+    // The server only takes keys during the lights and the race.
+    if (
+      ws?.readyState !== WebSocket.OPEN ||
+      (p !== "countdown" && p !== "racing" && p !== "finishing")
+    ) {
+      return;
+    }
+    const keys = mergeKeys(
+      keysRef.current,
+      padKeys.current,
+      autoGasRef.current && touchRef.current && p !== "countdown",
+    );
+    if (sameKeys(keys, lastSent.current)) return;
+    lastSent.current = keys;
+    ws.send(JSON.stringify({ event: "input", data: keys }));
+    timeline.current.record(performance.now(), keys);
   }, []);
 
   const reconnect = useCallback(() => {
+    resumingRef.current = false;
+    triesRef.current = 0;
+    seatRef.current = null;
+    sound.current?.wake();
     setShowColdStartHint(false);
     setWaited(0);
     setInviteMissed(false);
@@ -489,7 +635,9 @@ export function OnlineRace({
   useEffect(() => {
     let raf = 0;
     let hudAt = 0;
+    let lastLit = 0;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const pads = new Pads();
     view.current ??= new RaceView(stateRef.current.playerId ?? "", stateRef.current.laps, reduced);
     const v = view.current;
     // Each car in the colour its driver picked (or was given); you with an outline.
@@ -523,10 +671,23 @@ export function OnlineRace({
 
     const frame = (now: number) => {
       const phase = stateRef.current.phase;
+      v.sound = sound.current;
+      // A pad: its keys join the keyboard's; Start plays again, or starts the race (leader).
+      const pad = pads.poll();
+      padKeys.current = pad.keys;
+      if (pad.start) {
+        const s = stateRef.current;
+        if (s.phase === "finished" || s.phase === "disconnected") reconnect();
+        else if (s.phase === "lobby" && isLeader(s) && s.participants.length >= 2) {
+          wsRef.current?.send(JSON.stringify({ event: "start" }));
+        }
+      }
+      sendKeys();
       if (countdownEnd.current !== null && now >= countdownEnd.current) {
         countdownEnd.current = null;
         dispatch({ type: "lights-out" });
         v.lightsOut(now);
+        sound.current?.beep(true);
         setAnnouncement(tPlay("go"));
       }
       const running = phase === "racing" || phase === "finishing" || phase === "finished";
@@ -542,15 +703,39 @@ export function OnlineRace({
           look: look(p),
           name: names,
           zoom: zoomFor(canvas.clientWidth),
+          // Phones follow your car during the race (not when watching).
+          follow:
+            touchRef.current &&
+            !stateRef.current.spectating &&
+            (phase === "countdown" ||
+              phase === "racing" ||
+              phase === "finishing" ||
+              phase === "reconnecting"),
         });
       }
       const me = stateRef.current.playerId;
+      const lit =
+        phase === "countdown" && countdownEnd.current !== null
+          ? litLights(now - (countdownEnd.current - countdownMs.current), countdownMs.current)
+          : 0;
+      if (lit > lastLit) sound.current?.beep();
+      lastLit = lit;
+      // Watching: the standings and the leader's lap, no "you".
+      if (now - hudAt > 100 && stateRef.current.spectating && race.current.cars.length > 0) {
+        hudAt = now;
+        const s = race.current;
+        const leader = standings(s, track)[0];
+        setHud({
+          ...emptyHud(s),
+          tick: s.tick,
+          time: s.tick,
+          lap: Math.min(s.laps, (leader?.laps ?? 0) + 1),
+          board: boardOf(s),
+          lit,
+        });
+      }
       if (now - hudAt > 100 && me && race.current.cars.some((c) => c.id === me)) {
         hudAt = now;
-        const lit =
-          phase === "countdown" && countdownEnd.current !== null
-            ? litLights(now - (countdownEnd.current - countdownMs.current))
-            : 0;
         const { hud: next, announce } = v.hud(race.current, now, phase === "racing", lit);
         setHud(next);
         if (announce) {
@@ -560,8 +745,11 @@ export function OnlineRace({
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
-    return () => cancelAnimationFrame(raf);
-  }, [names, tPlay]);
+    return () => {
+      cancelAnimationFrame(raf);
+      sound.current?.engine(0, false);
+    };
+  }, [names, tPlay, reconnect, sendKeys]);
 
   const skip = () => {
     finish(race.current);
@@ -587,7 +775,12 @@ export function OnlineRace({
   const enough = state.participants.length >= 2;
   const me = state.playerId ?? "";
   const phase = state.phase;
-  const inRace = phase === "countdown" || phase === "racing" || phase === "finishing";
+  const spectating = state.spectating;
+  const inRace =
+    phase === "countdown" ||
+    phase === "racing" ||
+    phase === "finishing" ||
+    phase === "reconnecting";
   /** Not in a race: the card (connecting, lobby, connection lost) is up. */
   const outside = phase === "connecting" || phase === "lobby" || phase === "disconnected";
 
@@ -764,7 +957,7 @@ export function OnlineRace({
       <ResultsCard
         rows={resultRows(standings(result, track))}
         me={me}
-        place={result.finished.indexOf(me) + 1}
+        place={spectating ? 0 : result.finished.indexOf(me) + 1}
         myTime={result.cars.find((c) => c.id === me)?.finishedAt ?? null}
         outcome={outcome}
         name={renderName}
@@ -775,7 +968,7 @@ export function OnlineRace({
         <RestartButton
           buttonRef={focus ? restartRef : undefined}
           onClick={reconnect}
-          label={t("playAgain")}
+          label={spectating ? t("playNext") : t("playAgain")}
           hint={tPlay("restartHint")}
         />
       </ResultsCard>
@@ -803,10 +996,18 @@ export function OnlineRace({
           t={tPlay}
         />
       )}
-      {inRace && <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />}
+      {inRace && !spectating && <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />}
 
       <div className={TRACK_COLUMN}>
-        {inRace && <CompactHud hud={hud} me={state.playerId} laps={state.laps} t={tPlay} />}
+        {inRace && (
+          <CompactHud
+            hud={hud}
+            me={state.playerId}
+            laps={state.laps}
+            showPlace={!spectating}
+            t={tPlay}
+          />
+        )}
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -829,6 +1030,26 @@ export function OnlineRace({
             <FinishingVeil place={hud.place} onSkip={skip} t={tPlay} />
           )}
 
+          {/* Watching a race you came too late for. */}
+          {spectating && inRace && (
+            <p className="pointer-events-none absolute inset-x-0 bottom-3 mx-auto w-fit rounded-full bg-bg/90 px-4 py-1.5 text-sm text-ink ring-1 ring-line">
+              {t("spectating")}
+            </p>
+          )}
+
+          {/* Dropped mid-race: the race stays up while the car is taken back. */}
+          {phase === "reconnecting" && (
+            <div
+              role="status"
+              className="absolute inset-0 flex items-center justify-center bg-bg/40"
+            >
+              <p className="flex items-center gap-3 rounded-full bg-bg px-5 py-2.5 font-display text-xl tracking-tight ring-1 ring-line">
+                <Spinner />
+                {t("reconnecting")}
+              </p>
+            </div>
+          )}
+
           {(phase === "connecting" ||
             phase === "lobby" ||
             phase === "disconnected" ||
@@ -840,6 +1061,9 @@ export function OnlineRace({
               )}
             </div>
           )}
+          <TrackButtons>
+            <SoundButton on={soundOn} onToggle={toggleSound} t={tPlay} />
+          </TrackButtons>
         </div>
 
         {outside && <div className="mt-4 flex justify-center lg:hidden">{card}</div>}
@@ -849,7 +1073,13 @@ export function OnlineRace({
           <div className="mt-4 flex justify-center lg:hidden">{results(false)}</div>
         )}
 
-        <TouchPad press={press} hidden={!inRace} t={tPlay} />
+        <TouchPad
+          press={press}
+          hidden={!inRace || spectating}
+          autoGas={autoGas}
+          onAutoGas={chooseAutoGas}
+          t={tPlay}
+        />
       </div>
     </div>
   );

@@ -27,6 +27,7 @@ export function Controls() {
             <figcaption>{t("nitroKey")}</figcaption>
           </figure>
         </div>
+        <p className="hidden lg:block">{t("gamepadHint")}</p>
         <div className="flex items-end justify-center gap-x-7">
           <figure className="flex flex-col items-center gap-2">
             <NitroIcon className="size-7" />

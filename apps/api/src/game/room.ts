@@ -7,6 +7,7 @@ import {
   elasticStyle,
   raceProgress,
   createRace,
+  encodeSync,
   encodeTick,
   NO_KEYS,
   standings,
@@ -17,6 +18,7 @@ import {
   type RaceEvent,
   type RaceState,
 } from "race-engine/node";
+import { randomBytes } from "node:crypto";
 import { CLOSE_TOO_SLOW, MAX_BUFFERED_BYTES } from "./limits";
 import type { ServerMessage } from "./protocol";
 
@@ -57,7 +59,17 @@ export const SEND_EVERY = 2;
  */
 const MAX_CATCH_UP = 5;
 
-type Player = { carId: string; number: number };
+/**
+ * If every human drops out mid-race, the room waits this long for one to
+ * come back (a phone switching networks, a page reload) before ending.
+ */
+const REJOIN_GRACE_MS = 10_000;
+
+/** A seat token: what a client sends to take its car back after a dropped connection. */
+const newSeat = () => randomBytes(9).toString("base64url");
+
+/** A player's seat. `seat` is the token that lets the same person take the car back. */
+type Player = { carId: string; number: number; seat: string };
 /** `code: "busy"` is the one rejection the client explains to the visitor (see protocol.ts). */
 export type ActionResult = { ok: true } | { ok: false; message: string; code?: "busy" };
 type RoomOptions = { countdownMs?: number };
@@ -77,6 +89,14 @@ export class Room {
   state: "waiting" | "countdown" | "racing" | "done" = "waiting";
 
   private readonly players = new Map<RoomClient, Player>();
+  /** Every human seat taken this race, connected or not (a dropped player keeps theirs). */
+  private readonly seats = new Map<string, Player>();
+  /** Watching a race already under way: they get every message, but drive nothing. */
+  private readonly spectators = new Set<RoomClient>();
+  /** Joined (or came back) mid-race: they get a `sync` after the next state message. */
+  private pendingSync: RoomClient[] = [];
+  private countdownEndsAt = 0;
+  private rejoinTimer: ReturnType<typeof setTimeout> | null = null;
   /** Join order, oldest first: index 0 is the leader. */
   private readonly playerOrder: RoomClient[] = [];
   /** Bots in the order they were added, so "remove" takes the most recent one. */
@@ -136,8 +156,9 @@ export class Room {
   /** Assigns a car and a number. The first player in becomes the leader. */
   join(client: RoomClient): Player {
     const number = this.nextNumber++;
-    const player: Player = { carId: `p-${this.players.size}-${number}`, number };
+    const player: Player = { carId: `p-${this.players.size}-${number}`, number, seat: newSeat() };
     this.players.set(client, player);
+    this.seats.set(player.seat, player);
     this.playerOrder.push(client);
     this.numbers.set(player.carId, number);
     this.colors.set(player.carId, this.freeColor());
@@ -150,12 +171,74 @@ export class Room {
       roomId: this.id,
       laps: LAPS,
       tickRate: TICK_RATE,
+      seat: player.seat,
     });
     this.broadcastLobby();
     return player;
   }
 
+  /**
+   * Takes a car back after a dropped connection, during the lights or the
+   * race: the same car, number and colour, the race carrying on around it.
+   * Returns false if there's no such seat or it's still connected.
+   */
+  rejoin(client: RoomClient, seat: string): boolean {
+    if (!this.isRacing) return false;
+    const player = this.seats.get(seat);
+    if (!player || [...this.players.values()].includes(player)) return false;
+    this.players.set(client, player);
+    this.playerOrder.push(client);
+    this.keys.set(player.carId, NO_KEYS);
+    if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+    this.rejoinTimer = null;
+    this.send(client, {
+      type: "welcome",
+      playerId: player.carId,
+      number: player.number,
+      roomId: this.id,
+      laps: LAPS,
+      tickRate: TICK_RATE,
+      seat: player.seat,
+      rejoined: true,
+    });
+    this.catchUp(client);
+    return true;
+  }
+
+  /** Watches a race already under way (an invite link that arrived late). */
+  watch(client: RoomClient) {
+    this.spectators.add(client);
+    this.send(client, { type: "spectate", roomId: this.id, laps: LAPS, tickRate: TICK_RATE });
+    this.catchUp(client);
+  }
+
+  /** Brings a late client up to date: the lights still to run, or the race so far. */
+  private catchUp(client: RoomClient) {
+    if (!this.raceState) return;
+    if (this.state === "countdown") {
+      this.send(client, {
+        ...this.startMessage(),
+        countdownMs: Math.max(0, this.countdownEndsAt - Date.now()),
+      });
+    } else if (this.state === "racing") {
+      this.pendingSync.push(client);
+    }
+  }
+
+  private startMessage() {
+    const carIds = this.raceState!.cars.map((c) => c.id);
+    return {
+      type: "start" as const,
+      carIds,
+      numbers: Object.fromEntries(carIds.map((id) => [id, this.numbers.get(id)!])),
+      colors: Object.fromEntries(carIds.map((id) => [id, this.colors.get(id) ?? 0])),
+      countdownMs: this.countdownMs,
+    };
+  }
+
   leave(client: RoomClient) {
+    if (this.spectators.delete(client)) return;
+    this.pendingSync = this.pendingSync.filter((c) => c !== client);
     const player = this.players.get(client);
     if (!player) return;
     this.players.delete(client);
@@ -163,6 +246,7 @@ export class Room {
     if (orderIndex !== -1) this.playerOrder.splice(orderIndex, 1);
     if (this.state === "waiting") {
       this.colors.delete(player.carId);
+      this.seats.delete(player.seat);
       if (this.players.size === 0) {
         this.onEmpty(this);
       } else {
@@ -171,9 +255,15 @@ export class Room {
       }
     } else {
       // The car stays in the race (the engine's car list is fixed once started);
-      // it just stops responding and coasts, same as the original.
+      // it just stops responding and coasts, same as the original — and its
+      // seat stays open, so the same person can take it back (`rejoin`).
       this.keys.set(player.carId, NO_KEYS);
-      if (this.players.size === 0) this.finish();
+      if (this.players.size === 0 && !this.rejoinTimer) {
+        this.rejoinTimer = setTimeout(() => {
+          this.rejoinTimer = null;
+          if (this.players.size === 0) this.finish();
+        }, REJOIN_GRACE_MS).unref();
+      }
     }
   }
 
@@ -272,9 +362,8 @@ export class Room {
     this.raceState = createRace(this.track, carIds, LAPS);
     this.state = "countdown";
 
-    const numbers = Object.fromEntries(carIds.map((id) => [id, this.numbers.get(id)!]));
-    const colors = Object.fromEntries(carIds.map((id) => [id, this.colors.get(id) ?? 0]));
-    this.broadcast({ type: "start", carIds, numbers, colors, countdownMs: this.countdownMs });
+    this.countdownEndsAt = Date.now() + this.countdownMs;
+    this.broadcast(this.startMessage());
 
     // unref: a room ticking away doesn't need to keep the process (or a test) alive by itself.
     this.countdownTimer = setTimeout(() => {
@@ -358,6 +447,19 @@ export class Room {
     this.broadcast({ type: "state", ...encodeTick(this.raceState, this.pendingEvents) });
     this.pendingEvents = [];
     this.lastSentTick = this.raceState.tick;
+    // Latecomers get the race so far right after it: this message's events are already in.
+    if (this.pendingSync.length > 0) {
+      const { carIds, numbers, colors } = this.startMessage();
+      const sync: ServerMessage = {
+        type: "sync",
+        carIds,
+        numbers,
+        colors,
+        ...encodeSync(this.raceState),
+      };
+      for (const client of this.pendingSync) this.send(client, sync);
+      this.pendingSync = [];
+    }
   }
 
   private finish() {
@@ -366,6 +468,8 @@ export class Room {
     if (this.state === "racing" && this.raceState.tick > this.lastSentTick) this.sendState();
     if (this.tickTimer) clearTimeout(this.tickTimer);
     if (this.countdownTimer) clearTimeout(this.countdownTimer);
+    if (this.rejoinTimer) clearTimeout(this.rejoinTimer);
+    this.rejoinTimer = null;
     this.tickTimer = null;
     this.countdownTimer = null;
     this.state = "done";
@@ -416,7 +520,7 @@ export class Room {
    */
   private broadcast(message: ServerMessage) {
     const body = JSON.stringify(message);
-    for (const client of this.players.keys()) {
+    for (const client of [...this.players.keys(), ...this.spectators]) {
       if ((client.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES) {
         client.close?.(CLOSE_TOO_SLOW, "too slow");
         continue;

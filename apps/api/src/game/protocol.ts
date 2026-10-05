@@ -1,4 +1,4 @@
-import type { Difficulty, Keys, WireTick } from "race-engine/node";
+import type { Difficulty, Keys, RaceSync, WireTick } from "race-engine/node";
 
 /**
  * What a client sends. The server assigns car ids and racer numbers; no free
@@ -49,7 +49,13 @@ export type ServerMessage =
       roomId: string;
       laps: number;
       tickRate: number;
+      /** Keep it: connecting again with `?room=…&seat=…` takes the same car back mid-race. */
+      seat: string;
+      /** This is that: you're back in your car (a `start` or `sync` follows). */
+      rejoined?: boolean;
     }
+  /** The invite's race had already started: you watch it (a `start` or `sync` follows). */
+  | { type: "spectate"; roomId: string; laps: number; tickRate: number }
   | {
       type: "lobby";
       participants: LobbyParticipant[];
@@ -66,6 +72,13 @@ export type ServerMessage =
       colors: Record<string, number>;
       countdownMs: number;
     }
+  /** Joining a race under way: the grid as in `start`, plus the race so far (wire.ts's `RaceSync`). */
+  | ({
+      type: "sync";
+      carIds: string[];
+      numbers: Record<string, number>;
+      colors: Record<string, number>;
+    } & RaceSync)
   /** The race, in the compact format of `race-engine`'s wire.ts (see there). */
   | ({ type: "state" } & WireTick)
   | { type: "finished"; standings: StandingEntry[] }

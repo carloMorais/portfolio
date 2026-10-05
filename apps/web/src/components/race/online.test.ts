@@ -19,10 +19,52 @@ describe("applyServerMessage", () => {
       roomId: "r1",
       laps: 2,
       tickRate: 30,
+      seat: "abcdefghijkl",
     });
     expect(next.phase).toBe("lobby");
     expect(next.playerId).toBe("p-0-1");
     expect(next.roomId).toBe("r1");
+  });
+
+  test("dropped mid-race: reconnecting, then back in the car without passing the lobby", () => {
+    const racing: OnlineState = { ...initialOnlineState, phase: "racing", playerId: "p-0-1" };
+    const waiting = applyServerMessage(racing, { type: "reconnecting" });
+    expect(waiting.phase).toBe("reconnecting");
+    const back = applyServerMessage(waiting, {
+      type: "welcome",
+      playerId: "p-0-1",
+      number: 1,
+      roomId: "r1",
+      laps: 2,
+      tickRate: 30,
+      seat: "abcdefghijkl",
+      rejoined: true,
+    });
+    expect(back.phase).toBe("reconnecting");
+    const synced = applyServerMessage(back, {
+      type: "sync",
+      carIds: ["p-0-1"],
+      numbers: { "p-0-1": 1 },
+      colors: { "p-0-1": 3 },
+      lapTicks: [[]],
+      finished: [],
+      picked: {},
+      state: { t: 90, c: [] },
+    });
+    expect(synced.phase).toBe("racing");
+    expect(colorIndex(synced, "p-0-1")).toBe(3);
+  });
+
+  test("too late for an invite's race: watching it", () => {
+    const next = applyServerMessage(initialOnlineState, {
+      type: "spectate",
+      roomId: "abcdef",
+      laps: 2,
+      tickRate: 30,
+    });
+    expect(next.spectating).toBe(true);
+    expect(next.roomId).toBe("abcdef");
+    expect(next.playerId).toBeNull();
   });
 
   test("lobby updates the roster and leader, and clears a previous error", () => {
