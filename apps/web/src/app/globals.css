@@ -293,6 +293,26 @@ body {
   }
 }
 
+/* RaceGame: the start card's content slides in sideways when the mode changes. */
+.race-slide-from-right {
+  animation: race-slide-from-right 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.race-slide-from-left {
+  animation: race-slide-from-left 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes race-slide-from-right {
+  from {
+    opacity: 0;
+    transform: translateX(3rem);
+  }
+}
+@keyframes race-slide-from-left {
+  from {
+    opacity: 0;
+    transform: translateX(-3rem);
+  }
+}
+
 /* RaceGame: a quick pop for texts that mark a moment (lights out, last lap, results). */
 .race-pop-in {
   animation: race-pop-in 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
@@ -381,6 +401,8 @@ body {
   .tech-graph-caret,
   .scroll-hint-dot,
   .race-fade-in,
+  .race-slide-from-right,
+  .race-slide-from-left,
   .race-pop-in,
   .race-lights-zoom,
   .race-lights-out,

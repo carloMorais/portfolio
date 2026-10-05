@@ -136,7 +136,6 @@
     "racegameOriginal": "Original version, November 2024: a test match with a full room, 10 players."
   },
   "Play": {
-    "lead": "Two laps against three bots, running entirely in your browser.",
     "start": "Start race",
     "restart": "Race again",
     "go": "Go!",
@@ -198,7 +197,6 @@
   "Online": {
     "modeTraining": "Practice",
     "modeOnline": "Online",
-    "lead": "Up to 10 people in the same room, with the race running on the server.",
     "canvasLabel": "Top-down track with the connected players' cars.",
     "connecting": "Connecting…",
     "coldStartHint": "The free server sleeps when idle and takes up to a minute to wake up.",
@@ -216,9 +214,10 @@
     "reconnect": "Reconnect",
     "playAgain": "Play again",
     "practiceMeanwhile": "Practice meanwhile",
-    "inviteHint": "To race someone, send them this room's link.",
-    "inviteCopy": "Copy room link",
+    "inviteCopy": "Copy link",
     "inviteCopied": "Link copied",
-    "inviteMissed": "The invite's room had already started, so you're in a new room."
+    "inviteMissed": "The invite's room had already started, so you're in a new room.",
+    "room": "Room",
+    "botDifficulty": "{name}'s difficulty"
   }
 }

@@ -82,8 +82,8 @@ export class RoomService {
     return this.room(client)?.removeBot(client);
   }
 
-  setDifficulty(client: RoomClient, difficulty: unknown) {
-    return this.room(client)?.setDifficulty(client, difficulty);
+  setBotDifficulty(client: RoomClient, data: unknown) {
+    return this.room(client)?.setBotDifficulty(client, data);
   }
 
   /**

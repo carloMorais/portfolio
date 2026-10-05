@@ -154,15 +154,30 @@ describe("GameGateway (e2e)", () => {
     bob.socket.close();
   });
 
-  test("the leader picks the bots' difficulty and everyone's lobby shows it", async () => {
+  test("the leader sets a bot's difficulty and the lobby shows it", async () => {
     const { socket, next } = await connect();
     await next(); // welcome
-    expect(await next()).toEqual(expect.objectContaining({ difficulty: "normal" }));
+    await next(); // lobby of just this one client
+    socket.send(JSON.stringify({ event: "add-bot" }));
+    const lobby = (await next()) as { participants: { id: string; isBot: boolean }[] };
+    const bot = lobby.participants.find((p) => p.isBot)!;
+    expect(bot).toEqual(expect.objectContaining({ difficulty: "normal" }));
 
-    socket.send(JSON.stringify({ event: "difficulty", data: "hard" }));
-    expect(await next()).toEqual(expect.objectContaining({ type: "lobby", difficulty: "hard" }));
+    socket.send(
+      JSON.stringify({ event: "bot-difficulty", data: { bot: bot.id, difficulty: "hard" } }),
+    );
+    expect(await next()).toEqual(
+      expect.objectContaining({
+        type: "lobby",
+        participants: expect.arrayContaining([
+          expect.objectContaining({ id: bot.id, difficulty: "hard" }),
+        ]),
+      }),
+    );
 
-    socket.send(JSON.stringify({ event: "difficulty", data: "impossible" }));
+    socket.send(
+      JSON.stringify({ event: "bot-difficulty", data: { bot: bot.id, difficulty: "impossible" } }),
+    );
     expect(await next()).toEqual(expect.objectContaining({ type: "error" }));
     socket.close();
   });

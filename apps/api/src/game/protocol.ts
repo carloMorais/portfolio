@@ -11,7 +11,8 @@ export type ClientMessage =
   | { event: "input"; data: Keys }
   | { event: "add-bot" }
   | { event: "remove-bot" }
-  | { event: "difficulty"; data: Difficulty }
+  /** The leader sets one bot's difficulty. */
+  | { event: "bot-difficulty"; data: { bot: string; difficulty: Difficulty } }
   | { event: "start" }
   | { event: "ping"; data: number };
 
@@ -19,7 +20,13 @@ export type ClientMessage =
  * `number` is a plain sequential racer number ("Piloto N"/"Driver N" is the
  * client's own wording, in the viewer's language — never a string from here).
  */
-export type LobbyParticipant = { id: string; number: number; isBot: boolean };
+export type LobbyParticipant = {
+  id: string;
+  number: number;
+  isBot: boolean;
+  /** Bots only: how this one drives, set by the leader. */
+  difficulty?: Difficulty;
+};
 
 export type StandingEntry = {
   carId: string;
@@ -43,8 +50,6 @@ export type ServerMessage =
       type: "lobby";
       participants: LobbyParticipant[];
       leaderId: string | null;
-      /** How the bots drive, chosen by the leader. */
-      difficulty: Difficulty;
     }
   /**
    * The first tick runs `countdownMs` after this: the start lights, as in

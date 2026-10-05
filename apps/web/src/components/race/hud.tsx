@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode, Ref } from "react";
+import { useEffect, useRef, type ReactNode, type Ref, type RefObject } from "react";
 import { useTranslations } from "next-intl";
 import { TICK_RATE, type Keys } from "race-engine";
 import { COLORS } from "./colors";
@@ -27,6 +27,12 @@ export const TRACK_COLUMN =
   "col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1";
 export const VEIL =
   "absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]";
+/** Marks a veil, so the start card can find the track it sits on (see `StartCard`). */
+export const VEIL_ATTR = { "data-race-veil": "" };
+/** The site's sticky header covers this much of the top of the window. */
+const HEADER_PX = 64;
+/** The card keeps at least this far from the track's edges. */
+const CARD_MARGIN_PX = 12;
 
 type T = ReturnType<typeof useTranslations<"Play">>;
 
@@ -48,28 +54,24 @@ export const makeConfetti = (colors: string[]): ConfettiPiece[] =>
     rotate: Math.round(Math.random() * 360),
   }));
 
+/**
+ * The standings and the lap panel only show while a race is on screen: before
+ * it they'd be an empty table and "—" records. On phones the one-line
+ * `CompactHud` takes their place, so both are lg-only.
+ */
 export function StandingsBoard({
   board,
   me,
   name,
-  hideOnPhones = false,
   t,
 }: {
   board: Driver[];
   me: string | null;
   name: (id: string) => string;
-  /**
-   * Before the race (the start card says who you race) and while racing (the
-   * one-line `CompactHud` takes over), phones skip the table to keep the
-   * track on screen.
-   */
-  hideOnPhones?: boolean;
   t: T;
 }) {
   return (
-    <table
-      className={`col-start-1 row-start-1 self-start text-sm tabular-nums ${hideOnPhones ? "max-lg:hidden" : ""}`}
-    >
+    <table className="col-start-1 row-start-1 self-start text-sm tabular-nums max-lg:hidden">
       <caption className="sr-only">{t("standings")}</caption>
       <thead>
         <tr className="border-b border-line text-left text-xs text-muted">
@@ -117,27 +119,18 @@ export function LapPanel({
   hud,
   laps,
   best,
-  idle = false,
-  racing = false,
   t,
 }: {
   hud: Hud;
   laps: number;
   best: { race: number | null; lap: number | null };
-  /** Before the race "1/2" and "0:00.0" say nothing yet: only the record shows, if there is one. */
-  idle?: boolean;
-  /** While racing, phones get the one-line `CompactHud` instead. */
-  racing?: boolean;
   t: T;
 }) {
   const fastestLap = hud.laps.length > 0 ? Math.min(...hud.laps) : null;
-  if (idle && best.race === null && best.lap === null) return null;
   return (
-    <dl
-      className={`col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3 ${racing ? "max-lg:hidden" : ""}`}
-    >
-      {!idle && <LiveTimes hud={hud} laps={laps} fastestLap={fastestLap} t={t} />}
-      <div className={`text-sm ${idle ? "" : "border-t border-line pt-3"}`}>
+    <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums max-lg:hidden lg:col-start-3">
+      <LiveTimes hud={hud} laps={laps} fastestLap={fastestLap} t={t} />
+      <div className="border-t border-line pt-3 text-sm">
         <dt className="text-xs text-muted">{t("record")}</dt>
         <dd>{best.race !== null ? formatTime(best.race) : "—"}</dd>
         <dt className="mt-2 text-xs text-muted">{t("bestLap")}</dt>
@@ -354,6 +347,7 @@ export function ResultsCard({
   outcome,
   name,
   t,
+  header,
   children,
 }: {
   rows: ResultRow[];
@@ -363,11 +357,14 @@ export function ResultsCard({
   outcome: { newRace: boolean; newLap: boolean } | null;
   name: (id: string) => string;
   t: T;
+  /** On top of the card: the mode switch, so you can change modes after a race. */
+  header?: ReactNode;
   /** The actions under the table (race again, difficulty…). */
   children: ReactNode;
 }) {
   return (
     <div className="race-fade-in my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
+      {header && <div className="mb-5 flex justify-center">{header}</div>}
       <p className="race-elastic-in font-display text-2xl tracking-tight sm:text-3xl">
         {place > 0 ? t("finished", { n: place }) : t("standings")}
       </p>
@@ -589,14 +586,121 @@ export function CompactHud({
   );
 }
 
-/** The card over the blurred track before a race: how to drive, then the choices and Start. */
-export function StartCard({ children }: { children: ReactNode }) {
+export type RaceMode = "training" | "online";
+/** Which side a mode's card slides in from (null: no animation, e.g. on page load). */
+export type SlideFrom = "left" | "right" | null;
+
+/** Practice or online: the switch on top of the race's card. */
+export function ModeSwitch({
+  mode,
+  onChange,
+  t,
+}: {
+  mode: RaceMode;
+  onChange: (mode: RaceMode) => void;
+  t: ReturnType<typeof useTranslations<"Online">>;
+}) {
   return (
-    // Near the top of the track on lg, so Start sits above the fold; centred on phones.
-    <div className="race-fade-in my-auto flex w-full max-w-xl flex-col items-center gap-5 rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line sm:p-6 lg:mt-8 lg:mb-auto">
-      {children}
+    <div
+      role="group"
+      aria-label={`${t("modeTraining")} / ${t("modeOnline")}`}
+      className="inline-flex rounded-full bg-surface p-1 ring-1 ring-line"
+    >
+      {(["training", "online"] as const).map((m) => (
+        <button
+          key={m}
+          type="button"
+          aria-pressed={mode === m}
+          onClick={() => onChange(m)}
+          className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
+            mode === m ? "bg-ink text-bg" : "text-muted hover:text-ink"
+          }`}
+        >
+          {m === "training" ? t("modeTraining") : t("modeOnline")}
+        </button>
+      ))}
     </div>
   );
+}
+
+/**
+ * The window over the blurred track outside a race: the mode switch on top,
+ * then that mode's content, which slides in sideways when the mode changes
+ * (from the right towards Online, from the left back to Practice). Centred
+ * on the track both ways.
+ */
+export function StartCard({
+  header,
+  slideFrom = null,
+  children,
+}: {
+  header?: ReactNode;
+  slideFrom?: SlideFrom;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  useVisibleCenter(ref);
+  const slide =
+    slideFrom === "right"
+      ? "race-slide-from-right"
+      : slideFrom === "left"
+        ? "race-slide-from-left"
+        : "";
+  return (
+    <div
+      ref={ref}
+      className="my-auto flex w-full max-w-xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line"
+    >
+      {header}
+      <div className={`flex w-full flex-col items-center gap-4 ${slide}`}>{children}</div>
+    </div>
+  );
+}
+
+/**
+ * Centres the card on the part of its track that's on screen, not on the
+ * whole track: the track is taller than what's left of the window when the
+ * page opens, and a card centred on all of it would push Start below the
+ * fold. Once the whole track is in view, that's the true centre. Shifts with
+ * a transform (no layout), never past the track's edges. Below lg the card
+ * isn't on a veil (it sits under the track) and stays put.
+ */
+function useVisibleCenter(ref: RefObject<HTMLDivElement | null>) {
+  useEffect(() => {
+    const card = ref.current;
+    const veil = card?.closest<HTMLElement>("[data-race-veil]");
+    if (!card || !veil) return;
+    let frame = 0;
+    const place = () => {
+      frame = 0;
+      const box = veil.getBoundingClientRect();
+      const top = Math.max(box.top, HEADER_PX);
+      const bottom = Math.min(box.bottom, window.innerHeight);
+      if (bottom <= top) return;
+      const half = card.offsetHeight / 2;
+      const middle = box.top + box.height / 2;
+      const wanted = (top + bottom) / 2 - middle;
+      const highest = box.top + CARD_MARGIN_PX + half - middle;
+      const lowest = box.bottom - CARD_MARGIN_PX - half - middle;
+      const shift = highest > lowest ? 0 : Math.min(lowest, Math.max(highest, wanted));
+      card.style.transform = shift ? `translateY(${Math.round(shift)}px)` : "";
+    };
+    const schedule = () => {
+      if (!frame) frame = requestAnimationFrame(place);
+    };
+    place();
+    const resize = new ResizeObserver(schedule);
+    resize.observe(veil);
+    resize.observe(card);
+    window.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      resize.disconnect();
+      window.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [ref]);
 }
 
 function FlagIcon({ label }: { label: string }) {

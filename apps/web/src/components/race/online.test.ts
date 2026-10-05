@@ -28,14 +28,16 @@ describe("applyServerMessage", () => {
     const withError: OnlineState = { ...initialOnlineState, phase: "lobby", error: "nope" };
     const next = applyServerMessage(withError, {
       type: "lobby",
-      participants: [{ id: "p-0-1", number: 1, isBot: false }],
+      participants: [
+        { id: "p-0-1", number: 1, isBot: false },
+        { id: "b-0-2", number: 2, isBot: true, difficulty: "hard" },
+      ],
       leaderId: "p-0-1",
-      difficulty: "hard",
     });
-    expect(next.participants).toHaveLength(1);
+    expect(next.participants).toHaveLength(2);
+    expect(next.participants[1]!.difficulty).toBe("hard");
     expect(next.leaderId).toBe("p-0-1");
     expect(next.error).toBeNull();
-    expect(next.difficulty).toBe("hard");
   });
 
   test("a lobby broadcast once racing is ignored: the roster is frozen", () => {
@@ -44,7 +46,6 @@ describe("applyServerMessage", () => {
       type: "lobby",
       participants: [{ id: "p-0-1", number: 1, isBot: false }],
       leaderId: "p-0-1",
-      difficulty: "hard",
     });
     expect(next).toBe(racing);
   });

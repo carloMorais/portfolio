@@ -43,19 +43,21 @@ test("a race counts down, then the car answers the throttle", async ({ page, isM
   expect(Number(await game(page).getAttribute("data-tick"))).toBeGreaterThan(20);
 });
 
-test("a live board ranks every driver with their nitro, beside lap and time", async ({
+test("during a race, a live board ranks every driver beside lap and time", async ({
   page,
   isMobile,
 }) => {
   test.skip(isMobile, "phones get the one-line HUD instead (next test)");
   await page.goto(GAME);
   const board = page.getByRole("table", { name: "Standings" });
+  // Standings, times and records only show once there's a race.
+  await expect(board).toBeHidden();
+  await expect(page.getByText("Lap", { exact: true })).toBeHidden();
+  await expect(page.getByText("Best race", { exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "Start race" }).click();
   await expect(board.locator("tbody tr")).toHaveCount(4);
   await expect(board).toContainText("You");
   await expect(board.getByRole("img", { name: "no nitro" })).toHaveCount(4);
-  // Lap and time only show once there's a race.
-  await expect(page.getByText("Lap", { exact: true })).toBeHidden();
-  await page.getByRole("button", { name: "Start race" }).click();
   await expect(page.getByText("Lap", { exact: true })).toBeVisible();
 });
 

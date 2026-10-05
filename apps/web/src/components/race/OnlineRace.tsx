@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
@@ -9,13 +9,13 @@ import {
   createRace,
   standings,
   type Car,
+  type Difficulty,
   type Keys,
   type RaceState,
 } from "race-engine";
 import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
 import {
   CompactHud,
-  DifficultyPicker,
   FinishingVeil,
   LapPanel,
   RACE_GRID,
@@ -27,8 +27,10 @@ import {
   TouchPad,
   TrackOverlays,
   VEIL,
+  VEIL_ATTR,
   makeConfetti,
   type ConfettiPiece,
+  type SlideFrom,
 } from "./hud";
 import {
   apiWsUrl,
@@ -42,6 +44,7 @@ import {
 } from "./online";
 import { KeyTimeline, Predictor, Rtt, SnapshotBuffer, Smoother } from "./net";
 import {
+  DIFFICULTIES,
   bestLap,
   loadBest,
   resultRows,
@@ -98,11 +101,16 @@ type Outcome = { newRace: boolean; newLap: boolean };
 export function OnlineRace({
   invite,
   onPracticeInstead,
+  modeSwitch,
+  slideFrom,
 }: {
   /** A room code from an invite link (`?room=`), or null for any open room. */
   invite: string | null;
   /** While the server wakes up, the visitor can race the bots instead. */
   onPracticeInstead: () => void;
+  /** The practice/online switch, on top of the lobby and results cards. */
+  modeSwitch: ReactNode;
+  slideFrom: SlideFrom;
 }) {
   const t = useTranslations("Online");
   const tPlay = useTranslations("Play");
@@ -509,88 +517,151 @@ export function OnlineRace({
   const me = state.playerId ?? "";
   const phase = state.phase;
   const inRace = phase === "countdown" || phase === "racing" || phase === "finishing";
-  const waiting = phase === "connecting" || phase === "lobby";
+  /** Not in a race: the card (connecting, lobby, connection lost) is up. */
+  const outside = phase === "connecting" || phase === "lobby" || phase === "disconnected";
 
+  // Outside a race, one card: connecting, the lobby, or the connection lost.
   // On lg it sits over the track; below it there's no room, so it goes under it.
-  const lobby = (
-    <StartCard>
-      {inviteMissed && <p className="text-sm text-muted">{t("inviteMissed")}</p>}
-      <ul className="w-full space-y-1.5 text-left text-sm">
-        {state.participants.map((p) => (
-          <li
-            key={p.id}
-            className={`flex items-center justify-between rounded-lg px-3 py-1.5 ring-1 ring-line ${
-              p.id === state.playerId ? "bg-surface text-accent" : ""
-            }`}
-          >
-            <span>{renderName(p.id)}</span>
-            <span className="flex gap-1.5 text-xs text-muted">
-              {p.isBot && <span>{t("botBadge")}</span>}
-              {p.id === state.leaderId && <span className="text-accent">{t("leaderBadge")}</span>}
-            </span>
-          </li>
-        ))}
-      </ul>
-      {leading && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => send({ event: "add-bot" })}
-            className="btn btn-ghost px-4 py-2 text-sm"
-          >
-            {t("addBot")}
-          </button>
-          <button
-            type="button"
-            onClick={() => send({ event: "remove-bot" })}
-            disabled={!state.participants.some((p) => p.isBot)}
-            className="btn btn-ghost px-4 py-2 text-sm disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line"
-          >
-            {t("removeBot")}
-          </button>
-        </div>
-      )}
-      <DifficultyPicker
-        value={state.difficulty}
-        onChange={leading ? (d) => send({ event: "difficulty", data: d }) : undefined}
-        t={tPlay}
-      />
-      {state.roomId && (
-        <div className="w-full border-t border-line pt-4 text-sm">
-          <p className="text-muted">{t("inviteHint")}</p>
-          <button
-            type="button"
-            onClick={copyInvite}
-            className="mt-2 font-medium text-accent underline-offset-4 hover:underline"
-          >
-            {copied ? t("inviteCopied") : t("inviteCopy")}
-          </button>
-          <span role="status" className="sr-only">
-            {copied ? t("inviteCopied") : ""}
-          </span>
-        </div>
-      )}
-      {leading ? (
-        <div className="flex flex-col items-center gap-2">
-          <button
-            type="button"
-            onClick={() => send({ event: "start" })}
-            disabled={!enough}
-            className="btn btn-primary disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
-          >
-            {tPlay("start")}
-          </button>
-          {enough ? (
-            <p className="hidden text-xs text-muted lg:block">{tPlay("startHint")}</p>
-          ) : (
-            <p className="text-xs text-muted">{t("needTwoPlayers")}</p>
+  const card = (
+    <StartCard header={modeSwitch} slideFrom={slideFrom}>
+      {phase === "connecting" && (
+        <div className="flex flex-col items-center gap-3" role="status">
+          <p className="font-display text-2xl tracking-tight">
+            {t("connecting")}
+            {showColdStartHint && <span className="ml-2 text-muted tabular-nums">{waited} s</span>}
+          </p>
+          {showColdStartHint && (
+            <>
+              <p className="max-w-xs text-sm text-muted">{t("coldStartHint")}</p>
+              <button
+                type="button"
+                onClick={onPracticeInstead}
+                className="btn btn-ghost mt-1 text-sm"
+              >
+                {t("practiceMeanwhile")}
+              </button>
+            </>
           )}
         </div>
-      ) : (
-        <p className="text-sm text-muted">{t("waitingForLeader")}</p>
       )}
-      {transientError && (
-        <p className="text-xs text-accent">{state.busy ? t("serverBusy") : t("actionFailed")}</p>
+
+      {phase === "disconnected" && (
+        <div className="flex flex-col items-center gap-3">
+          <p className="font-display text-2xl tracking-tight">{t("disconnected")}</p>
+          {/* Turned away at the door (connection limit): say so, not just "lost". */}
+          {state.busy && <p className="max-w-xs text-sm text-muted">{t("serverBusy")}</p>}
+          <button type="button" onClick={reconnect} className="btn btn-primary">
+            {t("reconnect")}
+          </button>
+        </div>
+      )}
+
+      {phase === "lobby" && (
+        <>
+          {/* The room you're in, and its invite link right beside it. */}
+          {state.roomId && (
+            <div className="flex w-full items-center justify-between gap-3 rounded-lg bg-surface px-3 py-2 text-sm">
+              <span className="text-muted">
+                {t("room")} <span className="font-medium text-ink">{state.roomId}</span>
+              </span>
+              <button
+                type="button"
+                onClick={copyInvite}
+                className="rounded-full bg-bg px-3 py-1 text-xs font-medium text-accent ring-1 ring-line transition-colors hover:ring-ink"
+              >
+                {copied ? t("inviteCopied") : t("inviteCopy")}
+              </button>
+              <span role="status" className="sr-only">
+                {copied ? t("inviteCopied") : ""}
+              </span>
+            </div>
+          )}
+          {inviteMissed && <p className="text-sm text-muted">{t("inviteMissed")}</p>}
+          <ul className="w-full space-y-1.5 text-left text-sm">
+            {state.participants.map((p) => (
+              <li
+                key={p.id}
+                className={`flex min-h-10 items-center justify-between gap-3 rounded-lg px-3 py-1.5 ring-1 ring-line ${
+                  p.id === state.playerId ? "text-accent" : ""
+                }`}
+              >
+                <span>{renderName(p.id)}</span>
+                <span className="flex items-center gap-2 text-xs text-muted">
+                  {p.id === state.leaderId && (
+                    <span className="text-accent">{t("leaderBadge")}</span>
+                  )}
+                  {p.isBot && <span>{t("botBadge")}</span>}
+                  {/* Each bot drives at its own difficulty; only the leader sets it. */}
+                  {p.isBot &&
+                    (leading ? (
+                      <select
+                        aria-label={t("botDifficulty", { name: renderName(p.id) })}
+                        value={p.difficulty ?? "normal"}
+                        onChange={(e) =>
+                          send({
+                            event: "bot-difficulty",
+                            data: { bot: p.id, difficulty: e.target.value as Difficulty },
+                          })
+                        }
+                        className="rounded-md bg-bg py-1 pr-1 pl-2 text-xs text-ink ring-1 ring-line"
+                      >
+                        {DIFFICULTIES.map((d) => (
+                          <option key={d} value={d}>
+                            {tPlay(d)}
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <span className="text-ink">{tPlay(p.difficulty ?? "normal")}</span>
+                    ))}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {leading && (
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => send({ event: "add-bot" })}
+                className="btn btn-ghost px-4 py-2 text-sm"
+              >
+                {t("addBot")}
+              </button>
+              <button
+                type="button"
+                onClick={() => send({ event: "remove-bot" })}
+                disabled={!state.participants.some((p) => p.isBot)}
+                className="btn btn-ghost px-4 py-2 text-sm disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line"
+              >
+                {t("removeBot")}
+              </button>
+            </div>
+          )}
+          {leading ? (
+            <div className="flex flex-col items-center gap-2">
+              <button
+                type="button"
+                onClick={() => send({ event: "start" })}
+                disabled={!enough}
+                className="btn btn-primary disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
+              >
+                {tPlay("start")}
+              </button>
+              {enough ? (
+                <p className="hidden text-xs text-muted lg:block">{tPlay("startHint")}</p>
+              ) : (
+                <p className="text-xs text-muted">{t("needTwoPlayers")}</p>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-muted">{t("waitingForLeader")}</p>
+          )}
+          {transientError && (
+            <p className="text-xs text-accent">
+              {state.busy ? t("serverBusy") : t("actionFailed")}
+            </p>
+          )}
+        </>
       )}
     </StartCard>
   );
@@ -604,6 +675,7 @@ export function OnlineRace({
         myTime={result.cars.find((c) => c.id === me)?.finishedAt ?? null}
         outcome={outcome}
         name={renderName}
+        header={modeSwitch}
         t={tPlay}
       >
         <RestartButton
@@ -627,17 +699,11 @@ export function OnlineRace({
         {announcement}
       </p>
 
-      {/* In the lobby the card lists who's in; the race panels show once there's a race. */}
-      {!waiting && (
-        <StandingsBoard
-          board={hud.board}
-          me={state.playerId}
-          name={renderName}
-          hideOnPhones={inRace}
-          t={tPlay}
-        />
+      {/* Standings and times only while a race is on screen. */}
+      {inRace && (
+        <StandingsBoard board={hud.board} me={state.playerId} name={renderName} t={tPlay} />
       )}
-      <LapPanel hud={hud} laps={state.laps} best={best} idle={waiting} racing={inRace} t={tPlay} />
+      {inRace && <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />}
 
       <div className={TRACK_COLUMN}>
         {inRace && <CompactHud hud={hud} me={state.playerId} laps={state.laps} t={tPlay} />}
@@ -667,42 +733,8 @@ export function OnlineRace({
             phase === "lobby" ||
             phase === "disconnected" ||
             phase === "finished") && (
-            <div className={VEIL}>
-              {phase === "connecting" && (
-                <div className="flex flex-col items-center gap-3 text-center" role="status">
-                  <p className="font-display text-2xl tracking-tight">
-                    {t("connecting")}
-                    {showColdStartHint && (
-                      <span className="ml-2 text-muted tabular-nums">{waited} s</span>
-                    )}
-                  </p>
-                  {showColdStartHint && (
-                    <>
-                      <p className="max-w-xs text-sm text-muted">{t("coldStartHint")}</p>
-                      <button
-                        type="button"
-                        onClick={onPracticeInstead}
-                        className="btn btn-ghost mt-1 text-sm"
-                      >
-                        {t("practiceMeanwhile")}
-                      </button>
-                    </>
-                  )}
-                </div>
-              )}
-              {phase === "lobby" && (
-                <div className="hidden w-full justify-center self-stretch lg:flex">{lobby}</div>
-              )}
-              {phase === "disconnected" && (
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <p className="font-display text-2xl tracking-tight">{t("disconnected")}</p>
-                  {/* Turned away at the door (connection limit): say so, not just "lost". */}
-                  {state.busy && <p className="max-w-xs text-sm text-muted">{t("serverBusy")}</p>}
-                  <button type="button" onClick={reconnect} className="btn btn-primary">
-                    {t("reconnect")}
-                  </button>
-                </div>
-              )}
+            <div className={VEIL} {...VEIL_ATTR}>
+              {outside && <div className="hidden w-full justify-center lg:flex">{card}</div>}
               {phase === "finished" && (
                 <div className="hidden w-full justify-center lg:flex">{results(true)}</div>
               )}
@@ -710,7 +742,7 @@ export function OnlineRace({
           )}
         </div>
 
-        {phase === "lobby" && <div className="mt-4 flex justify-center lg:hidden">{lobby}</div>}
+        {outside && <div className="mt-4 flex justify-center lg:hidden">{card}</div>}
 
         {/* Below lg the results don't fit over the track: they take the touch controls' place. */}
         {phase === "finished" && (

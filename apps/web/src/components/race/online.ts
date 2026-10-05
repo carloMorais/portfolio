@@ -5,7 +5,13 @@ import type { Difficulty, Keys, WireTick } from "race-engine";
  * either side changes. The race state itself (`WireTick`) is shared code in
  * `race-engine`'s wire.ts, so the heaviest part can't drift.
  */
-export type LobbyParticipant = { id: string; number: number; isBot: boolean };
+export type LobbyParticipant = {
+  id: string;
+  number: number;
+  isBot: boolean;
+  /** Bots only: how this one drives, set by the leader. */
+  difficulty?: Difficulty;
+};
 
 export type StandingEntry = {
   carId: string;
@@ -31,7 +37,6 @@ export type ServerMessage =
       type: "lobby";
       participants: LobbyParticipant[];
       leaderId: string | null;
-      difficulty: Difficulty;
     }
   | { type: "start"; carIds: string[]; numbers: Record<string, number>; countdownMs: number }
   | StateMessage
@@ -46,7 +51,8 @@ export type ClientMessage =
   | { event: "input"; data: Keys }
   | { event: "add-bot" }
   | { event: "remove-bot" }
-  | { event: "difficulty"; data: Difficulty }
+  /** The leader sets one bot's difficulty. */
+  | { event: "bot-difficulty"; data: { bot: string; difficulty: Difficulty } }
   | { event: "start" }
   /** Our clock reading, echoed back in `pong` to measure the round trip. */
   | { event: "ping"; data: number };
@@ -107,7 +113,6 @@ export type OnlineState = {
   tickRate: number;
   participants: LobbyParticipant[];
   leaderId: string | null;
-  difficulty: Difficulty;
   /** The raw reason the server gave for rejecting the last action; English, developer-facing — never shown verbatim to the visitor. */
   error: string | null;
   carIds: string[];
@@ -127,7 +132,6 @@ export const initialOnlineState: OnlineState = {
   tickRate: 30,
   participants: [],
   leaderId: null,
-  difficulty: "normal",
   error: null,
   carIds: [],
   numbers: {},
@@ -166,7 +170,6 @@ export function applyServerMessage(
             ...state,
             participants: msg.participants,
             leaderId: msg.leaderId,
-            difficulty: msg.difficulty,
             error: null,
             busy: false,
           };

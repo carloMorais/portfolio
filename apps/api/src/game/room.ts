@@ -81,8 +81,8 @@ export class Room {
   private readonly numbers = new Map<string, number>();
   private readonly keys = new Map<string, Keys>();
   private nextNumber = 1;
-  /** Chosen by the leader; sets the bots' styles (the same three as practice mode's). */
-  private difficulty: Difficulty = "normal";
+  /** Each bot's difficulty, chosen by the leader per bot (the same styles as practice mode's). */
+  private readonly botDifficulty = new Map<string, Difficulty>();
   private humanIds: string[] = [];
   /** Tick at which every human was done, for the bots' grace period. */
   private humansDoneAt: number | null = null;
@@ -185,6 +185,7 @@ export class Room {
     const carId = `b-${this.botOrder.length}-${number}`;
     this.botOrder.push(carId);
     this.numbers.set(carId, number);
+    this.botDifficulty.set(carId, "normal");
     this.broadcastLobby();
     return { ok: true };
   }
@@ -195,18 +196,23 @@ export class Room {
     const carId = this.botOrder.pop();
     if (!carId) return { ok: false, message: "no bots to remove" };
     this.numbers.delete(carId);
+    this.botDifficulty.delete(carId);
     this.broadcastLobby();
     return { ok: true };
   }
 
-  setDifficulty(client: RoomClient, difficulty: unknown): ActionResult {
+  /** `data` comes off the wire: `{ bot, difficulty }`, checked here. */
+  setBotDifficulty(client: RoomClient, data: unknown): ActionResult {
     if (this.state !== "waiting") return { ok: false, message: "race already started" };
     if (!this.isLeader(client)) {
-      return { ok: false, message: "only the leader can set the difficulty" };
+      return { ok: false, message: "only the leader can set a bot's difficulty" };
     }
+    const { bot, difficulty } = (data ?? {}) as { bot?: unknown; difficulty?: unknown };
+    const id = this.botOrder.find((b) => b === bot);
+    if (!id) return { ok: false, message: "unknown bot" };
     const d = DIFFICULTIES.find((x) => x === difficulty);
     if (!d) return { ok: false, message: "unknown difficulty" };
-    this.difficulty = d;
+    this.botDifficulty.set(id, d);
     this.broadcastLobby();
     return { ok: true };
   }
@@ -267,14 +273,16 @@ export class Room {
 
   private tick() {
     if (!this.raceState) return;
-    const styles = BOT_STYLES[this.difficulty];
     const inputs: Record<string, Keys> = {};
     for (const car of this.raceState.cars) {
       const bot = this.botOrder.indexOf(car.id);
-      inputs[car.id] =
-        bot === -1
-          ? (this.keys.get(car.id) ?? NO_KEYS)
-          : botKeys(car, this.track, styles[bot % styles.length]);
+      if (bot === -1) {
+        inputs[car.id] = this.keys.get(car.id) ?? NO_KEYS;
+        continue;
+      }
+      // Bots of the same difficulty still drive a little differently (the three styles).
+      const styles = BOT_STYLES[this.botDifficulty.get(car.id) ?? "normal"];
+      inputs[car.id] = botKeys(car, this.track, styles[bot % styles.length]);
     }
     const s = stepRace(this.raceState, this.track, inputs);
     this.raceState = s;
@@ -329,9 +337,14 @@ export class Room {
     const leaderId = this.leader ? this.players.get(this.leader)!.carId : null;
     const participants = [
       ...[...this.players.values()].map((p) => ({ id: p.carId, number: p.number, isBot: false })),
-      ...this.botOrder.map((id) => ({ id, number: this.numbers.get(id)!, isBot: true })),
+      ...this.botOrder.map((id) => ({
+        id,
+        number: this.numbers.get(id)!,
+        isBot: true,
+        difficulty: this.botDifficulty.get(id) ?? "normal",
+      })),
     ];
-    this.broadcast({ type: "lobby", participants, leaderId, difficulty: this.difficulty });
+    this.broadcast({ type: "lobby", participants, leaderId });
   }
 
   private send(client: RoomClient, message: ServerMessage) {

@@ -136,7 +136,6 @@
     "racegameOriginal": "Versão original, de novembro de 2024: partida de teste com a sala cheia, 10 jogadores."
   },
   "Play": {
-    "lead": "Duas voltas contra três bots, rodando inteiras no seu navegador.",
     "start": "Começar corrida",
     "restart": "Correr de novo",
     "go": "Vai!",
@@ -198,7 +197,6 @@
   "Online": {
     "modeTraining": "Treino",
     "modeOnline": "Online",
-    "lead": "Até 10 pessoas na mesma sala, com a corrida rodando no servidor.",
     "canvasLabel": "Pista vista de cima com os carros dos jogadores conectados.",
     "connecting": "Conectando…",
     "coldStartHint": "O servidor gratuito dorme quando fica ocioso e leva até um minuto para acordar.",
@@ -216,9 +214,10 @@
     "reconnect": "Reconectar",
     "playAgain": "Jogar de novo",
     "practiceMeanwhile": "Treinar enquanto isso",
-    "inviteHint": "Para correr com alguém, mande o link desta sala.",
-    "inviteCopy": "Copiar link da sala",
+    "inviteCopy": "Copiar link",
     "inviteCopied": "Link copiado",
-    "inviteMissed": "A sala do convite já tinha começado, então você entrou numa sala nova."
+    "inviteMissed": "A sala do convite já tinha começado, então você entrou numa sala nova.",
+    "room": "Sala",
+    "botDifficulty": "Dificuldade de {name}"
   }
 }

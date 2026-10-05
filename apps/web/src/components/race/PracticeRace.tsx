@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
@@ -30,8 +30,10 @@ import {
   RACE_GRID,
   TRACK_COLUMN,
   VEIL,
+  VEIL_ATTR,
   makeConfetti,
   type ConfettiPiece,
+  type SlideFrom,
 } from "./hud";
 import {
   BOTS,
@@ -75,7 +77,14 @@ const newRace = () => createRace(track, [PLAYER, ...BOT_IDS], LAPS);
  * shared engine, and is drawn at the screen's refresh rate by interpolating
  * between the last two ticks.
  */
-export function PracticeRace() {
+export function PracticeRace({
+  modeSwitch,
+  slideFrom,
+}: {
+  /** The practice/online switch, on top of the start and results cards. */
+  modeSwitch: ReactNode;
+  slideFrom: SlideFrom;
+}) {
   const t = useTranslations("Play");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const trackLayer = useRef<HTMLCanvasElement | null>(null);
@@ -364,6 +373,7 @@ export function PracticeRace() {
         myTime={result.cars.find((c) => c.id === PLAYER)?.finishedAt ?? null}
         outcome={outcome}
         name={names}
+        header={modeSwitch}
         t={t}
       >
         <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
@@ -390,14 +400,9 @@ export function PracticeRace() {
         {announcement}
       </p>
 
-      <StandingsBoard
-        board={hud.board}
-        me={PLAYER}
-        name={names}
-        hideOnPhones={onTrack || phase === "ready"}
-        t={t}
-      />
-      <LapPanel hud={hud} laps={LAPS} best={best} idle={phase === "ready"} racing={onTrack} t={t} />
+      {/* Standings and times only while a race is on screen. */}
+      {onTrack && <StandingsBoard board={hud.board} me={PLAYER} name={names} t={t} />}
+      {onTrack && <LapPanel hud={hud} laps={LAPS} best={best} t={t} />}
 
       <div className={TRACK_COLUMN}>
         {onTrack && <CompactHud hud={hud} me={PLAYER} laps={LAPS} t={t} />}
@@ -427,9 +432,9 @@ export function PracticeRace() {
 
           {/* The countdown has no veil: the grid and the lights stay in full view. */}
           {(phase === "ready" || phase === "paused" || phase === "finished") && (
-            <div className={VEIL}>
+            <div className={VEIL} {...VEIL_ATTR}>
               {phase === "ready" && (
-                <StartCard>
+                <StartCard header={modeSwitch} slideFrom={slideFrom}>
                   {/* Phones: the track is too short for the legend too; it goes under the controls. */}
                   <div className="w-full max-lg:hidden">
                     <Controls />

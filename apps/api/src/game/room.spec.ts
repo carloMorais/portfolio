@@ -19,9 +19,8 @@ function fakeClient(): RoomClient & { messages: unknown[] } {
 function lastLobby(client: RoomClient & { messages: unknown[] }) {
   const lobbies = client.messages.filter((m) => (m as { type: string }).type === "lobby");
   return lobbies.at(-1) as {
-    participants: { id: string; number: number; isBot: boolean }[];
+    participants: { id: string; number: number; isBot: boolean; difficulty?: string }[];
     leaderId: string | null;
-    difficulty: string;
   };
 }
 
@@ -157,18 +156,27 @@ describe("Room", () => {
     jest.useRealTimers();
   });
 
-  test("only the leader picks the bots' difficulty, and only a known one", () => {
+  test("only the leader sets each bot's difficulty, and only a known one", () => {
     const room = new Room("r14", jest.fn(), jest.fn());
     const alice = fakeClient();
     const bob = fakeClient();
     room.join(alice);
     room.join(bob);
-    expect(lastLobby(bob).difficulty).toBe("normal");
+    room.addBot(alice);
+    room.addBot(alice);
+    const [first, second] = lastLobby(bob).participants.filter((p) => p.isBot);
+    expect([first!.difficulty, second!.difficulty]).toEqual(["normal", "normal"]);
+    const no = { ok: false, message: expect.any(String) };
 
-    expect(room.setDifficulty(bob, "hard")).toEqual({ ok: false, message: expect.any(String) });
-    expect(room.setDifficulty(alice, "insane")).toEqual({ ok: false, message: expect.any(String) });
-    expect(room.setDifficulty(alice, "hard")).toEqual({ ok: true });
-    expect(lastLobby(bob).difficulty).toBe("hard");
+    expect(room.setBotDifficulty(bob, { bot: first!.id, difficulty: "hard" })).toEqual(no);
+    expect(room.setBotDifficulty(alice, { bot: first!.id, difficulty: "insane" })).toEqual(no);
+    expect(room.setBotDifficulty(alice, { bot: "p-0-1", difficulty: "hard" })).toEqual(no);
+    expect(room.setBotDifficulty(alice, "hard")).toEqual(no);
+    expect(room.setBotDifficulty(alice, { bot: first!.id, difficulty: "hard" })).toEqual({
+      ok: true,
+    });
+    const bots = lastLobby(bob).participants.filter((p) => p.isBot);
+    expect(bots.map((p) => p.difficulty)).toEqual(["hard", "normal"]);
   });
 
   test("once every human is gone the race ends, instead of ticking on for nobody", () => {
@@ -276,7 +284,8 @@ describe("Room", () => {
     const alice = fakeClient();
     room.join(alice);
     room.addBot(alice);
-    room.setDifficulty(alice, "easy");
+    const bot = lastLobby(alice).participants.find((p) => p.isBot)!.id;
+    room.setBotDifficulty(alice, { bot, difficulty: "easy" });
     room.startRace(alice);
     const start = ofType(alice, "start")[0]!;
     const carIds = start.carIds as string[];
