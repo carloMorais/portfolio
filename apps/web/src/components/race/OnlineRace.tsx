@@ -4,13 +4,15 @@ import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
+  RaceDecoder,
   classicTrack as track,
   createRace,
   standings,
+  type Car,
   type Keys,
   type RaceState,
 } from "race-engine";
-import { readPalette, type CarLook, type Palette } from "./draw";
+import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
 import {
   DifficultyPicker,
   FinishingVeil,
@@ -31,11 +33,11 @@ import {
   applyServerMessage,
   initialOnlineState,
   isLeader,
-  toRaceState,
   type ClientMessage,
   type OnlineState,
   type ServerMessage,
 } from "./online";
+import { KeyTimeline, Predictor, Rtt, SnapshotBuffer, Smoother } from "./net";
 import {
   bestLap,
   loadBest,
@@ -55,12 +57,14 @@ import {
   type Hud,
 } from "./view";
 
-const STEP_MS = 1000 / 30;
 /** How long "couldn't complete that action" stays up before fading. */
 const ERROR_MS = 3000;
 /** After this long still connecting, the Render cold-start hint shows up. */
 const COLD_START_MS = 4000;
-const ITEM_IDS = track.items.map((it) => it.id);
+/** How often the round trip is measured (also keeps idle lobby connections alive). */
+const PING_MS = 2000;
+/** The server's "try again later" close code: it's at its connection limit (see the API's limits.ts). */
+const CLOSE_BUSY = 1013;
 
 const racerNumber = (s: OnlineState, id: string) =>
   s.numbers[id] ?? s.participants.find((p) => p.id === id)?.number ?? 0;
@@ -76,9 +80,15 @@ type Outcome = { newRace: boolean; newLap: boolean };
  * gateway), 30 ticks/s. Everything practice mode shows — start lights,
  * effects, the next checkpoint, wrong way, last lap, live standings, sector
  * delta, lap times, record, confetti, results — is drawn here from the
- * server's ticks with the same `RaceView` and HUD, interpolating between the
- * last two. No local physics and no bots computed here. No pause either: the
- * race goes on for everyone.
+ * server's ticks with the same `RaceView` and HUD. No bots are computed here,
+ * and no pause either: the race goes on for everyone.
+ *
+ * How the cars are drawn (see net.ts): the server's states arrive ~15 times a
+ * second in a compact format (`RaceDecoder`); the other cars are shown a
+ * little in the past, interpolated between two real states (`SnapshotBuffer`),
+ * and yours is predicted ahead by running the engine locally with the keys
+ * you sent (`Predictor`), so it answers at once instead of a round trip
+ * later. Rankings, laps and warnings always come from the server's state.
  */
 export function OnlineRace() {
   const t = useTranslations("Online");
@@ -87,10 +97,14 @@ export function OnlineRace() {
   const trackLayer = useRef<HTMLCanvasElement | null>(null);
   const palette = useRef<Palette | null>(null);
   const keysRef = useRef<Keys>({ ...NO_KEYS });
+  /** The latest server state (rankings, laps, warnings) or, before the race, the grid. */
   const race = useRef<RaceState>(EMPTY);
-  const prev = useRef<RaceState | null>(null);
-  /** When the latest tick arrived, to interpolate towards it. */
-  const tickAt = useRef(0);
+  const decoder = useRef<RaceDecoder | null>(null);
+  const buffer = useRef(new SnapshotBuffer());
+  const timeline = useRef(new KeyTimeline());
+  const predictor = useRef(new Predictor());
+  const smoother = useRef(new Smoother());
+  const rtt = useRef(new Rtt());
   const wsRef = useRef<WebSocket | null>(null);
   const view = useRef<RaceView | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -140,7 +154,6 @@ export function OnlineRace() {
       state.participants.map((p) => p.id),
       state.laps,
     );
-    prev.current = null;
   }, [state.phase, state.participants, state.laps]);
 
   // Track and colours, same renderer as practice mode.
@@ -175,11 +188,18 @@ export function OnlineRace() {
   useEffect(() => {
     let live = true;
     race.current = EMPTY;
-    prev.current = null;
+    decoder.current = null;
+    buffer.current.clear();
+    predictor.current.clear();
     const coldStartTimer = setTimeout(() => setShowColdStartHint(true), COLD_START_MS);
 
     const ws = new WebSocket(apiWsUrl());
     wsRef.current = ws;
+    const ping = () =>
+      ws.readyState === WebSocket.OPEN &&
+      ws.send(JSON.stringify({ event: "ping", data: performance.now() }));
+    ws.addEventListener("open", ping);
+    const pinger = setInterval(ping, PING_MS);
 
     ws.addEventListener("message", (event) => {
       if (!live) return;
@@ -187,10 +207,21 @@ export function OnlineRace() {
       const now = performance.now();
       const v = view.current;
       const me = stateRef.current.playerId;
+      if (msg.type === "pong") {
+        rtt.current.sample(now - msg.t);
+        return;
+      }
       if (msg.type === "state") {
-        prev.current = race.current;
-        race.current = toRaceState(msg, stateRef.current.laps, ITEM_IDS);
-        tickAt.current = now;
+        if (!decoder.current) return;
+        race.current = decoder.current.apply(msg);
+        buffer.current.push(race.current, now);
+        // Re-base the prediction on the server's truth; the smoother hides the correction.
+        if (me) {
+          predictor.current.reset(race.current, now, me);
+          smoother.current.correct(
+            predictor.current.at(now, rtt.current.value, (t) => timeline.current.keysAt(t)),
+          );
+        }
         const p = palette.current;
         if (v && p && v.react(race.current, p, now, bestRef.current.splits)) {
           setAnnouncement(tPlay("announceLastLap"));
@@ -211,8 +242,12 @@ export function OnlineRace() {
         return;
       }
       if (msg.type === "start") {
-        race.current = createRace(track, msg.carIds, stateRef.current.laps);
-        prev.current = null;
+        decoder.current = new RaceDecoder(track, msg.carIds, stateRef.current.laps);
+        race.current = decoder.current.initial();
+        buffer.current.clear();
+        timeline.current.clear();
+        predictor.current.clear();
+        smoother.current.clear();
         keysRef.current = { ...NO_KEYS };
         v?.reset();
         doneRef.current = false;
@@ -229,13 +264,16 @@ export function OnlineRace() {
       if (msg.type === "finished") finish(race.current);
       dispatch(msg);
     });
-    const onLost = () => live && dispatch({ type: "room-closed" });
-    ws.addEventListener("close", onLost);
-    ws.addEventListener("error", onLost);
+    ws.addEventListener(
+      "close",
+      (e) => live && dispatch({ type: "room-closed", busy: e.code === CLOSE_BUSY }),
+    );
+    ws.addEventListener("error", () => live && dispatch({ type: "room-closed" }));
 
     return () => {
       live = false;
       clearTimeout(coldStartTimer);
+      clearInterval(pinger);
       ws.close();
       wsRef.current = null;
     };
@@ -244,6 +282,17 @@ export function OnlineRace() {
   const send = (message: ClientMessage) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(message));
   };
+
+  /**
+   * Sends the keys held now, and notes when: the predictor replays exactly
+   * what the server will apply, so the timeline has to match what was sent.
+   */
+  const sendKeys = useCallback(() => {
+    const ws = wsRef.current;
+    if (ws?.readyState !== WebSocket.OPEN) return;
+    ws.send(JSON.stringify({ event: "input", data: keysRef.current }));
+    timeline.current.record(performance.now(), keysRef.current);
+  }, []);
 
   const reconnect = useCallback(() => {
     setShowColdStartHint(false);
@@ -262,9 +311,6 @@ export function OnlineRace() {
       const p = stateRef.current.phase;
       return p === "countdown" || p === "racing";
     };
-    const sendKeys = () =>
-      wsRef.current?.readyState === WebSocket.OPEN &&
-      wsRef.current.send(JSON.stringify({ event: "input", data: keysRef.current }));
     const onDown = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey) return;
       const s = stateRef.current;
@@ -313,7 +359,7 @@ export function OnlineRace() {
       window.removeEventListener("blur", away);
       document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, [reconnect]);
+  }, [reconnect, sendKeys]);
 
   // The results take the keyboard focus, so Enter races again.
   useEffect(() => {
@@ -322,10 +368,10 @@ export function OnlineRace() {
 
   const press = (key: keyof Keys, down: boolean) => {
     keysRef.current = { ...keysRef.current, [key]: down };
-    send({ event: "input", data: keysRef.current });
+    sendKeys();
   };
 
-  // Draw loop: interpolates between the last two server ticks.
+  // Draw loop: others interpolated from the buffer, you predicted (see net.ts).
   useEffect(() => {
     let raf = 0;
     let hudAt = 0;
@@ -344,6 +390,24 @@ export function OnlineRace() {
         return { body: p.c.bots[n % p.c.bots.length]!, helmet: p.c.helmet, stripe: false };
       };
 
+    /** The latest server state with every car where it should be drawn at `now`. */
+    const shownState = (now: number): RaceState => {
+      const s = race.current;
+      const sample = buffer.current.sample(now);
+      if (!sample) return s; // lobby, lights: the grid as it is
+      const me = stateRef.current.playerId;
+      const predicted = predictor.current.at(now, rtt.current.value, (t) =>
+        timeline.current.keysAt(t),
+      );
+      const cars = s.cars.map((car): Car => {
+        if (car.id === me && predicted) return smoother.current.apply(predicted, now);
+        const a = sample.a.cars.find((c) => c.id === car.id);
+        const b = sample.b.cars.find((c) => c.id === car.id) ?? car;
+        return interpolateCar(a, b, sample.alpha);
+      });
+      return { ...s, cars };
+    };
+
     const frame = (now: number) => {
       const phase = stateRef.current.phase;
       if (countdownEnd.current !== null && now >= countdownEnd.current) {
@@ -358,9 +422,9 @@ export function OnlineRace() {
       const p = palette.current;
       if (canvas && p && trackLayer.current) {
         const ctx = sizeCanvas(canvas);
-        const alpha = Math.min(1, (now - tickAt.current) / STEP_MS);
-        v.draw(ctx, trackLayer.current, race.current, prev.current, alpha, p, now, {
-          moving: running,
+        // Positions are already worked out per car (shownState), so the view draws them as given.
+        v.draw(ctx, trackLayer.current, shownState(now), null, 0, p, now, {
+          moving: false,
           running,
           look: look(p),
           name: names,
@@ -456,7 +520,9 @@ export function OnlineRace() {
           )}
         </div>
       )}
-      {transientError && <p className="text-xs text-accent">{t("actionFailed")}</p>}
+      {transientError && (
+        <p className="text-xs text-accent">{state.busy ? t("serverBusy") : t("actionFailed")}</p>
+      )}
     </div>
   );
 
@@ -537,6 +603,8 @@ export function OnlineRace() {
               {phase === "disconnected" && (
                 <div className="flex flex-col items-center gap-3 text-center">
                   <p className="font-display text-2xl tracking-tight">{t("disconnected")}</p>
+                  {/* Turned away at the door (connection limit): say so, not just "lost". */}
+                  {state.busy && <p className="max-w-xs text-sm text-muted">{t("serverBusy")}</p>}
                   <button type="button" onClick={reconnect} className="btn btn-primary">
                     {t("reconnect")}
                   </button>

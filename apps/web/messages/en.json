@@ -219,6 +219,7 @@
     "needTwoPlayers": "Needs at least 2 players to start",
     "roomFull": "The room is full",
     "actionFailed": "Couldn't complete that action.",
+    "serverBusy": "The server is full right now. Try again in a moment.",
     "disconnected": "Connection lost.",
     "reconnect": "Reconnect",
     "playAgain": "Play again"

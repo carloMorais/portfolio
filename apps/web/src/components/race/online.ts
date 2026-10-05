@@ -1,26 +1,11 @@
-import { createCar, type Difficulty, type Keys, type RaceEvent, type RaceState } from "race-engine";
+import type { Difficulty, Keys, WireTick } from "race-engine";
 
 /**
- * Mirrors `apps/api/src/game/protocol.ts` — the two aren't a shared package,
- * so keep them in sync by hand when either side changes.
+ * Mirrors `apps/api/src/game/protocol.ts` — keep them in sync by hand when
+ * either side changes. The race state itself (`WireTick`) is shared code in
+ * `race-engine`'s wire.ts, so the heaviest part can't drift.
  */
 export type LobbyParticipant = { id: string; number: number; isBot: boolean };
-
-export type CarSnapshot = {
-  id: string;
-  x: number;
-  y: number;
-  rotation: number;
-  vx: number;
-  vy: number;
-  checkpoint: number;
-  waypoint: number;
-  laps: number;
-  nitro: number;
-  nitroUntil: number | null;
-  finishedAt: number | null;
-  lapTicks: number[];
-};
 
 export type StandingEntry = {
   carId: string;
@@ -30,14 +15,8 @@ export type StandingEntry = {
   finishedAt: number | null;
 };
 
-export type StateMessage = {
-  type: "state";
-  tick: number;
-  cars: CarSnapshot[];
-  items: string[];
-  finished: string[];
-  events: RaceEvent[];
-};
+/** The race, in the compact format of `race-engine`'s wire.ts. */
+export type StateMessage = { type: "state" } & WireTick;
 
 export type ServerMessage =
   | {
@@ -57,15 +36,20 @@ export type ServerMessage =
   | { type: "start"; carIds: string[]; numbers: Record<string, number>; countdownMs: number }
   | StateMessage
   | { type: "finished"; standings: StandingEntry[] }
-  | { type: "error"; message: string }
-  | { type: "room-closed" };
+  /** `code: "busy"`: the server is at its race limit (the visitor is told). */
+  | { type: "error"; message: string; code?: "busy" }
+  | { type: "pong"; t: number }
+  /** Sent locally when the socket closes; `busy` when the server turned us away (code 1013). */
+  | { type: "room-closed"; busy?: boolean };
 
 export type ClientMessage =
   | { event: "input"; data: Keys }
   | { event: "add-bot" }
   | { event: "remove-bot" }
   | { event: "difficulty"; data: Difficulty }
-  | { event: "start" };
+  | { event: "start" }
+  /** Our clock reading, echoed back in `pong` to measure the round trip. */
+  | { event: "ping"; data: number };
 
 /**
  * What happens on this side only: the start lights going out, you crossing
@@ -101,6 +85,8 @@ export type OnlineState = {
   carIds: string[];
   numbers: Record<string, number>;
   countdownMs: number;
+  /** The server is full (too many races or connections): shown instead of a generic error. */
+  busy: boolean;
   /** Set once the server says the race is over (skipping to the results doesn't). */
   standings: StandingEntry[] | null;
 };
@@ -117,6 +103,7 @@ export const initialOnlineState: OnlineState = {
   carIds: [],
   numbers: {},
   countdownMs: 0,
+  busy: false,
   standings: null,
 };
 
@@ -151,6 +138,7 @@ export function applyServerMessage(
             leaderId: msg.leaderId,
             difficulty: msg.difficulty,
             error: null,
+            busy: false,
           };
     case "start":
       return {
@@ -174,32 +162,17 @@ export function applyServerMessage(
     case "finished":
       return { ...state, phase: "finished", standings: msg.standings };
     case "error":
-      return { ...state, error: msg.message };
+      return { ...state, error: msg.message, busy: msg.code === "busy" };
     case "room-closed":
       // The results stay up if the connection drops after the race.
-      return state.phase === "finished" ? state : { ...state, phase: "disconnected" };
+      return state.phase === "finished"
+        ? state
+        : { ...state, phase: "disconnected", busy: msg.busy === true };
     case "state":
+    case "pong":
       return state;
   }
 }
 
 export const isLeader = (state: OnlineState) =>
   state.playerId !== null && state.playerId === state.leaderId;
-
-/**
- * A server tick as the engine's own `RaceState`, so the practice-mode
- * renderer, standings and warnings work on it unchanged. The physics-only
- * fields the server doesn't send keep the engine's defaults.
- */
-export function toRaceState(msg: StateMessage, laps: number, itemIds: string[]): RaceState {
-  const on = new Set(msg.items);
-  return {
-    tick: msg.tick,
-    laps,
-    cars: msg.cars.map((c) => ({ ...createCar(c.id, c.x, c.y), ...c })),
-    // Only presence matters to `activeItems`, not when an item comes back.
-    itemRespawnAt: Object.fromEntries(itemIds.filter((id) => !on.has(id)).map((id) => [id, 0])),
-    finished: msg.finished,
-    events: msg.events,
-  };
-}

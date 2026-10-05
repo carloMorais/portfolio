@@ -1,23 +1,32 @@
 import {
   BOT_STYLES,
   DIFFICULTIES,
-  activeItems,
   botKeys,
   classicTrack,
   createRace,
+  encodeTick,
   NO_KEYS,
   standings,
   stepRace,
   TICK_RATE,
-  type Car,
   type Difficulty,
   type Keys,
+  type RaceEvent,
   type RaceState,
 } from "race-engine/node";
-import type { CarSnapshot, ServerMessage } from "./protocol";
+import { CLOSE_TOO_SLOW, MAX_BUFFERED_BYTES } from "./limits";
+import type { ServerMessage } from "./protocol";
 
-/** Anything the room can send a message to; `ws.WebSocket` satisfies this, so do test doubles. */
-export type RoomClient = { send(data: string): void };
+/**
+ * Anything the room can send a message to; `ws.WebSocket` satisfies this, so
+ * do test doubles. `bufferedAmount` and `close` are there for backpressure
+ * (see `broadcast`); doubles may leave them out.
+ */
+export type RoomClient = {
+  send(data: string): void;
+  bufferedAmount?: number;
+  close?(code: number, reason?: string): void;
+};
 
 const LAPS = 2;
 const CAPACITY = 10;
@@ -29,34 +38,32 @@ const MIN_PARTICIPANTS = 2;
 export const COUNTDOWN_MS = 3000;
 /** Once every human is done (finished or gone), the bots get this long to finish, as in practice. */
 const WAIT_TICKS = TICK_RATE * 45;
+const STEP_MS = 1000 / TICK_RATE;
+/**
+ * The simulation runs at 30 ticks/s, but state goes out every 2nd tick
+ * (15 messages/s): half the bandwidth, and clients interpolate between
+ * messages anyway (`OnlineRace.tsx`'s jitter buffer), with prediction keeping
+ * your own car instant. Events from the skipped tick ride along in the next
+ * message, so none is lost.
+ */
+export const SEND_EVERY = 2;
+/**
+ * At most this many ticks are run back to back to catch up after the process
+ * was late (a GC pause, or CPU throttling on Render's 0.1-CPU plan). Further
+ * behind than that, the race slows down instead of fast-forwarding in a burst.
+ */
+const MAX_CATCH_UP = 5;
 
 type Player = { carId: string; number: number };
-type ActionResult = { ok: true } | { ok: false; message: string };
+/** `code: "busy"` is the one rejection the client explains to the visitor (see protocol.ts). */
+export type ActionResult = { ok: true } | { ok: false; message: string; code?: "busy" };
 type RoomOptions = { countdownMs?: number };
-
-const round2 = (n: number) => Math.round(n * 100) / 100;
-
-const snapshot = (c: Car): CarSnapshot => ({
-  id: c.id,
-  x: round2(c.x),
-  y: round2(c.y),
-  rotation: round2(c.rotation),
-  vx: round2(c.vx),
-  vy: round2(c.vy),
-  checkpoint: c.checkpoint,
-  waypoint: c.waypoint,
-  laps: c.laps,
-  nitro: c.nitro,
-  nitroUntil: c.nitroUntil,
-  finishedAt: c.finishedAt,
-  lapTicks: c.lapTicks,
-});
 
 /**
  * One race room: the first player in is the leader, who adds/removes bots,
  * picks how they drive and decides when to start (never a timer) — then the
  * start lights run, and the room runs the authoritative simulation at
- * `TICK_RATE` and broadcasts every tick.
+ * `TICK_RATE` and broadcasts every `SEND_EVERY` ticks.
  *
  * Each racer (human or bot) only gets a sequential number, never a name
  * string: the site is bilingual, and "Piloto N"/"Driver N" has to be worded
@@ -80,7 +87,12 @@ export class Room {
   /** Tick at which every human was done, for the bots' grace period. */
   private humansDoneAt: number | null = null;
   private raceState: RaceState | null = null;
-  private tickTimer: ReturnType<typeof setInterval> | null = null;
+  private tickTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Wall-clock time (ms) the next tick is due; see `loop`. */
+  private nextTickAt = 0;
+  /** Events of ticks not sent yet (`SEND_EVERY`). */
+  private pendingEvents: RaceEvent[] = [];
+  private lastSentTick = 0;
   private countdownTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly countdownMs: number;
 
@@ -93,6 +105,11 @@ export class Room {
   ) {
     this.id = id;
     this.countdownMs = options.countdownMs ?? COUNTDOWN_MS;
+  }
+
+  /** Counts against `MAX_RACING_ROOMS` (see RoomService). */
+  get isRacing() {
+    return this.state === "countdown" || this.state === "racing";
   }
 
   get playerCount() {
@@ -214,9 +231,38 @@ export class Room {
     this.countdownTimer = setTimeout(() => {
       this.countdownTimer = null;
       this.state = "racing";
-      this.tickTimer = setInterval(() => this.tick(), 1000 / TICK_RATE).unref();
+      this.nextTickAt = Date.now() + STEP_MS;
+      this.schedule();
     }, this.countdownMs).unref();
     return { ok: true };
+  }
+
+  /**
+   * Fixed-timestep loop. A plain `setInterval(tick, 33.3)` ran at only ~23
+   * ticks/s on Windows (timers there fire on a 15.6 ms grid, so 33.3 ms became
+   * 46.9 ms) and drifts on Linux too, since each late callback pushes the next
+   * one back: the online race ran slower than practice mode. Here the room
+   * keeps the wall-clock time the next tick is due and, whenever the timer
+   * fires, runs every tick that time owes — so the race keeps real time even
+   * when timers are coarse or late.
+   */
+  private schedule() {
+    const delay = Math.max(0, this.nextTickAt - Date.now());
+    this.tickTimer = setTimeout(() => this.loop(), delay).unref();
+  }
+
+  private loop() {
+    this.tickTimer = null;
+    const now = Date.now();
+    let ran = 0;
+    while (this.state === "racing" && now >= this.nextTickAt && ran < MAX_CATCH_UP) {
+      this.tick();
+      this.nextTickAt += STEP_MS;
+      ran++;
+    }
+    // Hopelessly behind: carry on from now rather than replay the backlog.
+    if (now - this.nextTickAt > MAX_CATCH_UP * STEP_MS) this.nextTickAt = now + STEP_MS;
+    if (this.state === "racing") this.schedule();
   }
 
   private tick() {
@@ -233,14 +279,8 @@ export class Room {
     const s = stepRace(this.raceState, this.track, inputs);
     this.raceState = s;
 
-    this.broadcast({
-      type: "state",
-      tick: s.tick,
-      cars: s.cars.map(snapshot),
-      items: activeItems(this.track, s).map((it) => it.id),
-      finished: s.finished,
-      events: s.events,
-    });
+    this.pendingEvents.push(...s.events);
+    if (s.tick % SEND_EVERY === 0) this.sendState();
 
     // Every human done (finished or gone): the bots get a grace period, as in practice.
     const connected = new Set([...this.players.values()].map((p) => p.carId));
@@ -253,9 +293,19 @@ export class Room {
     if (allFinished || graceOver || s.tick >= MAX_TICKS) this.finish();
   }
 
+  /** The latest tick plus every event since the last message, in the compact format. */
+  private sendState() {
+    if (!this.raceState) return;
+    this.broadcast({ type: "state", ...encodeTick(this.raceState, this.pendingEvents) });
+    this.pendingEvents = [];
+    this.lastSentTick = this.raceState.tick;
+  }
+
   private finish() {
     if (!this.raceState || this.state === "done") return;
-    if (this.tickTimer) clearInterval(this.tickTimer);
+    // The last tick (and its events, e.g. the final lap) may not have gone out yet.
+    if (this.state === "racing" && this.raceState.tick > this.lastSentTick) this.sendState();
+    if (this.tickTimer) clearTimeout(this.tickTimer);
     if (this.countdownTimer) clearTimeout(this.countdownTimer);
     this.tickTimer = null;
     this.countdownTimer = null;
@@ -288,8 +338,20 @@ export class Room {
     client.send(JSON.stringify(message));
   }
 
+  /**
+   * One JSON encoding for everyone. A client whose unsent data has piled up
+   * past `MAX_BUFFERED_BYTES` (a stalled phone, a dead network) is closed
+   * instead of buffering forever; it can't simply skip messages, because the
+   * client rebuilds items and lap times from the events in every one.
+   */
   private broadcast(message: ServerMessage) {
     const body = JSON.stringify(message);
-    for (const client of this.players.keys()) client.send(body);
+    for (const client of this.players.keys()) {
+      if ((client.bufferedAmount ?? 0) > MAX_BUFFERED_BYTES) {
+        client.close?.(CLOSE_TOO_SLOW, "too slow");
+        continue;
+      }
+      client.send(body);
+    }
   }
 }

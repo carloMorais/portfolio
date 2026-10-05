@@ -219,6 +219,7 @@
     "needTwoPlayers": "Precisa de pelo menos 2 jogadores para começar",
     "roomFull": "A sala está cheia",
     "actionFailed": "Não foi possível concluir essa ação.",
+    "serverBusy": "O servidor está cheio agora. Tente de novo em alguns instantes.",
     "disconnected": "Conexão perdida.",
     "reconnect": "Reconectar",
     "playAgain": "Jogar de novo"

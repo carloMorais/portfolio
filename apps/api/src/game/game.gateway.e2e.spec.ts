@@ -5,6 +5,7 @@ import { WsAdapter } from "@nestjs/platform-ws";
 import { NO_KEYS } from "race-engine/node";
 import WebSocket from "ws";
 import { GameModule } from "./game.module";
+import { CLOSE_BUSY, CLOSE_POLICY, MAX_CONNECTIONS_PER_IP, MAX_PAYLOAD_BYTES } from "./limits";
 
 /**
  * Exercises the real WebSocket wiring end to end (the `ws` adapter's message
@@ -41,12 +42,14 @@ describe("GameGateway (e2e)", () => {
    * "lobby" to everyone already in the room — so each connect (yours or
    * anyone else's) queues exactly one more "lobby" for every open socket.
    */
-  function connect(): Promise<{ socket: WebSocket; next: () => Promise<Msg> }> {
+  function connect(
+    headers: Record<string, string> = {},
+  ): Promise<{ socket: WebSocket; next: () => Promise<Msg> }> {
     const queue: Msg[] = [];
     const waiters: ((msg: Msg) => void)[] = [];
 
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url);
+      const socket = new WebSocket(url, { headers });
       socket.on("message", (raw) => {
         const msg = JSON.parse(raw.toString());
         const waiter = waiters.shift();
@@ -67,6 +70,10 @@ describe("GameGateway (e2e)", () => {
       socket.once("error", reject);
     });
   }
+
+  /** Resolves with the close code the server closed this socket with. */
+  const closed = (socket: WebSocket) =>
+    new Promise<number>((resolve) => socket.once("close", (code) => resolve(code)));
 
   test("a connecting client is welcomed with a server-assigned number", async () => {
     const { socket, next } = await connect();
@@ -165,5 +172,48 @@ describe("GameGateway (e2e)", () => {
       expect.objectContaining({ type: "error", message: expect.stringContaining("2") }),
     );
     socket.close();
+  });
+
+  test("ping is echoed as pong, for the client's round-trip measurement", async () => {
+    const { socket, next } = await connect();
+    await next(); // welcome
+    await next(); // lobby
+    socket.send(JSON.stringify({ event: "ping", data: 1234.5 }));
+    expect(await next()).toEqual({ type: "pong", t: 1234.5 });
+    socket.close();
+  });
+
+  test("a message over the size limit closes the socket (ws code 1009)", async () => {
+    const { socket } = await connect();
+    const code = closed(socket);
+    socket.send(JSON.stringify({ event: "input", data: { pad: "x".repeat(MAX_PAYLOAD_BYTES) } }));
+    expect(await code).toBe(1009);
+  });
+
+  test("a socket flooding messages is cut off at once (abnormal close, 1006)", async () => {
+    const { socket } = await connect();
+    const code = closed(socket);
+    const input = JSON.stringify({ event: "input", data: NO_KEYS });
+    for (let i = 0; i < 2000 && socket.readyState === WebSocket.OPEN; i++) socket.send(input);
+    expect(await code).toBe(1006);
+  });
+
+  test("past the per-IP cap, a new socket is turned away as busy", async () => {
+    const open = [];
+    for (let i = 0; i < MAX_CONNECTIONS_PER_IP; i++) open.push((await connect()).socket);
+    const extra = await connect();
+    expect(await closed(extra.socket)).toBe(CLOSE_BUSY);
+    open.forEach((s) => s.close());
+  });
+
+  test("in production, a socket from another site is refused", async () => {
+    const env = process.env.NODE_ENV;
+    process.env.NODE_ENV = "production";
+    try {
+      const { socket } = await connect({ origin: "https://evil.example" });
+      expect(await closed(socket)).toBe(CLOSE_POLICY);
+    } finally {
+      process.env.NODE_ENV = env;
+    }
   });
 });

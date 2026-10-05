@@ -1,11 +1,8 @@
-import { activeItems, classicTrack, standings, wrongWay } from "race-engine";
 import {
   apiWsUrl,
   applyServerMessage,
   initialOnlineState,
   isLeader,
-  toRaceState,
-  type CarSnapshot,
   type OnlineState,
 } from "./online";
 
@@ -111,6 +108,19 @@ describe("applyServerMessage", () => {
     expect(next.error).toBe("only the leader can start the race");
   });
 
+  test("a busy refusal is remembered, so the visitor is told the server is full", () => {
+    const lobby: OnlineState = { ...initialOnlineState, phase: "lobby" };
+    expect(
+      applyServerMessage(lobby, { type: "error", message: "server busy", code: "busy" }).busy,
+    ).toBe(true);
+    expect(applyServerMessage(lobby, { type: "error", message: "nope" }).busy).toBe(false);
+    const closed = applyServerMessage(
+      { ...initialOnlineState, phase: "connecting" },
+      { type: "room-closed", busy: true },
+    );
+    expect(closed).toEqual(expect.objectContaining({ phase: "disconnected", busy: true }));
+  });
+
   test("room-closed disconnects", () => {
     const next = applyServerMessage(
       { ...initialOnlineState, phase: "racing" },
@@ -123,11 +133,8 @@ describe("applyServerMessage", () => {
     const state: OnlineState = { ...initialOnlineState, phase: "racing" };
     const next = applyServerMessage(state, {
       type: "state",
-      tick: 5,
-      cars: [],
-      items: [],
-      finished: [],
-      events: [],
+      t: 5,
+      c: [],
     });
     expect(next).toBe(state);
   });
@@ -144,46 +151,5 @@ describe("isLeader", () => {
 describe("apiWsUrl", () => {
   test("falls back to localhost when NEXT_PUBLIC_API_URL isn't set", () => {
     expect(apiWsUrl()).toBe("ws://localhost:17100");
-  });
-});
-
-describe("toRaceState", () => {
-  const car = (id: string, extra: Partial<CarSnapshot> = {}): CarSnapshot => ({
-    id,
-    x: 300,
-    y: 520,
-    rotation: 0,
-    vx: 0,
-    vy: 0,
-    checkpoint: 0,
-    waypoint: 0,
-    laps: 0,
-    nitro: 0,
-    nitroUntil: null,
-    finishedAt: null,
-    lapTicks: [],
-    ...extra,
-  });
-  const ids = classicTrack.items.map((it) => it.id);
-
-  test("gives the engine's helpers a full race: standings, items and wrong way all work", () => {
-    const [first, ...rest] = ids;
-    const s = toRaceState(
-      {
-        type: "state",
-        tick: 40,
-        cars: [car("a"), car("b", { laps: 1, finishedAt: 30, lapTicks: [30] })],
-        items: rest,
-        finished: ["b"],
-        events: [],
-      },
-      2,
-      ids,
-    );
-    expect(s.cars[0]).toEqual(expect.objectContaining({ width: 25, height: 25, x: 300 }));
-    expect(standings(s, classicTrack).map((c) => c.id)).toEqual(["b", "a"]);
-    expect(activeItems(classicTrack, s).map((it) => it.id)).not.toContain(first);
-    expect(activeItems(classicTrack, s)).toHaveLength(ids.length - 1);
-    expect(wrongWay(s.cars[0]!, classicTrack)).toBe(false);
   });
 });

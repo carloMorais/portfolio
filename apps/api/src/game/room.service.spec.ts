@@ -1,4 +1,5 @@
 import { NO_KEYS } from "race-engine/node";
+import { MAX_RACING_ROOMS } from "./limits";
 import { RoomService } from "./room.service";
 import type { RoomClient } from "./room";
 
@@ -60,5 +61,22 @@ describe("RoomService", () => {
 
     expect(service.addBot(alice)).toEqual({ ok: true });
     expect(service.startRace(alice)).toEqual({ ok: true });
+  });
+  test("past MAX_RACING_ROOMS races at once, starting another is refused as busy", () => {
+    jest.useFakeTimers();
+    const service = new RoomService();
+    // Each leader starts before the next one connects (a waiting room takes the next joiner).
+    const results = Array.from({ length: MAX_RACING_ROOMS + 1 }, () => {
+      const leader = fakeClient();
+      service.join(leader);
+      service.addBot(leader);
+      return service.startRace(leader);
+    });
+
+    expect(results.slice(0, MAX_RACING_ROOMS)).toEqual(
+      Array.from({ length: MAX_RACING_ROOMS }, () => ({ ok: true })),
+    );
+    expect(results.at(-1)).toEqual(expect.objectContaining({ ok: false, code: "busy" }));
+    jest.useRealTimers();
   });
 });
