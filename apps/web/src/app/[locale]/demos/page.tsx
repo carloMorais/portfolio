@@ -6,7 +6,7 @@ import { WakeApi } from "@/components/race/WakeApi";
 import { pageMetadata } from "@/lib/seo";
 import { work } from "@/content/work";
 import { SectionHeader } from "@/components/SectionHeader";
-import { WorkCard } from "@/components/WorkCard";
+import { WorkCard, isWide } from "@/components/WorkCard";
 import { brushTags } from "@/lib/rich";
 import { PageTransition } from "@/components/PageTransition";
 
@@ -36,8 +36,8 @@ export default function DemosPage() {
           lead={t("lead")}
         />
         <div className="mt-14 grid gap-x-10 gap-y-16 md:grid-cols-2">
-          {work.map((item) => (
-            <WorkCard key={item.slug} item={item} headingLevel="h2" />
+          {work.map((item, i) => (
+            <WorkCard key={item.slug} item={item} headingLevel="h2" wide={isWide(i, work.length)} />
           ))}
         </div>
       </section>

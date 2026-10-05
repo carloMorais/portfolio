@@ -153,6 +153,21 @@ export const photos = {
       url: "https://unsplash.com/photos/ybQcEX5zcNQ",
     },
   },
+  projectRenova: {
+    src: "/photos/project-renova.jpg",
+    ratio: "16 / 10",
+    position: "50% 70%",
+    alt: {
+      pt: "Painel de um carro visto do banco do motorista, com a estrada ao entardecer",
+      en: "A car’s instrument cluster seen from the driver’s seat, with the road at dusk",
+    },
+    hint: { pt: "Capa do Renova (16:10)", en: "Renova cover (16:10)" },
+    credit: {
+      author: "Dennis Eusebio",
+      source: "Unsplash",
+      url: "https://unsplash.com/photos/MbiSXN8u8q4",
+    },
+  },
 } satisfies Record<string, PhotoSlot>;
 
 export type PhotoId = keyof typeof photos;

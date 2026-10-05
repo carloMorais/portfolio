@@ -12,7 +12,7 @@ import { JobEntry } from "@/components/JobEntry";
 import { PhotoSlot } from "@/components/PhotoSlot";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SectionMinimap } from "@/components/SectionMinimap";
-import { WorkCard } from "@/components/WorkCard";
+import { WorkCard, isWide } from "@/components/WorkCard";
 import { HeroTitle } from "@/components/hero/HeroTitle";
 import { ScrollHint } from "@/components/hero/ScrollHint";
 import { TechGraph } from "@/components/hero/TechGraph";
@@ -150,8 +150,8 @@ export default function HomePage() {
           lead={t("workLead")}
         />
         <div className="mt-14 grid gap-x-10 gap-y-16 md:grid-cols-2">
-          {work.map((item) => (
-            <WorkCard key={item.slug} item={item} />
+          {work.map((item, i) => (
+            <WorkCard key={item.slug} item={item} wide={isWide(i, work.length)} />
           ))}
         </div>
         <Link href="/demos" className="btn btn-ghost group/cta mt-14">
