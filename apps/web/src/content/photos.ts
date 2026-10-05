@@ -23,6 +23,8 @@ export type PhotoSlot = {
   /** What should go here — shown on the placeholder while it is empty. */
   hint: Record<Locale, string>;
   credit?: PhotoCredit;
+  /** A screenshot of the site's own work (the playable RaceGame): ours, so no credit. */
+  screenshot?: true;
 };
 
 export const photos = {
@@ -139,19 +141,15 @@ export const photos = {
     },
   },
   projectRacegame: {
-    src: "/photos/project-racegame.jpg",
+    src: "/photos/racegame-track.jpg",
     ratio: "16 / 10",
-    position: "50% 62%",
+    position: "50% 55%",
     alt: {
-      pt: "Carrinhos em miniatura sobre um tapete com pista de corrida",
-      en: "Miniature cars on a race track desk mat",
+      pt: "A pista do RaceGame vista de cima, no meio de uma corrida contra três bots",
+      en: "The RaceGame track from above, in the middle of a race against three bots",
     },
     hint: { pt: "Print do jogo em ação (16:10)", en: "Game screenshot in action (16:10)" },
-    credit: {
-      author: "I'M ZION",
-      source: "Unsplash",
-      url: "https://unsplash.com/photos/ybQcEX5zcNQ",
-    },
+    screenshot: true,
   },
 } satisfies Record<string, PhotoSlot>;
 

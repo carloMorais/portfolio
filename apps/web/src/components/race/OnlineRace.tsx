@@ -14,6 +14,7 @@ import {
 } from "race-engine";
 import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
 import {
+  CompactHud,
   DifficultyPicker,
   FinishingVeil,
   LapPanel,
@@ -21,6 +22,7 @@ import {
   ResultsCard,
   RestartButton,
   StandingsBoard,
+  StartCard,
   TRACK_COLUMN,
   TouchPad,
   TrackOverlays,
@@ -32,6 +34,7 @@ import {
   apiWsUrl,
   applyServerMessage,
   initialOnlineState,
+  inviteUrl,
   isLeader,
   type ClientMessage,
   type OnlineState,
@@ -61,6 +64,8 @@ import {
 const ERROR_MS = 3000;
 /** After this long still connecting, the Render cold-start hint shows up. */
 const COLD_START_MS = 4000;
+/** How long "link copied" stays up. */
+const COPIED_MS = 2000;
 /** How often the round trip is measured (also keeps idle lobby connections alive). */
 const PING_MS = 2000;
 /** The server's "try again later" close code: it's at its connection limit (see the API's limits.ts). */
@@ -90,7 +95,15 @@ type Outcome = { newRace: boolean; newLap: boolean };
  * you sent (`Predictor`), so it answers at once instead of a round trip
  * later. Rankings, laps and warnings always come from the server's state.
  */
-export function OnlineRace() {
+export function OnlineRace({
+  invite,
+  onPracticeInstead,
+}: {
+  /** A room code from an invite link (`?room=`), or null for any open room. */
+  invite: string | null;
+  /** While the server wakes up, the visitor can race the bots instead. */
+  onPracticeInstead: () => void;
+}) {
   const t = useTranslations("Online");
   const tPlay = useTranslations("Play");
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -121,6 +134,16 @@ export function OnlineRace() {
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [transientError, setTransientError] = useState<string | null>(null);
   const [showColdStartHint, setShowColdStartHint] = useState(false);
+  /** Seconds spent connecting, shown while the server wakes up. */
+  const [waited, setWaited] = useState(0);
+  /** The invite's room had already started (or was full): you're in a new one. */
+  const [inviteMissed, setInviteMissed] = useState(false);
+  const [copied, setCopied] = useState(false);
+  /**
+   * The room to ask for on the next connection: the invite's, then the one
+   * you were in, so friends who all press "play again" meet again.
+   */
+  const roomRef = useRef(invite);
   const [hud, setHud] = useState<Hud>(() => emptyHud(EMPTY));
   const [result, setResult] = useState<RaceState | null>(null);
   const [best, setBest] = useState<PersonalBest>({ race: null, lap: null, splits: null });
@@ -192,8 +215,14 @@ export function OnlineRace() {
     buffer.current.clear();
     predictor.current.clear();
     const coldStartTimer = setTimeout(() => setShowColdStartHint(true), COLD_START_MS);
+    const connectedAt = performance.now();
+    const waitTimer = setInterval(
+      () => setWaited(Math.floor((performance.now() - connectedAt) / 1000)),
+      1000,
+    );
+    const requested = roomRef.current;
 
-    const ws = new WebSocket(apiWsUrl());
+    const ws = new WebSocket(apiWsUrl(requested));
     wsRef.current = ws;
     const ping = () =>
       ws.readyState === WebSocket.OPEN &&
@@ -207,6 +236,13 @@ export function OnlineRace() {
       const now = performance.now();
       const v = view.current;
       const me = stateRef.current.playerId;
+      if (msg.type === "welcome") {
+        clearInterval(waitTimer);
+        setInviteMissed(requested !== null && requested !== msg.roomId);
+        roomRef.current = msg.roomId;
+        // The address bar is an invite too: copy it and send it.
+        window.history.replaceState(null, "", inviteUrl(window.location.href, msg.roomId));
+      }
       if (msg.type === "pong") {
         rtt.current.sample(now - msg.t);
         return;
@@ -273,6 +309,7 @@ export function OnlineRace() {
     return () => {
       live = false;
       clearTimeout(coldStartTimer);
+      clearInterval(waitTimer);
       clearInterval(pinger);
       ws.close();
       wsRef.current = null;
@@ -296,6 +333,8 @@ export function OnlineRace() {
 
   const reconnect = useCallback(() => {
     setShowColdStartHint(false);
+    setWaited(0);
+    setInviteMissed(false);
     setResult(null);
     setConfetti(null);
     setOutcome(null);
@@ -454,21 +493,34 @@ export function OnlineRace() {
     dispatch({ type: "skip" });
   };
 
+  const copyInvite = async () => {
+    if (!state.roomId) return;
+    try {
+      await navigator.clipboard.writeText(inviteUrl(window.location.href, state.roomId));
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPIED_MS);
+    } catch {
+      // No clipboard (an insecure context, a refused permission): the address bar has the link.
+    }
+  };
+
   const leading = isLeader(state);
   const enough = state.participants.length >= 2;
   const me = state.playerId ?? "";
   const phase = state.phase;
   const inRace = phase === "countdown" || phase === "racing" || phase === "finishing";
+  const waiting = phase === "connecting" || phase === "lobby";
 
   // On lg it sits over the track; below it there's no room, so it goes under it.
   const lobby = (
-    <div className="flex w-full max-w-xs flex-col items-center gap-4">
-      <ul className="w-full space-y-1.5 text-sm">
+    <StartCard>
+      {inviteMissed && <p className="text-sm text-muted">{t("inviteMissed")}</p>}
+      <ul className="w-full space-y-1.5 text-left text-sm">
         {state.participants.map((p) => (
           <li
             key={p.id}
             className={`flex items-center justify-between rounded-lg px-3 py-1.5 ring-1 ring-line ${
-              p.id === state.playerId ? "bg-bg text-accent" : ""
+              p.id === state.playerId ? "bg-surface text-accent" : ""
             }`}
           >
             <span>{renderName(p.id)}</span>
@@ -479,37 +531,52 @@ export function OnlineRace() {
           </li>
         ))}
       </ul>
-      <p className="text-center text-sm text-muted">
-        {leading ? t("youAreLeader") : t("waitingForLeader")}
-      </p>
+      {leading && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => send({ event: "add-bot" })}
+            className="btn btn-ghost px-4 py-2 text-sm"
+          >
+            {t("addBot")}
+          </button>
+          <button
+            type="button"
+            onClick={() => send({ event: "remove-bot" })}
+            disabled={!state.participants.some((p) => p.isBot)}
+            className="btn btn-ghost px-4 py-2 text-sm disabled:cursor-not-allowed disabled:text-muted disabled:hover:border-line"
+          >
+            {t("removeBot")}
+          </button>
+        </div>
+      )}
       <DifficultyPicker
         value={state.difficulty}
         onChange={leading ? (d) => send({ event: "difficulty", data: d }) : undefined}
         t={tPlay}
       />
-      {leading && (
+      {state.roomId && (
+        <div className="w-full border-t border-line pt-4 text-sm">
+          <p className="text-muted">{t("inviteHint")}</p>
+          <button
+            type="button"
+            onClick={copyInvite}
+            className="mt-2 font-medium text-accent underline-offset-4 hover:underline"
+          >
+            {copied ? t("inviteCopied") : t("inviteCopy")}
+          </button>
+          <span role="status" className="sr-only">
+            {copied ? t("inviteCopied") : ""}
+          </span>
+        </div>
+      )}
+      {leading ? (
         <div className="flex flex-col items-center gap-2">
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => send({ event: "add-bot" })}
-              className="btn btn-ghost text-sm"
-            >
-              {t("addBot")}
-            </button>
-            <button
-              type="button"
-              onClick={() => send({ event: "remove-bot" })}
-              className="btn btn-ghost text-sm"
-            >
-              {t("removeBot")}
-            </button>
-          </div>
           <button
             type="button"
             onClick={() => send({ event: "start" })}
             disabled={!enough}
-            className="btn btn-primary disabled:opacity-40"
+            className="btn btn-primary disabled:cursor-not-allowed disabled:bg-line disabled:text-muted"
           >
             {tPlay("start")}
           </button>
@@ -519,11 +586,13 @@ export function OnlineRace() {
             <p className="text-xs text-muted">{t("needTwoPlayers")}</p>
           )}
         </div>
+      ) : (
+        <p className="text-sm text-muted">{t("waitingForLeader")}</p>
       )}
       {transientError && (
         <p className="text-xs text-accent">{state.busy ? t("serverBusy") : t("actionFailed")}</p>
       )}
-    </div>
+    </StartCard>
   );
 
   const results = (focus: boolean) =>
@@ -558,10 +627,20 @@ export function OnlineRace() {
         {announcement}
       </p>
 
-      <StandingsBoard board={hud.board} me={state.playerId} name={renderName} t={tPlay} />
-      <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />
+      {/* In the lobby the card lists who's in; the race panels show once there's a race. */}
+      {!waiting && (
+        <StandingsBoard
+          board={hud.board}
+          me={state.playerId}
+          name={renderName}
+          hideOnPhones={inRace}
+          t={tPlay}
+        />
+      )}
+      <LapPanel hud={hud} laps={state.laps} best={best} idle={waiting} racing={inRace} t={tPlay} />
 
       <div className={TRACK_COLUMN}>
+        {inRace && <CompactHud hud={hud} me={state.playerId} laps={state.laps} t={tPlay} />}
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -590,15 +669,29 @@ export function OnlineRace() {
             phase === "finished") && (
             <div className={VEIL}>
               {phase === "connecting" && (
-                <div className="flex flex-col items-center gap-3 text-center">
-                  <p className="font-display text-2xl tracking-tight">{t("connecting")}</p>
+                <div className="flex flex-col items-center gap-3 text-center" role="status">
+                  <p className="font-display text-2xl tracking-tight">
+                    {t("connecting")}
+                    {showColdStartHint && (
+                      <span className="ml-2 text-muted tabular-nums">{waited} s</span>
+                    )}
+                  </p>
                   {showColdStartHint && (
-                    <p className="max-w-xs text-sm text-muted">{t("coldStartHint")}</p>
+                    <>
+                      <p className="max-w-xs text-sm text-muted">{t("coldStartHint")}</p>
+                      <button
+                        type="button"
+                        onClick={onPracticeInstead}
+                        className="btn btn-ghost mt-1 text-sm"
+                      >
+                        {t("practiceMeanwhile")}
+                      </button>
+                    </>
                   )}
                 </div>
               )}
               {phase === "lobby" && (
-                <div className="hidden w-full justify-center lg:flex">{lobby}</div>
+                <div className="hidden w-full justify-center self-stretch lg:flex">{lobby}</div>
               )}
               {phase === "disconnected" && (
                 <div className="flex flex-col items-center gap-3 text-center">

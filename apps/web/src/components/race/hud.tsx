@@ -2,7 +2,7 @@
 
 import type { ReactNode, Ref } from "react";
 import { useTranslations } from "next-intl";
-import { PHYSICS, TICK_RATE, type Keys } from "race-engine";
+import { TICK_RATE, type Keys } from "race-engine";
 import { COLORS } from "./colors";
 import { BoltIcon } from "./icons";
 import { TouchButton } from "./TouchControls";
@@ -14,9 +14,14 @@ import type { Driver, Hud } from "./view";
  * start lights, banners, the finishing veil, results and touch controls.
  */
 
-/** Standings, track, lap panel: three columns on lg, the track under the panels below it. */
+/**
+ * Standings, track, lap panel: three columns on lg, the track under the panels
+ * below it. On lg the three hug each other and sit centred as one block (the
+ * track column is never wider than the window's height allows), so the panels
+ * belong to the track instead of drifting to the window's edges.
+ */
 export const RACE_GRID =
-  "grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,1fr)_6.5rem] lg:gap-x-6";
+  "grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,calc((100svh-6rem)*760/600))_6.5rem] lg:justify-center lg:gap-x-8";
 /** Never taller than the window: the whole track stays in view while you drive. */
 export const TRACK_COLUMN =
   "col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1";
@@ -47,15 +52,24 @@ export function StandingsBoard({
   board,
   me,
   name,
+  hideOnPhones = false,
   t,
 }: {
   board: Driver[];
   me: string | null;
   name: (id: string) => string;
+  /**
+   * Before the race (the start card says who you race) and while racing (the
+   * one-line `CompactHud` takes over), phones skip the table to keep the
+   * track on screen.
+   */
+  hideOnPhones?: boolean;
   t: T;
 }) {
   return (
-    <table className="col-start-1 row-start-1 self-start text-sm tabular-nums">
+    <table
+      className={`col-start-1 row-start-1 self-start text-sm tabular-nums ${hideOnPhones ? "max-lg:hidden" : ""}`}
+    >
       <caption className="sr-only">{t("standings")}</caption>
       <thead>
         <tr className="border-b border-line text-left text-xs text-muted">
@@ -103,16 +117,50 @@ export function LapPanel({
   hud,
   laps,
   best,
+  idle = false,
+  racing = false,
   t,
 }: {
   hud: Hud;
   laps: number;
   best: { race: number | null; lap: number | null };
+  /** Before the race "1/2" and "0:00.0" say nothing yet: only the record shows, if there is one. */
+  idle?: boolean;
+  /** While racing, phones get the one-line `CompactHud` instead. */
+  racing?: boolean;
   t: T;
 }) {
   const fastestLap = hud.laps.length > 0 ? Math.min(...hud.laps) : null;
+  if (idle && best.race === null && best.lap === null) return null;
   return (
-    <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3">
+    <dl
+      className={`col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3 ${racing ? "max-lg:hidden" : ""}`}
+    >
+      {!idle && <LiveTimes hud={hud} laps={laps} fastestLap={fastestLap} t={t} />}
+      <div className={`text-sm ${idle ? "" : "border-t border-line pt-3"}`}>
+        <dt className="text-xs text-muted">{t("record")}</dt>
+        <dd>{best.race !== null ? formatTime(best.race) : "—"}</dd>
+        <dt className="mt-2 text-xs text-muted">{t("bestLap")}</dt>
+        <dd>{best.lap !== null ? formatTime(best.lap) : "—"}</dd>
+      </div>
+    </dl>
+  );
+}
+
+/** Lap, time, sector delta and lap times: the lap panel while a race is on. */
+function LiveTimes({
+  hud,
+  laps,
+  fastestLap,
+  t,
+}: {
+  hud: Hud;
+  laps: number;
+  fastestLap: number | null;
+  t: T;
+}) {
+  return (
+    <>
       <div>
         <dt className="text-xs text-muted">{t("lap")}</dt>
         <dd className="font-display text-3xl tracking-tight">
@@ -150,13 +198,7 @@ export function LapPanel({
           </dd>
         </div>
       )}
-      <div className="border-t border-line pt-3 text-sm">
-        <dt className="text-xs text-muted">{t("record")}</dt>
-        <dd>{best.race !== null ? formatTime(best.race) : "—"}</dd>
-        <dt className="mt-2 text-xs text-muted">{t("bestLap")}</dt>
-        <dd>{best.lap !== null ? formatTime(best.lap) : "—"}</dd>
-      </div>
-    </dl>
+    </>
   );
 }
 
@@ -503,14 +545,57 @@ export function DifficultyPicker({
   );
 }
 
-/** Nitro charges as filled bolts out of the tank's size. */
+/**
+ * Nitro charges as bolts, only the ones you hold: empty slots drawn faintly
+ * read as a rendering glitch, not as "no nitro".
+ */
 function Nitro({ count, label }: { count: number; label: string }) {
   return (
-    <span role="img" aria-label={label} className="inline-flex gap-0.5">
-      {Array.from({ length: PHYSICS.maxNitro }, (_, i) => (
-        <BoltIcon key={i} className={`size-3 ${i < count ? "text-accent" : "text-line"}`} />
+    <span role="img" aria-label={label} className="inline-flex min-h-3 gap-0.5">
+      {Array.from({ length: count }, (_, i) => (
+        <BoltIcon key={i} className="size-3 text-accent" />
       ))}
     </span>
+  );
+}
+
+/**
+ * Below lg, while racing: place, lap and time on one line above the track, in
+ * place of the two panels, so the track and the touch controls fit the screen.
+ */
+export function CompactHud({
+  hud,
+  me,
+  laps,
+  t,
+}: {
+  hud: Hud;
+  me: string | null;
+  laps: number;
+  t: T;
+}) {
+  const place = hud.board.findIndex((d) => d.id === me) + 1;
+  return (
+    <p className="mb-2 flex items-baseline justify-between gap-3 text-sm text-muted tabular-nums lg:hidden">
+      <span>
+        {t("place")} <span className="font-display text-xl text-ink">{place || "–"}</span>/
+        {hud.board.length}
+      </span>
+      <span>
+        {t("lap")} <span className="font-display text-xl text-ink">{hud.lap}</span>/{laps}
+      </span>
+      <span className="font-display text-xl text-ink">{formatTime(hud.time)}</span>
+    </p>
+  );
+}
+
+/** The card over the blurred track before a race: how to drive, then the choices and Start. */
+export function StartCard({ children }: { children: ReactNode }) {
+  return (
+    // Near the top of the track on lg, so Start sits above the fold; centred on phones.
+    <div className="race-fade-in my-auto flex w-full max-w-xl flex-col items-center gap-5 rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line sm:p-6 lg:mt-8 lg:mb-auto">
+      {children}
+    </div>
   );
 }
 

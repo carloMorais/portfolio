@@ -277,6 +277,9 @@ export class RaceView {
     for (const { car, at } of ordered) drawCar(ctx, at, o.look(car.id), p, car.nitroUntil !== null);
     fx.drawImpacts(ctx, p, now);
     for (const { car, at } of ordered) {
+      // On the grid the cars sit nose to tail and every name would overlap:
+      // only yours shows until the race is under way.
+      if (s.tick === 0 && car.id !== this.me) continue;
       const boost =
         car.nitroUntil === null
           ? null

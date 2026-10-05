@@ -13,6 +13,8 @@ export type WorkItem = {
   tags: string[];
   photo: PhotoId;
   repo?: string;
+  /** The project page opens on a playable demo: the card says so. */
+  playable?: true;
 };
 
 export const work: WorkItem[] = [
@@ -84,5 +86,6 @@ export const work: WorkItem[] = [
     tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
     photo: "projectRacegame",
     repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
+    playable: true,
   },
 ];

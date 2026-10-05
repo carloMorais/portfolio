@@ -90,6 +90,7 @@ test("a ready work card opens its case study", async ({ page }) => {
     "Decisões técnicas",
     "Arquitetura",
     "Resultado",
+    "A reescrita de 2026",
   ]) {
     await expect(page.getByRole("heading", { level: 2, name: section })).toBeVisible();
   }

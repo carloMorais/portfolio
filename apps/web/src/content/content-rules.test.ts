@@ -105,7 +105,8 @@ describe("content rules", () => {
 
   it("credits every stock photo", () => {
     for (const [id, slot] of Object.entries(photos as Record<string, PhotoSlot>)) {
-      if (!slot.src || id === "heroPortrait") continue;
+      // The portrait and screenshots of the site's own demos are ours.
+      if (!slot.src || id === "heroPortrait" || slot.screenshot) continue;
       expect({ id, credited: Boolean(slot.credit) }).toEqual({ id, credited: true });
     }
   });

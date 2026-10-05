@@ -1,8 +1,11 @@
 import {
+  apiHttpUrl,
   apiWsUrl,
   applyServerMessage,
   initialOnlineState,
+  inviteUrl,
   isLeader,
+  isRoomCode,
   type OnlineState,
 } from "./online";
 
@@ -18,6 +21,7 @@ describe("applyServerMessage", () => {
     });
     expect(next.phase).toBe("lobby");
     expect(next.playerId).toBe("p-0-1");
+    expect(next.roomId).toBe("r1");
   });
 
   test("lobby updates the roster and leader, and clears a previous error", () => {
@@ -151,5 +155,31 @@ describe("isLeader", () => {
 describe("apiWsUrl", () => {
   test("falls back to localhost when NEXT_PUBLIC_API_URL isn't set", () => {
     expect(apiWsUrl()).toBe("ws://localhost:17100");
+  });
+
+  test("asks for an invite's room in the query", () => {
+    expect(apiWsUrl("race42")).toBe("ws://localhost:17100/?room=race42");
+  });
+});
+
+describe("apiHttpUrl", () => {
+  test("is the same server over http, for the wake-up call", () => {
+    expect(apiHttpUrl()).toBe("http://localhost:17100");
+  });
+});
+
+describe("invites", () => {
+  test("only the API's own room codes are accepted from a URL", () => {
+    expect(isRoomCode("race42")).toBe(true);
+    expect(isRoomCode("RACE42")).toBe(false);
+    expect(isRoomCode("race4")).toBe(false);
+    expect(isRoomCode("rac<e>")).toBe(false);
+    expect(isRoomCode(null)).toBe(false);
+  });
+
+  test("the invite link is this page in online mode, with the room and nothing else", () => {
+    expect(inviteUrl("https://site.dev/pt/projects/racegame?x=1#top", "race42")).toBe(
+      "https://site.dev/pt/projects/racegame?mode=online&room=race42",
+    );
   });
 });

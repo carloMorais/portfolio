@@ -27,7 +27,8 @@
     "comingSoon": "Case study coming soon",
     "viewCase": "Read case study",
     "viewProject": "View project",
-    "sourceCode": "Code on GitHub"
+    "sourceCode": "Code on GitHub",
+    "playNow": "Play now"
   },
   "Home": {
     "eyebrow": "Full-Stack Developer",
@@ -131,16 +132,11 @@
     "result": "Outcome",
     "play": "Play",
     "pause": "Pause",
-    "racegameVideo": "Clip of a RaceGame test match with 10 players: cars racing on a top-down track."
+    "racegameVideo": "Clip of a RaceGame test match with 10 players: cars racing on a top-down track.",
+    "racegameOriginal": "Original version, November 2024: a test match with a full room, 10 players."
   },
   "Play": {
-    "metaTitle": "RaceGame: practice mode",
-    "metaDescription": "Play RaceGame in your browser: a 2-lap race against 3 bots, on an engine rewritten from the 2024 game.",
-    "eyebrow": "RaceGame",
-    "title": "Practice <k>mode</k>",
     "lead": "Two laps against three bots, running entirely in your browser.",
-    "note": "A 2026 reimplementation of the 2024 engine: same steering and same layout, with reworked collisions (the car bounces off walls and lines up with them), gentler obstacles and the track redrawn.",
-    "backToCase": "Case study",
     "start": "Start race",
     "restart": "Race again",
     "go": "Go!",
@@ -154,7 +150,6 @@
     "finishedTime": "Time: {time}",
     "standings": "Standings",
     "notFinished": "still racing",
-    "controlsTitle": "Controls",
     "controlsKeys": "Arrow keys or WASD to drive, space for nitro, Enter to start, R to restart and Esc to pause. Blue badges with a bolt are nitro; barrels, logs and cones slow you down. The dashed blue line marks the next checkpoint.",
     "controlsTouch": "On a phone, use the buttons below the track.",
     "canvasLabel": "Top-down track with your car, in blue, and three bots.",
@@ -163,7 +158,6 @@
     "gas": "Accelerate",
     "brake": "Brake",
     "nitroButton": "Nitro",
-    "playCta": "Play in your browser",
     "or": "or",
     "drive": "Drive",
     "space": "Space",
@@ -204,15 +198,13 @@
   "Online": {
     "modeTraining": "Practice",
     "modeOnline": "Online",
-    "lead": "Up to 10 players share one room: the leader adds bots and starts when everyone's ready, and the race runs on the server, not your browser.",
-    "note": "The free server sleeps when idle, so the first connection of the day can take about a minute to wake it up.",
+    "lead": "Up to 10 people in the same room, with the race running on the server.",
     "canvasLabel": "Top-down track with the connected players' cars.",
     "connecting": "Connecting…",
-    "coldStartHint": "Still connecting — the server can take up to a minute to wake up on its first connection.",
+    "coldStartHint": "The free server sleeps when idle and takes up to a minute to wake up.",
     "participants": "Players",
     "leaderBadge": "Leader",
     "botBadge": "Bot",
-    "youAreLeader": "You're the leader: add bots and start whenever you like.",
     "waitingForLeader": "Waiting for the leader to start the race.",
     "addBot": "Add a bot",
     "removeBot": "Remove a bot",
@@ -222,6 +214,11 @@
     "serverBusy": "The server is full right now. Try again in a moment.",
     "disconnected": "Connection lost.",
     "reconnect": "Reconnect",
-    "playAgain": "Play again"
+    "playAgain": "Play again",
+    "practiceMeanwhile": "Practice meanwhile",
+    "inviteHint": "To race someone, send them this room's link.",
+    "inviteCopy": "Copy room link",
+    "inviteCopied": "Link copied",
+    "inviteMissed": "The invite's room had already started, so you're in a new room."
   }
 }

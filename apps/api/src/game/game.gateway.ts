@@ -26,7 +26,8 @@ import type { ActionResult } from "./room";
 import { RoomService } from "./room.service";
 
 /**
- * Every connection joins the next open room (or starts one); the room itself
+ * Every connection joins the room of its invite code, else the next open room
+ * (or starts one); the room itself
  * owns names, cars and the tick loop. Mirrors the original's lobby-less
  * matchmaking (ciclo 2 RaceGame put you straight into a room, never a name
  * prompt), but server-authoritative. Unlike the original, starting is
@@ -72,7 +73,9 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
     this.budgets.set(client, new MessageBudget());
     this.alive.add(client);
     client.on("pong", () => this.alive.add(client));
-    this.rooms.join(client);
+    // An invite link connects with ?room=<code> (validated by the service).
+    const code = new URL(req?.url ?? "/", "http://localhost").searchParams.get("room");
+    this.rooms.join(client, code ?? undefined);
   }
 
   handleDisconnect(client: WebSocket) {

@@ -559,17 +559,28 @@ export function drawTarget(
     ctx.lineWidth = 2;
     ctx.strokeRect(box.x - 2, box.y - 2, box.width + 4, box.height + 4);
   } else {
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 5]);
-    ctx.beginPath();
-    if (box.width > box.height) {
-      ctx.moveTo(box.x, box.y + box.height / 2);
-      ctx.lineTo(box.x + box.width, box.y + box.height / 2);
-    } else {
-      ctx.moveTo(box.x + box.width / 2, box.y);
-      ctx.lineTo(box.x + box.width / 2, box.y + box.height);
-    }
-    ctx.stroke();
+    const line = () => {
+      ctx.beginPath();
+      if (box.width > box.height) {
+        ctx.moveTo(box.x, box.y + box.height / 2);
+        ctx.lineTo(box.x + box.width, box.y + box.height / 2);
+      } else {
+        ctx.moveTo(box.x + box.width / 2, box.y);
+        ctx.lineTo(box.x + box.width / 2, box.y + box.height);
+      }
+      ctx.stroke();
+    };
+    // A soft light band under the dashes, so the line reads on the grey asphalt.
+    ctx.lineCap = "round";
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 9;
+    ctx.globalAlpha = 0.18 + 0.22 * pulse;
+    line();
+    ctx.strokeStyle = p.accent;
+    ctx.lineWidth = 4;
+    ctx.globalAlpha = 0.6 + 0.4 * pulse;
+    ctx.setLineDash([7, 6]);
+    line();
   }
   ctx.restore();
 }

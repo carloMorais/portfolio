@@ -25,6 +25,13 @@ describe("WorkCard", () => {
     );
   });
 
+  it("invites to play when the project page is a playable demo", () => {
+    renderWithIntl(<WorkCard item={racegame} />, "en");
+    expect(screen.getByText("Play now")).toBeInTheDocument();
+    renderWithIntl(<WorkCard item={{ ...racegame, playable: undefined }} />, "en");
+    expect(screen.getByText("View project")).toBeInTheDocument();
+  });
+
   it("opens the source code in a new tab", () => {
     renderWithIntl(<WorkCard item={racegame} />, "en");
     expect(screen.getByRole("link", { name: /Code on GitHub/ })).toHaveAttribute(

@@ -6,18 +6,33 @@ import { Link } from "@/i18n/navigation";
 import { ArchDiagram } from "./ArchDiagram";
 import { ArrowIcon } from "../icons";
 import { PageTransition } from "../PageTransition";
-import { TagList } from "../TagList";
 
 type Props = {
   item: WorkItem;
   study: CaseStudy;
   /** Cover: a screenshot or clip of the real thing. */
-  media: ReactNode;
-  /** Optional call to action under the facts (e.g. a playable demo). */
+  media?: ReactNode;
+  /**
+   * The real thing, playable, right under the title: a visitor tries it
+   * first and reads about it after. Takes the cover's place; the facts move
+   * below it.
+   */
+  demo?: ReactNode;
+  /** Optional call to action under the facts. */
   actions?: ReactNode;
+  /** More sections after the result, before the afterword. */
+  extra?: ReactNode;
 };
 
-function Section({ id, title, children }: { id: string; title: string; children: ReactNode }) {
+export function Section({
+  id,
+  title,
+  children,
+}: {
+  id: string;
+  title: string;
+  children: ReactNode;
+}) {
   return (
     <section
       aria-labelledby={id}
@@ -35,15 +50,44 @@ function Section({ id, title, children }: { id: string; title: string; children:
  * The shared shape of every case study page:
  * context → problem → my part → decisions → architecture → result.
  */
-export function CaseStudyLayout({ item, study, media, actions }: Props) {
+export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Props) {
   const locale = useLocale();
   const t = useTranslations("Case");
   const common = useTranslations("Common");
 
+  const facts = (
+    <>
+      <dl className="grid gap-x-10 gap-y-6 border-t border-line pt-8 sm:grid-cols-2 lg:grid-cols-4">
+        {study.facts.map((fact) => (
+          <div key={fact.label.en}>
+            <dt className="text-xs tracking-wide text-muted uppercase">{fact.label[locale]}</dt>
+            <dd className="mt-1.5 text-pretty">{fact.value[locale]}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
+        {actions}
+        {item.repo && (
+          <a
+            href={item.repo}
+            target="_blank"
+            rel="noreferrer"
+            className="link-underline text-sm text-muted hover:text-ink"
+          >
+            {common("sourceCode")} ↗
+          </a>
+        )}
+      </div>
+    </>
+  );
+
   return (
     <PageTransition>
       <article>
-        <header className="container-page pt-10 pb-12 md:pt-16">
+        {/* With a demo the header stays short, so the game starts above the fold. */}
+        <header
+          className={`container-page ${demo ? "pt-6 pb-5 md:pt-10" : "pt-10 pb-12 md:pt-16"}`}
+        >
           <Link
             href="/demos"
             className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink"
@@ -51,36 +95,30 @@ export function CaseStudyLayout({ item, study, media, actions }: Props) {
             <ArrowIcon className="size-4 rotate-180" />
             {t("back")}
           </Link>
-          <p className="eyebrow mt-10">{item.context[locale]}</p>
-          <h1 className="mt-4 max-w-3xl font-display text-4xl leading-[1.1] tracking-tight text-balance sm:text-5xl">
+          <p className={`eyebrow ${demo ? "mt-6" : "mt-10"}`}>{item.context[locale]}</p>
+          <h1
+            className={`mt-4 font-display leading-[1.1] tracking-tight text-balance ${
+              demo ? "text-3xl sm:text-4xl lg:text-[2.75rem]" : "max-w-3xl text-4xl sm:text-5xl"
+            }`}
+          >
             {item.title[locale]}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg text-muted text-pretty">{study.lead[locale]}</p>
-
-          <dl className="mt-10 grid gap-x-10 gap-y-6 border-t border-line pt-8 sm:grid-cols-2 lg:grid-cols-4">
-            {study.facts.map((fact) => (
-              <div key={fact.label.en}>
-                <dt className="text-xs tracking-wide text-muted uppercase">{fact.label[locale]}</dt>
-                <dd className="mt-1.5 text-pretty">{fact.value[locale]}</dd>
-              </div>
-            ))}
-          </dl>
-          <div className="mt-8 flex flex-wrap items-center gap-x-6 gap-y-3">
-            {actions}
-            {item.repo && (
-              <a
-                href={item.repo}
-                target="_blank"
-                rel="noreferrer"
-                className="link-underline text-sm text-muted hover:text-ink"
-              >
-                {common("sourceCode")} ↗
-              </a>
-            )}
-          </div>
+          <p
+            className={`max-w-2xl text-muted text-pretty ${demo ? "mt-3 sm:text-lg" : "mt-5 text-lg"}`}
+          >
+            {study.lead[locale]}
+          </p>
+          {!demo && <div className="mt-10">{facts}</div>}
         </header>
 
-        <div className="container-page">{media}</div>
+        {demo ? (
+          <>
+            {demo}
+            <div className="container-page mt-16">{facts}</div>
+          </>
+        ) : (
+          <div className="container-page">{media}</div>
+        )}
 
         <div className="container-page mt-16">
           <Section id="context" title={t("context")}>
@@ -110,9 +148,10 @@ export function CaseStudyLayout({ item, study, media, actions }: Props) {
           </Section>
 
           <Section id="decisions" title={t("decisions")}>
+            {/* An odd one out spans both columns instead of sitting alone in the last row. */}
             <div className="grid gap-x-10 gap-y-8 sm:grid-cols-2">
               {study.decisions.map((d) => (
-                <div key={d.title.en}>
+                <div key={d.title.en} className="sm:last:odd:col-span-2">
                   <h3 className="font-display text-xl tracking-tight text-ink">
                     {d.title[locale]}
                   </h3>
@@ -145,6 +184,8 @@ export function CaseStudyLayout({ item, study, media, actions }: Props) {
             ))}
           </Section>
 
+          {extra}
+
           {study.afterword && (
             <Section id="afterword" title={study.afterword.title[locale]}>
               {study.afterword.paragraphs.map((p) => (
@@ -156,10 +197,9 @@ export function CaseStudyLayout({ item, study, media, actions }: Props) {
 
         <footer className="container-page pb-20">
           <div className="border-t border-line pt-10">
-            <TagList tags={item.tags} />
             <Link
               href="/demos"
-              className="mt-8 inline-flex items-center gap-1.5 font-medium text-accent"
+              className="inline-flex items-center gap-1.5 font-medium text-accent"
             >
               {t("more")}
               <ArrowIcon className="size-4" />

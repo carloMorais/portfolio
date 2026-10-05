@@ -64,8 +64,34 @@ export type LocalAction =
   | { type: "reconnect" };
 
 /** The Render free tier sleeps after 15 min idle, so a first connect can take up to ~1 min. */
-export function apiWsUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL ?? "ws://localhost:17100";
+export function apiWsUrl(room?: string | null): string {
+  const base = process.env.NEXT_PUBLIC_API_URL ?? "ws://localhost:17100";
+  return room ? `${base}/?room=${encodeURIComponent(room)}` : base;
+}
+
+/**
+ * The API's plain HTTP address (ws → http, wss → https), for the wake-up
+ * call; null in a production build without `NEXT_PUBLIC_API_URL` (CI, a
+ * preview), where there's no API to wake and localhost isn't the visitor's.
+ */
+export function apiHttpUrl(): string | null {
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (!configured && process.env.NODE_ENV === "production") return null;
+  return (configured ?? "ws://localhost:17100").replace(/^ws/, "http");
+}
+
+/** Room codes as the API makes them (see its room.service.ts): only these go in a URL. */
+export const isRoomCode = (code: string | null | undefined): code is string =>
+  !!code && /^[abcdefghjkmnpqrstuvwxyz23456789]{6}$/.test(code);
+
+/** The page's address with an invite to `room` in online mode. */
+export function inviteUrl(href: string, room: string): string {
+  const url = new URL(href);
+  url.search = "";
+  url.hash = "";
+  url.searchParams.set("mode", "online");
+  url.searchParams.set("room", room);
+  return url.toString();
 }
 
 /** Same phases as practice mode's (but no pause: the race goes on for everyone), plus the lobby. */
@@ -75,6 +101,8 @@ export type OnlinePhase =
 export type OnlineState = {
   phase: OnlinePhase;
   playerId: string | null;
+  /** The room's code, for the invite link (and to regroup on "play again"). */
+  roomId: string | null;
   laps: number;
   tickRate: number;
   participants: LobbyParticipant[];
@@ -94,6 +122,7 @@ export type OnlineState = {
 export const initialOnlineState: OnlineState = {
   phase: "connecting",
   playerId: null,
+  roomId: null,
   laps: 2,
   tickRate: 30,
   participants: [],
@@ -123,6 +152,7 @@ export function applyServerMessage(
       return {
         ...state,
         playerId: msg.playerId,
+        roomId: msg.roomId,
         laps: msg.laps,
         tickRate: msg.tickRate,
         phase: "lobby",

@@ -14,7 +14,9 @@ import {
   type RaceState,
 } from "race-engine";
 import { readPalette, type CarLook, type Palette } from "./draw";
+import { Controls } from "./Controls";
 import {
+  CompactHud,
   DifficultyPicker,
   FinishingVeil,
   LapPanel,
@@ -22,6 +24,7 @@ import {
   ResultsCard,
   RestartButton,
   StandingsBoard,
+  StartCard,
   TouchPad,
   TrackOverlays,
   RACE_GRID,
@@ -348,6 +351,10 @@ export function PracticeRace() {
     keys.current = { ...keys.current, [key]: down };
   };
 
+  /** The race is on screen (lights, racing, paused): phones swap the panels for one line. */
+  const onTrack =
+    phase === "countdown" || phase === "racing" || phase === "finishing" || phase === "paused";
+
   const results = (focus: boolean) =>
     result && (
       <ResultsCard
@@ -383,10 +390,17 @@ export function PracticeRace() {
         {announcement}
       </p>
 
-      <StandingsBoard board={hud.board} me={PLAYER} name={names} t={t} />
-      <LapPanel hud={hud} laps={LAPS} best={best} t={t} />
+      <StandingsBoard
+        board={hud.board}
+        me={PLAYER}
+        name={names}
+        hideOnPhones={onTrack || phase === "ready"}
+        t={t}
+      />
+      <LapPanel hud={hud} laps={LAPS} best={best} idle={phase === "ready"} racing={onTrack} t={t} />
 
       <div className={TRACK_COLUMN}>
+        {onTrack && <CompactHud hud={hud} me={PLAYER} laps={LAPS} t={t} />}
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -415,13 +429,19 @@ export function PracticeRace() {
           {(phase === "ready" || phase === "paused" || phase === "finished") && (
             <div className={VEIL}>
               {phase === "ready" && (
-                <div className="flex flex-col items-center gap-5">
+                <StartCard>
+                  {/* Phones: the track is too short for the legend too; it goes under the controls. */}
+                  <div className="w-full max-lg:hidden">
+                    <Controls />
+                  </div>
                   <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
-                  <button type="button" onClick={start} className="btn btn-primary">
-                    {t("start")}
-                  </button>
-                  <p className="hidden text-xs text-muted lg:block">{t("startHint")}</p>
-                </div>
+                  <div className="flex flex-col items-center gap-2">
+                    <button type="button" onClick={start} className="btn btn-primary">
+                      {t("start")}
+                    </button>
+                    <p className="hidden text-xs text-muted lg:block">{t("startHint")}</p>
+                  </div>
+                </StartCard>
               )}
               {phase === "paused" && (
                 <div className="flex flex-col items-center gap-4 text-center">
@@ -450,6 +470,11 @@ export function PracticeRace() {
         )}
 
         <TouchPad press={press} hidden={phase === "finished"} t={t} />
+        {phase === "ready" && (
+          <div className="mt-6 lg:hidden">
+            <Controls />
+          </div>
+        )}
       </div>
     </div>
   );

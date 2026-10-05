@@ -1,19 +1,25 @@
 import { expect, test } from "@playwright/test";
 
+const GAME = "/en/projects/racegame";
 const game = (page: import("@playwright/test").Page) => page.locator("[data-phase]");
 const playerX = async (page: import("@playwright/test").Page) =>
   Number(await game(page).getAttribute("data-player-x"));
 
-test("the case study links to the playable practice mode", async ({ page }) => {
+test("the game is playable right on the RaceGame page, Start above the fold", async ({ page }) => {
   await page.goto("/pt/projects/racegame");
-  await page.getByRole("link", { name: "Jogar no navegador" }).click();
-  await expect(page).toHaveURL(/\/pt\/projects\/racegame\/play$/);
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Modo treino");
   await expect(page.getByRole("img", { name: /Pista vista de cima/ })).toBeVisible();
+  const start = page.getByRole("button", { name: "Começar corrida" });
+  await expect(start).toBeInViewport();
+});
+
+test("the old /play address opens the RaceGame page", async ({ page }) => {
+  await page.goto("/pt/projects/racegame/play");
+  await expect(page).toHaveURL(/\/pt\/projects\/racegame$/);
+  await expect(game(page)).toHaveAttribute("data-phase", "ready");
 });
 
 test("a race counts down, then the car answers the throttle", async ({ page, isMobile }) => {
-  await page.goto("/en/projects/racegame/play");
+  await page.goto(GAME);
   await expect(game(page)).toHaveAttribute("data-phase", "ready");
   await page.getByRole("button", { name: "Start race" }).click();
   await expect(game(page)).toHaveAttribute("data-phase", "countdown");
@@ -37,27 +43,43 @@ test("a race counts down, then the car answers the throttle", async ({ page, isM
   expect(Number(await game(page).getAttribute("data-tick"))).toBeGreaterThan(20);
 });
 
-test("a live board ranks every driver with their nitro, beside lap and time", async ({ page }) => {
-  await page.goto("/en/projects/racegame/play");
+test("a live board ranks every driver with their nitro, beside lap and time", async ({
+  page,
+  isMobile,
+}) => {
+  test.skip(isMobile, "phones get the one-line HUD instead (next test)");
+  await page.goto(GAME);
   const board = page.getByRole("table", { name: "Standings" });
   await expect(board.locator("tbody tr")).toHaveCount(4);
   await expect(board).toContainText("You");
   await expect(board.getByRole("img", { name: "no nitro" })).toHaveCount(4);
+  // Lap and time only show once there's a race.
+  await expect(page.getByText("Lap", { exact: true })).toBeHidden();
+  await page.getByRole("button", { name: "Start race" }).click();
   await expect(page.getByText("Lap", { exact: true })).toBeVisible();
 });
 
+test("on phones, a race shows place, lap and time on one line", async ({ page, isMobile }) => {
+  test.skip(!isMobile, "desktop keeps the full panels");
+  await page.goto(GAME);
+  await expect(page.getByRole("table", { name: "Standings" })).toBeHidden();
+  await page.getByRole("button", { name: "Start race" }).click();
+  await expect(page.getByText(/^Pos\. \d\/4$/)).toBeVisible();
+  await expect(page.getByRole("table", { name: "Standings" })).toBeHidden();
+});
+
 test("controls are drawn as keys on desktop", async ({ page, isMobile }) => {
-  await page.goto("/en/projects/racegame/play");
-  const space = page.locator("kbd", { hasText: "Space" });
-  if (isMobile) await expect(space).toBeHidden();
-  else await expect(space).toBeVisible();
+  await page.goto(GAME);
+  // One legend per breakpoint is in the page; only the visible one counts.
+  const space = page.locator("kbd", { hasText: "Space" }).filter({ visible: true });
+  await expect(space).toHaveCount(isMobile ? 0 : 1);
 });
 
 test("touch controls show on phones and stay out of the way on desktop", async ({
   page,
   isMobile,
 }) => {
-  await page.goto("/en/projects/racegame/play");
+  await page.goto(GAME);
   const gas = page.getByRole("button", { name: "Accelerate" });
   if (isMobile) await expect(gas).toBeVisible();
   else await expect(gas).toBeHidden();
@@ -65,7 +87,7 @@ test("touch controls show on phones and stay out of the way on desktop", async (
 
 test("the keyboard starts, pauses, resumes and restarts the race", async ({ page, isMobile }) => {
   test.skip(isMobile, "keyboard shortcuts are for desktop");
-  await page.goto("/en/projects/racegame/play");
+  await page.goto(GAME);
   await page.keyboard.press("Enter");
   await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
 
@@ -83,7 +105,7 @@ test("the keyboard starts, pauses, resumes and restarts the race", async ({ page
 });
 
 test("the difficulty is remembered in this browser", async ({ page }) => {
-  await page.goto("/en/projects/racegame/play");
+  await page.goto(GAME);
   const hard = page.getByRole("button", { name: "Hard" });
   await expect(page.getByRole("button", { name: "Normal" })).toHaveAttribute(
     "aria-pressed",
@@ -96,8 +118,9 @@ test("the difficulty is remembered in this browser", async ({ page }) => {
 });
 
 test("a pause button on the track pauses the race at any time", async ({ page }) => {
-  await page.goto("/en/projects/racegame/play");
-  const pause = page.getByRole("button", { name: "Pause" });
+  await page.goto(GAME);
+  // The game's own button (the 2024 clip further down has one too).
+  const pause = game(page).getByRole("button", { name: "Pause" });
   await expect(pause).toBeHidden();
   await page.getByRole("button", { name: "Start race" }).click();
   await expect(game(page)).toHaveAttribute("data-phase", "racing", { timeout: 5000 });
@@ -105,4 +128,16 @@ test("a pause button on the track pauses the race at any time", async ({ page })
   await expect(game(page)).toHaveAttribute("data-phase", "paused");
   await page.getByRole("button", { name: "Resume" }).click();
   await expect(game(page)).toHaveAttribute("data-phase", "racing");
+});
+
+test("an invite link opens online mode", async ({ page }) => {
+  await page.goto(`${GAME}?mode=online&room=race42`);
+  await expect(page.getByRole("button", { name: "Online" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  // Back to practice: the invite leaves the address bar.
+  await page.getByRole("button", { name: "Practice" }).click();
+  await expect(page).toHaveURL(/\/en\/projects\/racegame$/);
+  await expect(game(page)).toHaveAttribute("data-phase", "ready");
 });

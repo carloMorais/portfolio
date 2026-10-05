@@ -44,12 +44,13 @@ describe("GameGateway (e2e)", () => {
    */
   function connect(
     headers: Record<string, string> = {},
+    query = "",
   ): Promise<{ socket: WebSocket; next: () => Promise<Msg> }> {
     const queue: Msg[] = [];
     const waiters: ((msg: Msg) => void)[] = [];
 
     return new Promise((resolve, reject) => {
-      const socket = new WebSocket(url, { headers });
+      const socket = new WebSocket(url + query, { headers });
       socket.on("message", (raw) => {
         const msg = JSON.parse(raw.toString());
         const waiter = waiters.shift();
@@ -80,6 +81,12 @@ describe("GameGateway (e2e)", () => {
     const welcome = await next();
 
     expect(welcome).toEqual(expect.objectContaining({ type: "welcome", number: 1 }));
+    socket.close();
+  });
+
+  test("an invite link's ?room= code picks the room", async () => {
+    const { socket, next } = await connect({}, "/?room=race42");
+    expect(await next()).toEqual(expect.objectContaining({ type: "welcome", roomId: "race42" }));
     socket.close();
   });
 
