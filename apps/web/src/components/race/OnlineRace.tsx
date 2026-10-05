@@ -27,7 +27,6 @@ import {
   TouchPad,
   TrackOverlays,
   VEIL,
-  VEIL_ATTR,
   makeConfetti,
   type ConfettiPiece,
   type SlideFrom,
@@ -733,7 +732,7 @@ export function OnlineRace({
             phase === "lobby" ||
             phase === "disconnected" ||
             phase === "finished") && (
-            <div className={VEIL} {...VEIL_ATTR}>
+            <div className={VEIL}>
               {outside && <div className="hidden w-full justify-center lg:flex">{card}</div>}
               {phase === "finished" && (
                 <div className="hidden w-full justify-center lg:flex">{results(true)}</div>

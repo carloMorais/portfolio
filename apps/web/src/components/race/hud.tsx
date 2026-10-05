@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode, type Ref, type RefObject } from "react";
+import type { ReactNode, Ref } from "react";
 import { useTranslations } from "next-intl";
 import { TICK_RATE, type Keys } from "race-engine";
 import { COLORS } from "./colors";
@@ -27,12 +27,6 @@ export const TRACK_COLUMN =
   "col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1";
 export const VEIL =
   "absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]";
-/** Marks a veil, so the start card can find the track it sits on (see `StartCard`). */
-export const VEIL_ATTR = { "data-race-veil": "" };
-/** The site's sticky header covers this much of the top of the window. */
-const HEADER_PX = 64;
-/** The card keeps at least this far from the track's edges. */
-const CARD_MARGIN_PX = 12;
 
 type T = ReturnType<typeof useTranslations<"Play">>;
 
@@ -638,8 +632,6 @@ export function StartCard({
   slideFrom?: SlideFrom;
   children: ReactNode;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useVisibleCenter(ref);
   const slide =
     slideFrom === "right"
       ? "race-slide-from-right"
@@ -647,60 +639,11 @@ export function StartCard({
         ? "race-slide-from-left"
         : "";
   return (
-    <div
-      ref={ref}
-      className="my-auto flex w-full max-w-xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line"
-    >
+    <div className="my-auto flex w-full max-w-xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line">
       {header}
       <div className={`flex w-full flex-col items-center gap-4 ${slide}`}>{children}</div>
     </div>
   );
-}
-
-/**
- * Centres the card on the part of its track that's on screen, not on the
- * whole track: the track is taller than what's left of the window when the
- * page opens, and a card centred on all of it would push Start below the
- * fold. Once the whole track is in view, that's the true centre. Shifts with
- * a transform (no layout), never past the track's edges. Below lg the card
- * isn't on a veil (it sits under the track) and stays put.
- */
-function useVisibleCenter(ref: RefObject<HTMLDivElement | null>) {
-  useEffect(() => {
-    const card = ref.current;
-    const veil = card?.closest<HTMLElement>("[data-race-veil]");
-    if (!card || !veil) return;
-    let frame = 0;
-    const place = () => {
-      frame = 0;
-      const box = veil.getBoundingClientRect();
-      const top = Math.max(box.top, HEADER_PX);
-      const bottom = Math.min(box.bottom, window.innerHeight);
-      if (bottom <= top) return;
-      const half = card.offsetHeight / 2;
-      const middle = box.top + box.height / 2;
-      const wanted = (top + bottom) / 2 - middle;
-      const highest = box.top + CARD_MARGIN_PX + half - middle;
-      const lowest = box.bottom - CARD_MARGIN_PX - half - middle;
-      const shift = highest > lowest ? 0 : Math.min(lowest, Math.max(highest, wanted));
-      card.style.transform = shift ? `translateY(${Math.round(shift)}px)` : "";
-    };
-    const schedule = () => {
-      if (!frame) frame = requestAnimationFrame(place);
-    };
-    place();
-    const resize = new ResizeObserver(schedule);
-    resize.observe(veil);
-    resize.observe(card);
-    window.addEventListener("scroll", schedule, { passive: true });
-    window.addEventListener("resize", schedule);
-    return () => {
-      cancelAnimationFrame(frame);
-      resize.disconnect();
-      window.removeEventListener("scroll", schedule);
-      window.removeEventListener("resize", schedule);
-    };
-  }, [ref]);
 }
 
 function FlagIcon({ label }: { label: string }) {

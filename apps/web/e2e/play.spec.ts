@@ -5,11 +5,24 @@ const game = (page: import("@playwright/test").Page) => page.locator("[data-phas
 const playerX = async (page: import("@playwright/test").Page) =>
   Number(await game(page).getAttribute("data-player-x"));
 
-test("the game is playable right on the RaceGame page, Start above the fold", async ({ page }) => {
+test("the game is playable right on the RaceGame page, its card centred on the track", async ({
+  page,
+}) => {
   await page.goto("/pt/projects/racegame");
-  await expect(page.getByRole("img", { name: /Pista vista de cima/ })).toBeVisible();
-  const start = page.getByRole("button", { name: "Começar corrida" });
-  await expect(start).toBeInViewport();
+  const track = page.getByRole("img", { name: /Pista vista de cima/ });
+  await expect(track).toBeVisible();
+  const card = page.locator("div.rounded-2xl", {
+    has: page.getByRole("button", { name: "Começar corrida" }),
+  });
+  const centre = async () => {
+    const [t, c] = await Promise.all([track.boundingBox(), card.first().boundingBox()]);
+    return Math.round(c!.y + c!.height / 2 - (t!.y + t!.height / 2));
+  };
+  // Centred on the track, and it stays put when the page scrolls.
+  expect(Math.abs(await centre())).toBeLessThanOrEqual(2);
+  await page.mouse.wheel(0, 200);
+  await page.waitForTimeout(200);
+  expect(Math.abs(await centre())).toBeLessThanOrEqual(2);
 });
 
 test("the old /play address opens the RaceGame page", async ({ page }) => {

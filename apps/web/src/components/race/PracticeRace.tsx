@@ -30,7 +30,6 @@ import {
   RACE_GRID,
   TRACK_COLUMN,
   VEIL,
-  VEIL_ATTR,
   makeConfetti,
   type ConfettiPiece,
   type SlideFrom,
@@ -432,7 +431,7 @@ export function PracticeRace({
 
           {/* The countdown has no veil: the grid and the lights stay in full view. */}
           {(phase === "ready" || phase === "paused" || phase === "finished") && (
-            <div className={VEIL} {...VEIL_ATTR}>
+            <div className={VEIL}>
               {phase === "ready" && (
                 <StartCard header={modeSwitch} slideFrom={slideFrom}>
                   {/* Phones: the track is too short for the legend too; it goes under the controls. */}
