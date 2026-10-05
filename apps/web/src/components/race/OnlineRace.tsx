@@ -51,7 +51,15 @@ import {
   type OnlineState,
   type ServerMessage,
 } from "./online";
-import { KeyTimeline, Predictor, Rtt, SnapshotBuffer, Smoother } from "./net";
+import {
+  INTERP_DELAY_TICKS,
+  KeyTimeline,
+  Predictor,
+  Rtt,
+  STEP_MS,
+  SnapshotBuffer,
+  Smoother,
+} from "./net";
 import {
   DIFFICULTIES,
   bestLap,
@@ -188,6 +196,11 @@ export function OnlineRace({
   const predictor = useRef(new Predictor());
   const smoother = useRef(new Smoother());
   const rtt = useRef(new Rtt());
+  /**
+   * Items your predicted car just picked up, and until when (local ms) to keep
+   * them off the track: the delayed states only lose them a little later.
+   */
+  const taken = useRef(new Map<string, number>());
   const wsRef = useRef<WebSocket | null>(null);
   const view = useRef<RaceView | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
@@ -400,6 +413,7 @@ export function OnlineRace({
           timeline.current.clear();
           predictor.current.clear();
           smoother.current.clear();
+          taken.current.clear();
           keysRef.current = { ...NO_KEYS };
           lastSent.current = { ...NO_KEYS };
           doneRef.current = false;
@@ -426,13 +440,15 @@ export function OnlineRace({
           buffer.current.push(race.current, now);
           // Re-base the prediction on the server's truth; the smoother hides the correction.
           if (me) {
-            predictor.current.reset(race.current, now, me);
+            predictor.current.reset(race.current, buffer.current.arrivalOf(race.current.tick), me);
             smoother.current.correct(
               predictor.current.at(now, rtt.current.value, (t) => timeline.current.keysAt(t)),
             );
           }
           const p = palette.current;
-          if (v && p && v.react(race.current, p, now, bestRef.current.splits)) {
+          // Laps, splits and warnings from the server's truth, at once; the
+          // effects wait until each car is drawn there (see the draw loop).
+          if (v && v.follow(race.current, now, bestRef.current.splits)) {
             setAnnouncement(tPlay("announceLastLap"));
           }
           const mine = race.current.cars.find((c) => c.id === me);
@@ -460,6 +476,7 @@ export function OnlineRace({
           timeline.current.clear();
           predictor.current.clear();
           smoother.current.clear();
+          taken.current.clear();
           keysRef.current = { ...NO_KEYS };
           lastSent.current = { ...NO_KEYS };
           v?.reset();
@@ -660,13 +677,48 @@ export function OnlineRace({
       const predicted = predictor.current.at(now, rtt.current.value, (t) =>
         timeline.current.keysAt(t),
       );
+      const shownTick = buffer.current.renderTick(now);
+      // Each car is drawn at its own moment (you ahead, the rest behind): its
+      // nitro countdown is moved to the latest tick, which the nitro bar counts from.
+      const atLatest = (car: Car, tick: number): Car =>
+        car.nitroUntil === null ? car : { ...car, nitroUntil: car.nitroUntil - (tick - s.tick) };
       const cars = s.cars.map((car): Car => {
-        if (car.id === me && predicted) return smoother.current.apply(predicted, now);
+        if (car.id === me && predicted) {
+          return atLatest(smoother.current.apply(predicted, now), predictor.current.tick);
+        }
         const a = sample.a.cars.find((c) => c.id === car.id);
         const b = sample.b.cars.find((c) => c.id === car.id) ?? car;
-        return interpolateCar(a, b, sample.alpha);
+        return atLatest(interpolateCar(a, b, sample.alpha), shownTick);
       });
-      return { ...s, cars };
+      // Items as the drawn cars see them, minus what your car just took.
+      const itemRespawnAt = { ...sample.a.itemRespawnAt };
+      for (const [id, until] of taken.current) {
+        if (now < until) itemRespawnAt[id] = Infinity;
+        else taken.current.delete(id);
+      }
+      return { ...s, cars, itemRespawnAt };
+    };
+
+    /**
+     * Effects where each car is drawn: everyone else's from the delayed
+     * states as they come into view, yours from the predicted ticks.
+     */
+    const showEffects = (p: Palette, now: number) => {
+      const me = stateRef.current.playerId;
+      for (const due of buffer.current.takeDue(now)) {
+        v.effects(due, p, now, (id) => id !== me);
+      }
+      for (const tick of predictor.current.takeTicks()) {
+        v.effects(tick, p, now, (id) => id === me, false);
+        for (const ev of tick.events) {
+          if (ev.type === "pickup") {
+            taken.current.set(
+              ev.item,
+              now + rtt.current.value + INTERP_DELAY_TICKS * STEP_MS + 250,
+            );
+          }
+        }
+      }
     };
 
     const frame = (now: number) => {
@@ -697,7 +749,9 @@ export function OnlineRace({
       if (canvas && p && trackLayer.current) {
         const ctx = sizeCanvas(canvas);
         // Positions are already worked out per car (shownState), so the view draws them as given.
-        v.draw(ctx, trackLayer.current, shownState(now), null, 0, p, now, {
+        const shown = shownState(now);
+        showEffects(p, now);
+        v.draw(ctx, trackLayer.current, shown, null, 0, p, now, {
           moving: false,
           running,
           look: look(p),

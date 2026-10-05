@@ -21,11 +21,12 @@ describe("ghost", () => {
 
   test("medals go to the best one a time earns, and say how far the next was", () => {
     const s = (seconds: number) => seconds * TICK_RATE;
-    expect(medalFor(s(49))).toBe("gold");
-    expect(medalFor(s(53))).toBe("silver");
-    expect(medalFor(s(60))).toBe("bronze");
-    expect(medalFor(s(70))).toBeNull();
-    expect(nextMedal(s(57))).toEqual({ id: "silver", missedBy: s(2) });
-    expect(nextMedal(s(49))).toBeNull();
+    expect(medalFor(s(43))).toBe("gold");
+    expect(medalFor(s(44))).toBe("gold");
+    expect(medalFor(s(47))).toBe("silver");
+    expect(medalFor(s(55))).toBe("bronze");
+    expect(medalFor(s(60))).toBeNull();
+    expect(nextMedal(s(51))).toEqual({ id: "silver", missedBy: s(2) });
+    expect(nextMedal(s(43))).toBeNull();
   });
 });

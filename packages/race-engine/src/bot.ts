@@ -6,9 +6,10 @@ import type { Car, Keys, Track } from "./types.ts";
  * `topSpeed` (track pixels per tick) makes it lift off above that speed and
  * skip the nitro, which is what sets the difficulty. `racing` swaps in the
  * stronger driver of the hard bots (see `racingKeys`); there `topSpeed`
- * only caps the straights, and the nitro is still used.
+ * only caps the straights, and the nitro is still used. `fixed` keeps it
+ * out of the rubber band (`elasticStyle`): hard bots stay honest.
  */
-export type BotStyle = { skill: number; topSpeed?: number; racing?: boolean };
+export type BotStyle = { skill: number; topSpeed?: number; racing?: boolean; fixed?: boolean };
 
 const deg = (rad: number) => (rad * 180) / Math.PI;
 const wrap180 = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
@@ -174,9 +175,12 @@ export type Difficulty = (typeof DIFFICULTIES)[number];
 /**
  * Three bot styles per difficulty, shared by practice mode and the online
  * server. Measured over 2 laps (05/10/2026, with the obstacle penalty by kind
- * and the two nitros behind barrels): easy ~69–76 s, normal ~59–65 s, hard
- * ~43, ~45 and ~47 s (the racing driver, with nitro; was ~53–55 s with
- * `botKeys` until a player beat them by 7 s). Without the rubber band.
+ * and the two nitros behind barrels): easy ~69–76 s, normal ~50–63 s
+ * (average ~56), hard ~42–49 s, without the rubber band. Hard and normal
+ * both use the racing driver (hard was ~53–55 s with `botKeys` until a
+ * player beat them by 7 s); normal only with a lower top speed. Normal used
+ * `botKeys` too (~59–65 s), far from hard, and on a 10-car grid some of
+ * those got stuck and never finished.
  */
 export const BOT_STYLES: Record<Difficulty, BotStyle[]> = {
   easy: [
@@ -185,14 +189,14 @@ export const BOT_STYLES: Record<Difficulty, BotStyle[]> = {
     { skill: 1, topSpeed: 3.5 },
   ],
   normal: [
-    { skill: 1, topSpeed: 5.5 },
-    { skill: 1, topSpeed: 5 },
-    { skill: 1, topSpeed: 4.5 },
+    { skill: 1, racing: true, topSpeed: 5.8 },
+    { skill: 1, racing: true, topSpeed: 5.5 },
+    { skill: 1, racing: true, topSpeed: 5.2 },
   ],
   hard: [
-    { skill: 1, racing: true },
-    { skill: 1, racing: true, topSpeed: 6.4 },
-    { skill: 1, racing: true, topSpeed: 6.1 },
+    { skill: 1, racing: true, fixed: true },
+    { skill: 1, racing: true, fixed: true, topSpeed: 6.4 },
+    { skill: 1, racing: true, fixed: true, topSpeed: 6.1 },
   ],
 };
 
@@ -201,17 +205,20 @@ const ELASTIC_MIN = 0.85;
 const ELASTIC_MAX = 1.12;
 /** How strongly the gap (share of the race, 0–1) bends the top speed. */
 const ELASTIC_GAIN = 2.5;
+/** The fastest the rubber band ever lets a bot go (the slowest hard bot's straights: 6.1). */
+const ELASTIC_TOP = 6;
 
 /**
  * A light rubber band for the capped difficulties (easy, normal): a bot
  * well ahead of the leading human eases off, one well behind pushes a
  * little, so the pack stays together and an early mistake doesn't decide the
- * race. Hard bots (`racing`) are left alone, so "hard" stays honest.
+ * race. Hard bots (`fixed`) are left alone, so "hard" stays honest.
  * `gap` is the bot's race progress minus the leading human's (see
  * `raceProgress`); positive when the bot is ahead.
  */
 export function elasticStyle(style: BotStyle, gap: number): BotStyle {
-  if (style.racing || style.topSpeed === undefined) return style;
+  if (style.fixed || style.topSpeed === undefined) return style;
   const factor = Math.max(ELASTIC_MIN, Math.min(ELASTIC_MAX, 1 - gap * ELASTIC_GAIN));
-  return { ...style, topSpeed: Math.min(5.8, style.topSpeed * factor) };
+  // Never as fast as the hard bots' straights.
+  return { ...style, topSpeed: Math.min(ELASTIC_TOP, style.topSpeed * factor) };
 }

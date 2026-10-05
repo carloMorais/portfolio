@@ -189,6 +189,10 @@ export const racegame: CaseStudy = {
         pt: "A versão jogável no topo desta página é uma reimplementação de 2026, feita a partir do motor de 2024. O original dependia do login, do banco e do servidor da Alpha EdTech, e a arte dele não tem licença para ser republicada; para dar para jogar aqui, o jogo foi refeito com a mesma direção e o mesmo traçado.",
         en: "The playable version at the top of this page is a 2026 reimplementation, built from the 2024 engine. The original depended on sign-in, the database and Alpha EdTech's server, and its art isn't licensed for republishing; to make it playable here, the game was rebuilt with the same handling and the same track.",
       },
+      {
+        pt: "A reescrita foi feita com o Claude Code, a IA de programação da Anthropic: eu decidi o design, a física e o que entrava em cada rodada, joguei e revisei cada uma, e o código foi escrito em pareamento com a IA.",
+        en: "The rewrite was done with Claude Code, Anthropic's AI coding tool: I decided the design, the physics and what went into each round, played and reviewed every one, and the code was written in pairing with the AI.",
+      },
     ],
     bullets: [
       {
@@ -200,8 +204,8 @@ export const racegame: CaseStudy = {
         en: "Collision was redone: the car moves one axis at a time and bounces off walls instead of sticking to them, which ended cars getting stuck in a corner of the track.",
       },
       {
-        pt: "Dois modos: o treino roda inteiro no navegador, contra bots; o online roda no servidor (NestJS e ws, 30 ticks por segundo), e o navegador usa o mesmo motor para prever o próprio carro.",
-        en: "Two modes: practice runs entirely in the browser, against bots; online runs on the server (NestJS and ws, 30 ticks per second), and the browser uses the same engine to predict your own car.",
+        pt: "Três modos: o treino, contra bots, e o contra o relógio, contra o fantasma da sua melhor corrida, rodam inteiros no navegador; o online roda no servidor (NestJS e ws, 30 ticks por segundo), e o navegador usa o mesmo motor para prever o próprio carro.",
+        en: "Three modes: practice, against bots, and time trial, against the ghost of your best run, run entirely in the browser; online runs on the server (NestJS and ws, 30 ticks per second), and the browser uses the same engine to predict your own car.",
       },
       {
         pt: "Um formato compacto de mensagens (cerca de 11 KB/s por jogador numa sala de 10) e limites contra abuso protegem o servidor gratuito.",
@@ -210,15 +214,6 @@ export const racegame: CaseStudy = {
       {
         pt: "A pista é desenhada em código a partir das caixas de colisão do motor.",
         en: "The track is drawn in code from the engine's collision boxes.",
-      },
-    ],
-  },
-  afterword: {
-    title: { pt: "O que eu mudaria hoje", en: "What I would change today" },
-    paragraphs: [
-      {
-        pt: "Em 2024 o game loop não tinha testes automatizados; a reescrita resolveu isso, com a física em funções puras testadas tick a tick. O que continua: a colisão usa caixas alinhadas aos eixos, então um carro de lado ocupa mais espaço do que parece. E no modo online, se a conexão cair, você volta numa sala nova em vez de retomar a corrida.",
-        en: "In 2024 the game loop had no automated tests; the rewrite fixed that, with the physics in pure functions tested tick by tick. What remains: collision uses axis-aligned boxes, so a car turned sideways takes more room than it looks. And in online mode, if the connection drops you come back in a new room instead of resuming the race.",
       },
     ],
   },
