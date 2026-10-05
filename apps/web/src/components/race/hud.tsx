@@ -21,10 +21,12 @@ import type { Driver, Hud } from "./view";
  * belong to the track instead of drifting to the window's edges.
  */
 export const RACE_GRID =
-  "grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,calc((100svh-6rem)*760/600))_6.5rem] lg:justify-center lg:gap-x-8";
+  "grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[11.5rem_minmax(0,calc((100svh-6rem)*760/600))_8rem] lg:justify-center lg:gap-x-8";
 /** Never taller than the window: the whole track stays in view while you drive. */
 export const TRACK_COLUMN =
   "col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1";
+/** The standings and lap panels: small cards that sit against the track, not loose text on the page. */
+const PANEL = "self-start rounded-2xl bg-surface p-3 ring-1 ring-line";
 export const VEIL =
   "absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]";
 
@@ -57,55 +59,61 @@ export function StandingsBoard({
   board,
   me,
   name,
+  tag,
   t,
 }: {
   board: Driver[];
   me: string | null;
   name: (id: string) => string;
+  /** Each other car's colour and race number, as drawn over it on the track. */
+  tag: (id: string) => { color: string; n: number };
   t: T;
 }) {
   return (
-    <table className="col-start-1 row-start-1 self-start text-sm tabular-nums max-lg:hidden">
-      <caption className="sr-only">{t("standings")}</caption>
-      <thead>
-        <tr className="border-b border-line text-left text-xs text-muted">
-          <th scope="col" className="pr-3 pb-2 font-normal">
-            {t("place")}
-          </th>
-          <th scope="col" className="pr-3 pb-2 font-normal">
-            {t("driver")}
-          </th>
-          <th scope="col" className="pb-2 font-normal">
-            {t("nitro")}
-          </th>
-        </tr>
-      </thead>
-      <tbody>
-        {board.map((d, i) => (
-          <tr key={d.id} className="border-b border-line last:border-0">
-            <td className="py-2 pr-3 text-muted">{i + 1}</td>
-            <th
-              scope="row"
-              className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${d.id === me ? "text-accent" : ""}`}
-            >
-              <span className="inline-flex items-center gap-1.5">
-                {name(d.id)}
-                {d.change && (
-                  <ChangeIcon
-                    dir={d.change}
-                    label={t(d.change === "up" ? "gainedPlace" : "lostPlace")}
-                  />
-                )}
-                {d.done && <FlagIcon label={t("done")} />}
-              </span>
+    <div className={`${PANEL} col-start-1 row-start-1 max-lg:hidden`}>
+      <table className="w-full text-sm tabular-nums">
+        <caption className="sr-only">{t("standings")}</caption>
+        <thead>
+          <tr className="border-b border-line text-left text-xs text-muted">
+            <th scope="col" className="pr-3 pb-2 font-normal">
+              {t("place")}
             </th>
-            <td className="py-2">
-              <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
-            </td>
+            <th scope="col" className="pr-3 pb-2 font-normal">
+              {t("driver")}
+            </th>
+            <th scope="col" className="pb-2 font-normal">
+              {t("nitro")}
+            </th>
           </tr>
-        ))}
-      </tbody>
-    </table>
+        </thead>
+        <tbody>
+          {board.map((d, i) => (
+            <tr key={d.id} className="border-b border-line last:border-0">
+              <td className="py-2 pr-3 text-muted">{i + 1}</td>
+              <th
+                scope="row"
+                className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${d.id === me ? "text-accent" : ""}`}
+              >
+                <span className="inline-flex items-center gap-1.5">
+                  <CarTag {...(d.id === me ? { mine: true } : tag(d.id))} />
+                  {name(d.id)}
+                  {d.change && (
+                    <ChangeIcon
+                      dir={d.change}
+                      label={t(d.change === "up" ? "gainedPlace" : "lostPlace")}
+                    />
+                  )}
+                  {d.done && <FlagIcon label={t("done")} />}
+                </span>
+              </th>
+              <td className="py-2">
+                <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -122,7 +130,9 @@ export function LapPanel({
 }) {
   const fastestLap = hud.laps.length > 0 ? Math.min(...hud.laps) : null;
   return (
-    <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums max-lg:hidden lg:col-start-3">
+    <dl
+      className={`${PANEL} col-start-2 row-start-1 flex flex-col gap-4 tabular-nums max-lg:hidden lg:col-start-3`}
+    >
       <LiveTimes hud={hud} laps={laps} fastestLap={fastestLap} t={t} />
       <div className="border-t border-line pt-3 text-sm">
         <dt className="text-xs text-muted">{t("record")}</dt>
@@ -493,6 +503,7 @@ export function TouchPad({
         </TouchButton>
         <TouchButton
           label={t("gas")}
+          primary
           onDown={() => press("up", true)}
           onUp={() => press("up", false)}
         >
@@ -643,6 +654,27 @@ export function StartCard({
       {header}
       <div className={`flex w-full flex-col items-center gap-4 ${slide}`}>{children}</div>
     </div>
+  );
+}
+
+/**
+ * The car's mark in the standings, matching the track: your car's blue dot,
+ * or the other car's colour with its race number (the disc drawn over it).
+ */
+function CarTag(props: { mine: true } | { color: string; n: number }) {
+  if ("mine" in props) {
+    return (
+      <span aria-hidden className="size-3.5 shrink-0 rounded-full bg-accent ring-2 ring-white/80" />
+    );
+  }
+  return (
+    <span
+      aria-hidden
+      className="grid size-4 shrink-0 place-items-center rounded-full text-[0.6rem] leading-none font-bold text-[#1a1a1a] ring-1 ring-white/80"
+      style={{ backgroundColor: props.color }}
+    >
+      {props.n}
+    </span>
   );
 }
 

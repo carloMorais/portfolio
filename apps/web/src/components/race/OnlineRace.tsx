@@ -13,6 +13,7 @@ import {
   type Keys,
   type RaceState,
 } from "race-engine";
+import { COLORS } from "./colors";
 import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
 import {
   CompactHud,
@@ -59,6 +60,7 @@ import {
   emptyHud,
   litLights,
   sizeCanvas,
+  zoomFor,
   type Hud,
 } from "./view";
 
@@ -474,6 +476,8 @@ export function OnlineRace({
           running,
           look: look(p),
           name: names,
+          number: (id) => racerNumber(stateRef.current, id),
+          zoom: zoomFor(canvas.clientWidth),
         });
       }
       const me = stateRef.current.playerId;
@@ -700,7 +704,16 @@ export function OnlineRace({
 
       {/* Standings and times only while a race is on screen. */}
       {inRace && (
-        <StandingsBoard board={hud.board} me={state.playerId} name={renderName} t={tPlay} />
+        <StandingsBoard
+          board={hud.board}
+          me={state.playerId}
+          name={renderName}
+          tag={(id) => {
+            const n = racerNumber(state, id);
+            return { color: COLORS.bots[n % COLORS.bots.length]!, n };
+          }}
+          t={tPlay}
+        />
       )}
       {inRace && <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />}
 

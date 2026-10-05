@@ -12,7 +12,9 @@ import { itemColors, type Palette } from "./draw";
  * - hitting an obstacle flashes a little impact star where the two touched;
  * - an item coming back onto the track pops in with a ring (see `draw.ts`'s
  *   overshoot scale, driven by `respawnProgress`);
- * - nitro leaves a trail.
+ * - nitro leaves a long, glowing trail;
+ * - hard corners and heavy braking leave tyre marks that fade over a few
+ *   seconds, and pulling away from a standstill puffs a little exhaust.
  * With reduced motion none of this is drawn.
  */
 
@@ -40,6 +42,28 @@ const IMPACT_MS = 240;
 type Ring = { x: number; y: number; color: string; born: number; life: number; radius: number };
 
 const TRAIL_EVERY_MS = 18;
+const TRAIL_MS = 650;
+/** Tyre marks stay this long, fading out. */
+const SKID_MS = 4000;
+const MAX_SKIDS = 1200;
+const EXHAUST_EVERY_MS = 90;
+
+type Skid = { x1: number; y1: number; x2: number; y2: number; born: number };
+type Point = { x: number; y: number };
+type CarPose = Box & { rotation: number };
+
+/** Where a car's two rear wheels are, in map coordinates. */
+function rearWheels(car: CarPose): [Point, Point] {
+  const facing = ((car.rotation + 180) * Math.PI) / 180;
+  const cx = car.x + car.width / 2 - Math.cos(facing) * 8;
+  const cy = car.y + car.height / 2 - Math.sin(facing) * 8;
+  const px = -Math.sin(facing) * 7;
+  const py = Math.cos(facing) * 7;
+  return [
+    { x: cx + px, y: cy + py },
+    { x: cx - px, y: cy - py },
+  ];
+}
 const RESPAWN_MS = 420;
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 
@@ -49,6 +73,9 @@ export class Effects {
   private impacts: Impact[] = [];
   private respawns = new Map<string, number>();
   private lastTrail = new Map<string, number>();
+  private skids: Skid[] = [];
+  private wheels = new Map<string, [Point, Point]>();
+  private lastExhaust = new Map<string, number>();
 
   constructor(private readonly reduced: boolean) {}
 
@@ -58,6 +85,65 @@ export class Effects {
     this.impacts = [];
     this.respawns.clear();
     this.lastTrail.clear();
+    this.skids = [];
+    this.wheels.clear();
+    this.lastExhaust.clear();
+  }
+
+  /**
+   * Called every tick for every car: while it `skids` (a hard turn at speed,
+   * heavy braking) its rear wheels leave two dark marks on the road.
+   */
+  tyres(id: string, car: CarPose, skids: boolean, now: number) {
+    if (this.reduced) return;
+    const next = rearWheels(car);
+    const last = this.wheels.get(id);
+    this.wheels.set(id, next);
+    if (!skids || !last) return;
+    // A respawn or a teleport is not a skid.
+    if (Math.hypot(next[0].x - last[0].x, next[0].y - last[0].y) > 20) return;
+    for (const i of [0, 1] as const) {
+      this.skids.push({ x1: last[i].x, y1: last[i].y, x2: next[i].x, y2: next[i].y, born: now });
+    }
+    if (this.skids.length > MAX_SKIDS) this.skids.splice(0, this.skids.length - MAX_SKIDS);
+  }
+
+  /** Pulling away from a standstill: a small grey puff behind the car. */
+  exhaust(id: string, car: CarPose, now: number) {
+    if (this.reduced || now - (this.lastExhaust.get(id) ?? 0) < EXHAUST_EVERY_MS) return;
+    this.lastExhaust.set(id, now);
+    const facing = ((car.rotation + 180) * Math.PI) / 180;
+    this.particles.push({
+      kind: "puff",
+      x: car.x + car.width / 2 - Math.cos(facing) * 14 + rand(-1.5, 1.5),
+      y: car.y + car.height / 2 - Math.sin(facing) * 14 + rand(-1.5, 1.5),
+      vx: -Math.cos(facing) * 0.02 + rand(-0.01, 0.01),
+      vy: -Math.sin(facing) * 0.02 + rand(-0.01, 0.01),
+      size: rand(2, 3),
+      color: "#9a9890",
+      born: now,
+      life: rand(500, 750),
+      alpha: 0.4,
+    });
+  }
+
+  /** Tyre marks: drawn first, flat on the road, under everything else. */
+  drawSkids(ctx: CanvasRenderingContext2D, now: number) {
+    if (this.skids.length === 0) return;
+    this.skids = this.skids.filter((sk) => now - sk.born < SKID_MS);
+    ctx.save();
+    ctx.strokeStyle = "#141414";
+    ctx.lineWidth = 2.2;
+    ctx.lineCap = "round";
+    for (const sk of this.skids) {
+      const t = (now - sk.born) / SKID_MS;
+      ctx.globalAlpha = 0.3 * (1 - t * t);
+      ctx.beginPath();
+      ctx.moveTo(sk.x1, sk.y1);
+      ctx.lineTo(sk.x2, sk.y2);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   /** An item came back: a quick ring, and `drawItem` pops it in (see `respawnProgress`). */
@@ -247,8 +333,8 @@ export class Effects {
     }
   }
 
-  /** Called every frame for a car on nitro: warm circles that shrink behind it. */
-  trail(id: string, car: Box & { rotation: number }, p: Palette, now: number) {
+  /** Called every frame for a car on nitro: warm circles that shrink behind it, over a soft blue glow. */
+  trail(id: string, car: CarPose, p: Palette, now: number) {
     if (this.reduced || now - (this.lastTrail.get(id) ?? 0) < TRAIL_EVERY_MS) return;
     this.lastTrail.set(id, now);
     const facing = ((car.rotation + 180) * Math.PI) / 180;
@@ -260,11 +346,23 @@ export class Effects {
       y: rearY + rand(-2, 2),
       vx: -Math.cos(facing) * 0.03,
       vy: -Math.sin(facing) * 0.03,
-      size: rand(3.5, 5),
+      size: rand(4, 6),
       color: Math.random() < 0.6 ? p.c.bolt : p.accent,
       born: now,
-      life: 380,
-      alpha: 0.6,
+      life: TRAIL_MS,
+      alpha: 0.7,
+    });
+    this.particles.push({
+      kind: "dot",
+      x: rearX,
+      y: rearY,
+      vx: -Math.cos(facing) * 0.015,
+      vy: -Math.sin(facing) * 0.015,
+      size: rand(7, 9),
+      color: p.accent,
+      born: now,
+      life: TRAIL_MS * 0.8,
+      alpha: 0.18,
     });
   }
 

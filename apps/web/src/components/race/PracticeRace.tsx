@@ -13,6 +13,7 @@ import {
   type Keys,
   type RaceState,
 } from "race-engine";
+import { COLORS } from "./colors";
 import { readPalette, type CarLook, type Palette } from "./draw";
 import { Controls } from "./Controls";
 import {
@@ -56,6 +57,7 @@ import {
   emptyHud,
   litLights,
   sizeCanvas,
+  zoomFor,
   type Hud,
 } from "./view";
 
@@ -70,6 +72,10 @@ type Phase = "ready" | "countdown" | "racing" | "finishing" | "paused" | "finish
 type Outcome = { newRace: boolean; newLap: boolean };
 
 const newRace = () => createRace(track, [PLAYER, ...BOT_IDS], LAPS);
+/** Behind the start card, the bots lap on their own (many laps: it never ends while you read). */
+const newDemo = () => createRace(track, BOT_IDS, 99);
+/** A bot's race number, as in its name ("Driver 2"). */
+const botNumber = (id: string) => Number(id.replace("bot", ""));
 
 /**
  * Practice mode: the whole race runs in the browser at 30 ticks/s on the
@@ -248,6 +254,18 @@ export function PracticeRace({
     const v = view.current;
     const running = () => phaseRef.current === "racing" || phaseRef.current === "finishing";
     const moving = () => running() || phaseRef.current === "paused";
+    // Before the first race the bots lap behind the (blurred) start card, so
+    // the page shows a live race, not a still. Not with reduced motion.
+    let demo: RaceState | null = null;
+    let demoPrev: RaceState | null = null;
+    let demoAcc = 0;
+    const stepBots = (s: RaceState, inputs: Record<string, Keys>) => {
+      for (const bot of BOTS[difficultyRef.current]) {
+        const car = s.cars.find((c) => c.id === bot.id);
+        if (car) inputs[bot.id] = botKeys(car, track, bot.style);
+      }
+      return inputs;
+    };
     // You in the site's blue with a stripe; each bot in its own colour.
     const look =
       (p: Palette) =>
@@ -285,11 +303,7 @@ export function PracticeRace({
         acc += dt;
         while (acc >= STEP_MS) {
           const s = race.current;
-          const inputs: Record<string, Keys> = { [PLAYER]: keys.current };
-          for (const bot of BOTS[difficultyRef.current]) {
-            const car = s.cars.find((c) => c.id === bot.id)!;
-            inputs[bot.id] = botKeys(car, track, bot.style);
-          }
+          const inputs = stepBots(s, { [PLAYER]: keys.current });
           prev.current = s;
           const next = stepRace(s, track, inputs);
           race.current = next;
@@ -316,16 +330,44 @@ export function PracticeRace({
         }
       }
 
+      const attract = !reduced && phaseRef.current === "ready";
+      if (attract) {
+        demo ??= newDemo();
+        demoAcc += dt;
+        while (demoAcc >= STEP_MS) {
+          demoPrev = demo;
+          demo = stepRace(demo, track, stepBots(demo, {}));
+          demoAcc -= STEP_MS;
+          if (palette.current) v.react(demo, palette.current, now, null);
+        }
+      } else if (demo) {
+        demo = demoPrev = null;
+        demoAcc = 0;
+      }
+
       const canvas = canvasRef.current;
       const p = palette.current;
       if (canvas && p && trackLayer.current) {
         const ctx = sizeCanvas(canvas);
-        v.draw(ctx, trackLayer.current, race.current, prev.current, acc / STEP_MS, p, now, {
-          moving: moving(),
-          running: running(),
-          look: look(p),
-          name: names,
-        });
+        const shown = attract && demo ? demo : race.current;
+        const before = attract && demo ? demoPrev : prev.current;
+        v.draw(
+          ctx,
+          trackLayer.current,
+          shown,
+          before,
+          attract ? demoAcc / STEP_MS : acc / STEP_MS,
+          p,
+          now,
+          {
+            moving: attract || moving(),
+            running: attract || running(),
+            look: look(p),
+            name: names,
+            number: botNumber,
+            zoom: zoomFor(canvas.clientWidth),
+          },
+        );
       }
       if (now - hudAt > 100) {
         hudAt = now;
@@ -400,7 +442,15 @@ export function PracticeRace({
       </p>
 
       {/* Standings and times only while a race is on screen. */}
-      {onTrack && <StandingsBoard board={hud.board} me={PLAYER} name={names} t={t} />}
+      {onTrack && (
+        <StandingsBoard
+          board={hud.board}
+          me={PLAYER}
+          name={names}
+          tag={(id) => ({ color: COLORS.bots[BOT_IDS.indexOf(id)]!, n: botNumber(id) })}
+          t={t}
+        />
+      )}
       {onTrack && <LapPanel hud={hud} laps={LAPS} best={best} t={t} />}
 
       <div className={TRACK_COLUMN}>
@@ -473,6 +523,9 @@ export function PracticeRace({
           <div className="mt-4 flex justify-center lg:hidden">{results(false)}</div>
         )}
 
+        {phase === "ready" && (
+          <p className="mt-4 text-center text-xs text-muted lg:hidden">{t("controlsTouch")}</p>
+        )}
         <TouchPad press={press} hidden={phase === "finished"} t={t} />
         {phase === "ready" && (
           <div className="mt-6 lg:hidden">

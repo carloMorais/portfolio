@@ -11,6 +11,14 @@ export type GameColors = {
   roadDash: string;
   kerbOuter: string;
   kerbInner: string;
+  /** Red-and-white kerbs on the corners. */
+  kerbRed: string;
+  kerbWhite: string;
+  /** Gravel run-off outside the corners. */
+  gravel: string;
+  gravelDot: string;
+  /** Painted grid slots. */
+  gridLine: string;
   grass: string;
   grassBlotchDark: string;
   grassBlotchLight: string;
@@ -30,6 +38,8 @@ export type GameColors = {
   rockLight: string;
   tire: string;
   tireRim: string;
+  /** The coloured band on top of a tire stack. */
+  tireBand: string;
   oilBarrel: string;
   oilBarrelBand: string;
   fans: string[];
@@ -56,9 +66,15 @@ export const COLORS: GameColors = {
   roadDash: "#eceae2",
   kerbOuter: "#cac6ba",
   kerbInner: "#edebe3",
-  grass: "#3f8f49",
-  grassBlotchDark: "#346f3d",
-  grassBlotchLight: "#4ea655",
+  kerbRed: "#d4544a",
+  kerbWhite: "#f3f1ea",
+  gravel: "#d6c7a0",
+  gravelDot: "#b9a883",
+  gridLine: "#f3f1ea",
+  // 05/10/2026: pulled a little towards olive, so the game sits on the cream page instead of jumping off it.
+  grass: "#4d8a45",
+  grassBlotchDark: "#41733a",
+  grassBlotchLight: "#5c9b50",
   checkpoint: "#232323",
   border: "#232323",
   bots: ["#ef6f6c", "#f2b134", "#3bb08f"],
@@ -69,14 +85,16 @@ export const COLORS: GameColors = {
   standRow: "#b1aca1",
   standRowAlt: "#a39d90",
   standRoof: "#585349",
-  tree: "#3c7a40",
-  treeLight: "#55974f",
+  tree: "#3d6f37",
+  treeLight: "#58894a",
   rock: "#8f8d85",
   rockLight: "#aaa79c",
   tire: "#201f1d",
   tireRim: "#4a4642",
-  oilBarrel: "#30342f",
-  oilBarrelBand: "#1b1e1a",
+  tireBand: "#d4544a",
+  // Scenery stays neutral (blue-grey), so only what you can hit is warm.
+  oilBarrel: "#5f7383",
+  oilBarrelBand: "#475866",
   fans: ["#ef6f6c", "#f2b134", "#3bb08f", "#5b8def", "#f3924a", "#b07cc6", "#fffaf0"],
   bolt: "#ffd166",
   barrel: "#e07a5f",

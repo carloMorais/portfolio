@@ -42,7 +42,6 @@ export function Controls() {
           </figure>
         </div>
       </div>
-      <p className="mt-4 text-xs text-muted lg:hidden">{t("controlsTouch")}</p>
     </div>
   );
 }

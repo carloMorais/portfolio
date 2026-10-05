@@ -8,9 +8,11 @@ import {
   type RaceState,
 } from "race-engine";
 import {
+  drawBadge,
   drawCar,
   drawItem,
   drawLabel,
+  drawVignette,
   drawTarget,
   drawTrack,
   interpolateCar,
@@ -100,6 +102,7 @@ export function buildTrackLayer(p: Palette) {
   const ctx = layer.getContext("2d")!;
   drawTrack(ctx, track, p);
   drawScenery(ctx, p);
+  drawVignette(ctx, track.width, track.height);
   return layer;
 }
 
@@ -123,7 +126,19 @@ type DrawOptions = {
   running: boolean;
   look: (id: string) => CarLook;
   name: (id: string) => string;
+  /** Everyone else's race number, shown on a disc over their car instead of the name. */
+  number: (id: string) => number;
+  /** How much bigger than their boxes cars and items are drawn (phones: the map is tiny). */
+  zoom?: number;
 };
+
+/** A hard turn at speed, or heavy braking, marks the road. */
+const SKID_TURN = 5.5;
+const SKID_SPEED = 4.5;
+const SKID_BRAKE = 0.3;
+
+/** What zoom to draw cars and items at for a canvas `cssWidth` px wide. */
+export const zoomFor = (cssWidth: number) => (cssWidth > 0 && cssWidth < 640 ? 1.3 : 1);
 
 /**
  * Everything both race modes show on top of the engine's state, whichever
@@ -149,6 +164,8 @@ export class RaceView {
   private delta: number | null = null;
   private prevOrder: string[] = [];
   private readonly changeUntil = new Map<string, { dir: "up" | "down"; until: number }>();
+  /** Each car's rotation and speed at the last tick, for tyre marks and exhaust. */
+  private readonly motion = new Map<string, { rotation: number; speed: number }>();
 
   constructor(
     public me: string,
@@ -170,6 +187,7 @@ export class RaceView {
     this.delta = null;
     this.prevOrder = [];
     this.changeUntil.clear();
+    this.motion.clear();
   }
 
   /** The lights just went out: the "Go!" flash. */
@@ -222,6 +240,20 @@ export class RaceView {
         }
       }
     }
+    // Tyre marks on hard turns and heavy braking; a puff pulling away.
+    for (const car of s.cars) {
+      const speed = Math.hypot(car.vx, car.vy);
+      const last = this.motion.get(car.id);
+      this.motion.set(car.id, { rotation: car.rotation, speed });
+      if (!last || car.finishedAt !== null) continue;
+      let turn = Math.abs(car.rotation - last.rotation) % 360;
+      if (turn > 180) turn = 360 - turn;
+      const skids =
+        (speed > SKID_SPEED && turn >= SKID_TURN) || (speed > 2 && last.speed - speed > SKID_BRAKE);
+      this.fx.tyres(car.id, car, skids, now);
+      if (speed < 2.2 && speed > last.speed + 0.05) this.fx.exhaust(car.id, car, now);
+    }
+
     const me = s.cars.find((c) => c.id === this.me);
     this.wrongTicks = me && me.finishedAt === null && wrongWay(me, track) ? this.wrongTicks + 1 : 0;
     return lastLap;
@@ -238,7 +270,9 @@ export class RaceView {
     o: DrawOptions,
   ) {
     const { fx, reduced } = this;
+    const zoom = o.zoom ?? 1;
     ctx.drawImage(layer, 0, 0);
+    fx.drawSkids(ctx, now);
     // The crowd cheers when a car goes past its stand.
     this.crowd.draw(ctx, this.fans, p.c.fans, STANDS, s.cars, now, reduced);
     // Nitro badges float gently, each at its own beat; a just-respawned item pops in.
@@ -249,6 +283,7 @@ export class RaceView {
         p,
         reduced ? 0 : Math.sin(now / 450 + i * 1.7),
         reduced ? null : fx.respawnProgress(item.id, now),
+        zoom,
       ),
     );
 
@@ -274,7 +309,9 @@ export class RaceView {
       if (car.nitroUntil !== null && o.running) fx.trail(car.id, at, p, now);
     }
     fx.draw(ctx, now);
-    for (const { car, at } of ordered) drawCar(ctx, at, o.look(car.id), p, car.nitroUntil !== null);
+    for (const { car, at } of ordered) {
+      drawCar(ctx, at, o.look(car.id), p, car.nitroUntil !== null, zoom);
+    }
     fx.drawImpacts(ctx, p, now);
     for (const { car, at } of ordered) {
       // On the grid the cars sit nose to tail and every name would overlap:
@@ -284,7 +321,11 @@ export class RaceView {
         car.nitroUntil === null
           ? null
           : Math.max(0, Math.min(1, (car.nitroUntil - s.tick - alpha) / PHYSICS.nitroTicks));
-      drawLabel(ctx, at, o.name(car.id), car.nitro, p, track.width, boost, car.id === this.me);
+      if (car.id === this.me) {
+        drawLabel(ctx, at, o.name(car.id), car.nitro, p, track.width, boost, true, zoom);
+      } else {
+        drawBadge(ctx, at, o.number(car.id), o.look(car.id).body, p, boost, zoom);
+      }
     }
   }
 

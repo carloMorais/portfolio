@@ -5,9 +5,12 @@ export function TouchButton({
   label,
   onDown,
   onUp,
+  primary = false,
   children,
 }: {
   label: string;
+  /** The accelerator: the one your thumb lives on, so it is bigger and filled. */
+  primary?: boolean;
   onDown: () => void;
   onUp: () => void;
   children: ReactNode;
@@ -23,7 +26,11 @@ export function TouchButton({
       onPointerUp={onUp}
       onPointerCancel={onUp}
       onContextMenu={(e) => e.preventDefault()}
-      className="size-14 touch-none rounded-full text-xl ring-1 ring-line active:bg-surface"
+      className={`touch-none rounded-full text-xl ${
+        primary
+          ? "size-16 bg-ink text-bg active:opacity-80"
+          : "size-14 ring-1 ring-line active:bg-surface"
+      }`}
     >
       {children}
     </button>
