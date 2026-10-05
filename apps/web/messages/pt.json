@@ -200,5 +200,27 @@
     "gainedPlace": "Subiu uma posição",
     "lostPlace": "Desceu uma posição",
     "lightsHint": "Acelere quando as luzes se apagarem"
+  },
+  "Online": {
+    "modeTraining": "Treino",
+    "modeOnline": "Online",
+    "lead": "Até 10 jogadores dividem uma sala: o líder adiciona bots e começa quando todos estiverem prontos, e a corrida roda no servidor, não no seu navegador.",
+    "note": "O servidor gratuito dorme quando fica ocioso, então a primeira conexão do dia pode levar cerca de um minuto para acordá-lo.",
+    "canvasLabel": "Pista vista de cima com os carros dos jogadores conectados.",
+    "connecting": "Conectando…",
+    "coldStartHint": "Ainda conectando — o servidor pode levar até um minuto para acordar na primeira conexão.",
+    "participants": "Jogadores",
+    "leaderBadge": "Líder",
+    "botBadge": "Bot",
+    "youAreLeader": "Você é o líder: adicione bots e comece quando quiser.",
+    "waitingForLeader": "Aguardando o líder começar a corrida.",
+    "addBot": "Adicionar bot",
+    "removeBot": "Remover bot",
+    "needTwoPlayers": "Precisa de pelo menos 2 jogadores para começar",
+    "roomFull": "A sala está cheia",
+    "actionFailed": "Não foi possível concluir essa ação.",
+    "disconnected": "Conexão perdida.",
+    "reconnect": "Reconectar",
+    "playAgain": "Jogar de novo"
   }
 }

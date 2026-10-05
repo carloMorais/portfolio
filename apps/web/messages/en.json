@@ -200,5 +200,27 @@
     "gainedPlace": "Gained a place",
     "lostPlace": "Lost a place",
     "lightsHint": "Accelerate when the lights go out"
+  },
+  "Online": {
+    "modeTraining": "Practice",
+    "modeOnline": "Online",
+    "lead": "Up to 10 players share one room: the leader adds bots and starts when everyone's ready, and the race runs on the server, not your browser.",
+    "note": "The free server sleeps when idle, so the first connection of the day can take about a minute to wake it up.",
+    "canvasLabel": "Top-down track with the connected players' cars.",
+    "connecting": "Connecting…",
+    "coldStartHint": "Still connecting — the server can take up to a minute to wake up on its first connection.",
+    "participants": "Players",
+    "leaderBadge": "Leader",
+    "botBadge": "Bot",
+    "youAreLeader": "You're the leader: add bots and start whenever you like.",
+    "waitingForLeader": "Waiting for the leader to start the race.",
+    "addBot": "Add a bot",
+    "removeBot": "Remove a bot",
+    "needTwoPlayers": "Needs at least 2 players to start",
+    "roomFull": "The room is full",
+    "actionFailed": "Couldn't complete that action.",
+    "disconnected": "Connection lost.",
+    "reconnect": "Reconnect",
+    "playAgain": "Play again"
   }
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
@@ -31,6 +31,7 @@ import { COLORS } from "./colors";
 import { Effects } from "./effects";
 import { Crowd, STANDS, drawScenery, seatFans } from "./scenery";
 import { BoltIcon } from "./icons";
+import { TouchButton } from "./TouchControls";
 import {
   BOTS,
   DIFFICULTIES,
@@ -98,7 +99,7 @@ const makeConfetti = (colors: string[]): ConfettiPiece[] =>
     rotate: Math.round(Math.random() * 360),
   }));
 
-const KEY_MAP: Record<string, keyof Keys> = {
+export const KEY_MAP: Record<string, keyof Keys> = {
   ArrowUp: "up",
   KeyW: "up",
   ArrowDown: "down",
@@ -1069,34 +1070,5 @@ function ChangeIcon({ dir, label }: { dir: "up" | "down"; label: string }) {
     >
       <path d={dir === "up" ? "M5 1 9 7H1Z" : "M5 9 1 3H9Z"} fill="currentColor" />
     </svg>
-  );
-}
-
-function TouchButton({
-  label,
-  onDown,
-  onUp,
-  children,
-}: {
-  label: string;
-  onDown: () => void;
-  onUp: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      aria-label={label}
-      onPointerDown={(e) => {
-        e.currentTarget.setPointerCapture(e.pointerId);
-        onDown();
-      }}
-      onPointerUp={onUp}
-      onPointerCancel={onUp}
-      onContextMenu={(e) => e.preventDefault()}
-      className="size-14 touch-none rounded-full text-xl ring-1 ring-line active:bg-surface"
-    >
-      {children}
-    </button>
   );
 }
