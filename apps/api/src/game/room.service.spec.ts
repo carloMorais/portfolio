@@ -13,9 +13,6 @@ function fakeClient(): RoomClient & { messages: unknown[] } {
 }
 
 describe("RoomService", () => {
-  beforeEach(() => jest.useFakeTimers());
-  afterEach(() => jest.useRealTimers());
-
   test("two joins in a row land in the same open room", () => {
     const service = new RoomService();
     const alice = fakeClient();
@@ -43,5 +40,25 @@ describe("RoomService", () => {
   test("input from an unknown client is ignored, not thrown", () => {
     const service = new RoomService();
     expect(() => service.input(fakeClient(), NO_KEYS)).not.toThrow();
+  });
+
+  test("add-bot/remove-bot/start from an unknown client return nothing, not throw", () => {
+    const service = new RoomService();
+    const stranger = fakeClient();
+    expect(() => {
+      service.addBot(stranger);
+      service.removeBot(stranger);
+      service.startRace(stranger);
+    }).not.toThrow();
+    expect(service.addBot(stranger)).toBeUndefined();
+  });
+
+  test("the leader can add a bot and then start with just the two", () => {
+    const service = new RoomService();
+    const alice = fakeClient();
+    service.join(alice);
+
+    expect(service.addBot(alice)).toEqual({ ok: true });
+    expect(service.startRace(alice)).toEqual({ ok: true });
   });
 });

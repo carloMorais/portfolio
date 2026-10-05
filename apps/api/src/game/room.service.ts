@@ -14,7 +14,7 @@ export class RoomService {
   private readonly clientRoom = new Map<RoomClient, string>();
 
   join(client: RoomClient) {
-    let room = [...this.rooms.values()].find((r) => r.state === "waiting");
+    let room = [...this.rooms.values()].find((r) => r.state === "waiting" && !r.isFull);
     if (!room) {
       room = new Room(
         randomUUID(),
@@ -35,9 +35,24 @@ export class RoomService {
   }
 
   input(client: RoomClient, keys: Keys) {
+    this.room(client)?.setInput(client, keys);
+  }
+
+  addBot(client: RoomClient) {
+    return this.room(client)?.addBot(client);
+  }
+
+  removeBot(client: RoomClient) {
+    return this.room(client)?.removeBot(client);
+  }
+
+  startRace(client: RoomClient) {
+    return this.room(client)?.startRace(client);
+  }
+
+  private room(client: RoomClient): Room | undefined {
     const roomId = this.clientRoom.get(client);
-    if (!roomId) return;
-    this.rooms.get(roomId)?.setInput(client, keys);
+    return roomId ? this.rooms.get(roomId) : undefined;
   }
 
   get roomCount() {

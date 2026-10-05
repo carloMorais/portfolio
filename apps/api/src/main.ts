@@ -7,12 +7,14 @@ import { AppModule } from "./app.module";
 // Local dev stays in the 17xxx range (see CLAUDE.md); Render injects its own PORT in production.
 const DEV_PORT = 17100;
 
-// The web app's own production URL plus its Vercel preview URLs and local dev ports,
-// since the browser calling this API is either the live site, a release preview, or localhost.
+const isProduction = process.env.NODE_ENV === "production";
+
+// The web app's own production URL plus its Vercel preview URLs; local dev ports are
+// only added outside production, so a production deploy never trusts a localhost origin
+// (Render must set NODE_ENV=production for this to take effect — see CLAUDE.md).
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://portfolio-carlomorais.vercel.app",
-  "http://localhost:17000",
-  "http://localhost:17001",
+  ...(isProduction ? [] : ["http://localhost:17000", "http://localhost:17001"]),
 ];
 
 async function bootstrap() {
