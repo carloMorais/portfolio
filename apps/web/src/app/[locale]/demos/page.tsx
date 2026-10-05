@@ -4,7 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { site } from "@/content/site";
 import { WakeApi } from "@/components/race/WakeApi";
 import { pageMetadata } from "@/lib/seo";
-import { work } from "@/content/work";
+import { demos } from "@/content/work";
 import { SectionHeader } from "@/components/SectionHeader";
 import { WorkCard } from "@/components/WorkCard";
 import { brushTags } from "@/lib/rich";
@@ -36,7 +36,7 @@ export default function DemosPage() {
           lead={t("lead")}
         />
         <div className="mt-14 grid gap-x-10 gap-y-16 md:grid-cols-2">
-          {work.map((item) => (
+          {demos.map((item) => (
             <WorkCard key={item.slug} item={item} headingLevel="h2" />
           ))}
         </div>

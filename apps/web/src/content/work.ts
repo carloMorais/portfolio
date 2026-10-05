@@ -89,3 +89,13 @@ export const work: WorkItem[] = [
     playable: true,
   },
 ];
+
+/**
+ * The Demos tab's order: the playable RaceGame comes second, right after the
+ * main job (Carlos, 05/10/2026). The home keeps `work`'s own order.
+ */
+export const demosOrder = ["plumaa", "racegame", "omnichannel-ai", "bayer"];
+
+export const demos: WorkItem[] = [...work].sort(
+  (a, b) => demosOrder.indexOf(a.slug) - demosOrder.indexOf(b.slug),
+);
