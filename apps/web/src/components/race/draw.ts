@@ -293,9 +293,10 @@ function shadow(
   rx: number,
   ry: number,
   p: Palette,
+  opacity = 1,
 ) {
   ctx.save();
-  ctx.globalAlpha = 0.13;
+  ctx.globalAlpha = 0.13 * opacity;
   ctx.fillStyle = p.ink;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -465,16 +466,86 @@ export function drawItem(
   ctx.restore();
 }
 
-/** `highlight`: a white outline so you can always spot your own car. */
-export type CarLook = { body: string; helmet: string; stripe: boolean; highlight?: boolean };
+/** A livery mark per car colour, so colours that look alike to colour-blind eyes still differ. */
+export type Livery =
+  "stripe" | "band" | "nose" | "twin" | "chevron" | "ring" | "pods" | "split" | "tail" | "none";
+
+/**
+ * `highlight`: a white outline so you can always spot your own car.
+ * `opacity`: other cars fade while they overlap one (cars don't collide, so
+ * passing through each other has to read as a rule, not a glitch).
+ */
+export type CarLook = {
+  body: string;
+  helmet: string;
+  livery: Livery;
+  highlight?: boolean;
+  opacity?: number;
+};
 
 /** Darkens whatever was just filled with `path`: wings and the floor read as carbon. */
-function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number) {
+function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number, opacity = 1) {
   ctx.save();
-  ctx.globalAlpha = amount;
+  ctx.globalAlpha = amount * opacity;
   ctx.fillStyle = "#000000";
   path();
   ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The livery mark, clipped to the body by the caller. Light marks on every
+ * colour but white, which gets dark ones; "tail" paints the rear wing.
+ */
+function drawLivery(ctx: CanvasRenderingContext2D, look: CarLook, o: number) {
+  const mark = look.body.toLowerCase() === "#f1efe8" ? "#1c1b19" : "#fffaf0";
+  ctx.save();
+  ctx.fillStyle = mark;
+  ctx.strokeStyle = mark;
+  ctx.globalAlpha = 0.9 * o;
+  switch (look.livery) {
+    case "stripe":
+      ctx.fillRect(-11, -0.55, 23, 1.1);
+      break;
+    case "twin":
+      ctx.fillRect(-11, -2, 23, 0.9);
+      ctx.fillRect(-11, 1.1, 23, 0.9);
+      break;
+    case "band":
+      ctx.fillRect(-6.5, -6, 2.2, 12);
+      break;
+    case "nose":
+      ctx.fillRect(5.5, -3, 7, 6);
+      break;
+    case "chevron":
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(2, -3);
+      ctx.lineTo(5.5, 0);
+      ctx.lineTo(2, 3);
+      ctx.stroke();
+      break;
+    case "ring":
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(-7.5, 0, 1.6, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    case "pods":
+      ctx.fillRect(-7, -6, 7, 2);
+      ctx.fillRect(-7, 4, 7, 2);
+      break;
+    case "split":
+      ctx.fillStyle = "#000000";
+      ctx.globalAlpha = 0.3 * o;
+      ctx.fillRect(-11, -6, 8, 12);
+      break;
+    case "tail":
+      // Drawn outside the body clip below; see drawCar.
+      break;
+    case "none":
+      break;
+  }
   ctx.restore();
 }
 
@@ -493,13 +564,15 @@ export function drawCar(
   zoom = 1,
 ) {
   const c = p.c;
+  const o = look.opacity ?? 1;
   const cx = car.x + car.width / 2;
   const cy = car.y + car.height / 2;
   ctx.save();
-  shadow(ctx, cx + zoom, cy + 2 * zoom, 12.5 * zoom, 7.5 * zoom, p);
+  shadow(ctx, cx + zoom, cy + 2 * zoom, 12.5 * zoom, 7.5 * zoom, p, o);
   ctx.translate(cx, cy);
   ctx.rotate(((car.rotation + 180) * Math.PI) / 180);
   ctx.scale(zoom, zoom);
+  ctx.globalAlpha = o;
 
   if (boosted) {
     // A pointed, flickering exhaust flame: an outer spike in the site's blue,
@@ -507,7 +580,7 @@ export function drawCar(
     const flicker = 0.8 + 0.2 * Math.sin(performance.now() / 35) * Math.sin(performance.now() / 23);
     const spike = (length: number, width: number, color: string, alpha: number) => {
       ctx.fillStyle = color;
-      ctx.globalAlpha = alpha;
+      ctx.globalAlpha = alpha * o;
       ctx.beginPath();
       ctx.moveTo(-11.5, -width);
       ctx.lineTo(-11.5 - length * flicker, 0);
@@ -518,7 +591,7 @@ export function drawCar(
     spike(15, 3.2, p.accent, 0.75);
     spike(11, 2.2, c.bolt, 0.95);
     spike(6, 1.1, "#ffffff", 0.95);
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = o;
   }
 
   // Wheels, outside the body: wider at the back.
@@ -555,10 +628,17 @@ export function drawCar(
   ctx.fillStyle = look.body;
   rearWing();
   ctx.fill();
-  darken(ctx, rearWing, 0.35);
+  darken(ctx, rearWing, 0.35, o);
   frontWing();
   ctx.fill();
-  darken(ctx, frontWing, 0.2);
+  darken(ctx, frontWing, 0.2, o);
+  if (look.livery === "tail") {
+    ctx.fillStyle = "#fffaf0";
+    ctx.globalAlpha = 0.9 * o;
+    rearWing();
+    ctx.fill();
+    ctx.globalAlpha = o;
+  }
 
   // Body: engine cover, sidepods, then a nose that narrows to the front wing.
   const body = () => {
@@ -589,30 +669,26 @@ export function drawCar(
   ctx.save();
   body();
   ctx.clip();
-  // Livery: a stripe down the middle, and a light sheen on the near side.
-  if (look.stripe) {
-    ctx.fillStyle = c.stripe;
-    ctx.globalAlpha = 0.9;
-    ctx.fillRect(-11, -0.55, 23, 1.1);
-  }
+  // Livery (one mark per colour), and a light sheen on the near side.
+  drawLivery(ctx, look, o);
   ctx.fillStyle = "#ffffff";
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = 0.16 * o;
   ctx.fillRect(-11, -6, 23, 2.6);
   ctx.restore();
 
   // Cockpit and helmet.
   ctx.fillStyle = "#000000";
-  ctx.globalAlpha = 0.55;
+  ctx.globalAlpha = 0.55 * o;
   ctx.beginPath();
   ctx.ellipse(-1.8, 0, 3.2, 1.9, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = o;
   ctx.fillStyle = look.helmet;
   ctx.beginPath();
   ctx.arc(-1.4, 0, 1.55, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#000000";
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = 0.45 * o;
   ctx.fillRect(-0.4, -1, 0.7, 2); // visor
   ctx.restore();
 }

@@ -12,6 +12,13 @@ export {
   stepRace,
   wrongWay,
 } from "./race.ts";
-export { BOT_STYLES, DIFFICULTIES, botKeys, type BotStyle, type Difficulty } from "./bot.ts";
+export {
+  BOT_STYLES,
+  DIFFICULTIES,
+  botKeys,
+  elasticStyle,
+  type BotStyle,
+  type Difficulty,
+} from "./bot.ts";
 export { classicTrack } from "./track.ts";
 export { RaceDecoder, encodeCar, encodeTick, type WireCar, type WireTick } from "./wire.ts";

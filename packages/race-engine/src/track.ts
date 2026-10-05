@@ -67,12 +67,15 @@ export const classicTrack: Track = {
     // Moved up from the first curve's exit (near the bottom straight) to its
     // entry, higher up the left straight.
     { id: "a", type: 2, x: 60, y: 260, width: 20, height: 20 },
-    { id: "b", type: 1, x: 90, y: 420, width: 20, height: 20 },
+    // 05/10/2026: two nitros moved just past a barrel, off the racing line,
+    // so taking one is a choice (swerve round the barrel and back) instead of
+    // a freebie on the way: b behind barrel a, g behind barrel k.
+    { id: "b", type: 1, x: 60, y: 226, width: 20, height: 20 },
     { id: "c", type: 2, x: 180, y: 160, width: 20, height: 20 },
     { id: "d", type: 4, x: 300, y: 300, width: 20, height: 20 },
     { id: "e", type: 2, x: 380, y: 150, width: 20, height: 20 },
     { id: "f", type: 4, x: 440, y: 20, width: 20, height: 20 },
-    { id: "g", type: 1, x: 660, y: 150, width: 20, height: 20 },
+    { id: "g", type: 1, x: 688, y: 278, width: 20, height: 20 },
     { id: "h", type: 3, x: 650, y: 450, width: 25, height: 30 },
     { id: "i", type: 1, x: 600, y: 520, width: 20, height: 20 },
     // j and k moved off the crowded start-area cluster onto the bare right

@@ -92,12 +92,16 @@ describe("stepCarPhysics", () => {
 });
 
 describe("applySlowdown", () => {
-  test("costs 70% of the speed on both axes, whatever the speed", () => {
-    const car = createCar("a", 0, 0);
-    car.vx = -6;
-    car.vy = 2;
-    applySlowdown(car);
-    assert.equal(car.vx, -1.8);
-    assert.equal(car.vy, 0.6);
+  test("costs a share of the speed on both axes, by what was hit", () => {
+    const hit = (type: 2 | 3 | 4) => {
+      const car = createCar("a", 0, 0);
+      car.vx = -6;
+      car.vy = 2;
+      applySlowdown(car, type);
+      return [car.vx, car.vy];
+    };
+    assert.deepEqual(hit(4), [-4.5, 1.5]); // cone: 25%
+    assert.deepEqual(hit(2), [-3.3, 1.1]); // barrel: 45%
+    assert.deepEqual(hit(3), [-2.7, 0.9]); // log: 55%
   });
 });

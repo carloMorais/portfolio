@@ -7,6 +7,8 @@ import {
   TICK_RATE,
   botKeys,
   classicTrack as track,
+  elasticStyle,
+  raceProgress,
   createRace,
   standings,
   stepRace,
@@ -279,20 +281,28 @@ export function PracticeRace({
     let demoPrev: RaceState | null = null;
     let demoAcc = 0;
     const stepBots = (s: RaceState, inputs: Record<string, Keys>) => {
+      // A light rubber band towards you on easy and normal (see elasticStyle).
+      const you = s.cars.find((c) => c.id === PLAYER);
+      const yours = you ? raceProgress(you, track, s.laps) : null;
       for (const bot of BOTS[difficultyRef.current]) {
         const car = s.cars.find((c) => c.id === bot.id);
-        if (car) inputs[bot.id] = botKeys(car, track, bot.style);
+        if (!car) continue;
+        const style =
+          yours === null
+            ? bot.style
+            : elasticStyle(bot.style, raceProgress(car, track, s.laps) - yours);
+        inputs[bot.id] = botKeys(car, track, style);
       }
       return inputs;
     };
-    // Each car in its colour (yours picked on the start card), you with a stripe and an outline.
+    // Each car in its colour (yours picked on the start card), you with an outline.
     const look =
       (p: Palette) =>
       (id: string): CarLook => {
-        const body = carColor(colorsRef.current[id] ?? 0).body;
+        const { body, livery } = carColor(colorsRef.current[id] ?? 0);
         return id === PLAYER
-          ? { body, helmet: p.c.bolt, stripe: true, highlight: true }
-          : { body, helmet: p.c.helmet, stripe: false };
+          ? { body, livery, helmet: p.c.bolt, highlight: true }
+          : { body, livery, helmet: p.c.helmet };
       };
 
     const finish = (s: RaceState) => {

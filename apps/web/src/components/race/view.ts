@@ -1,6 +1,7 @@
 import {
   PHYSICS,
   activeItems,
+  overlaps,
   classicTrack as track,
   standings,
   wrongWay,
@@ -312,8 +313,21 @@ export class RaceView {
       if (car.nitroUntil !== null && o.running) fx.trail(car.id, at, p, now);
     }
     fx.draw(ctx, now);
+    // Cars drive through each other: anyone overlapping another car fades
+    // while they do, so it reads as a rule of the game, not a glitch. Yours never fades.
     for (const { car, at } of ordered) {
-      drawCar(ctx, at, o.look(car.id), p, car.nitroUntil !== null, zoom);
+      const overlapping =
+        car.id !== this.me &&
+        ordered.some((other) => other.car.id !== car.id && overlaps(at, other.at));
+      const look = o.look(car.id);
+      drawCar(
+        ctx,
+        at,
+        overlapping ? { ...look, opacity: 0.45 } : look,
+        p,
+        car.nitroUntil !== null,
+        zoom,
+      );
     }
     fx.drawImpacts(ctx, p, now);
     for (const { car, at } of ordered) {

@@ -492,20 +492,15 @@ export function OnlineRace({
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     view.current ??= new RaceView(stateRef.current.playerId ?? "", stateRef.current.laps, reduced);
     const v = view.current;
-    // Each car in the colour its driver picked (or was given); you with a stripe and an outline.
+    // Each car in the colour its driver picked (or was given); you with an outline.
     const look =
       (p: Palette) =>
       (id: string): CarLook => {
         const s = stateRef.current;
-        if (id === s.playerId) {
-          return {
-            body: carColor(colorIndex(s, id)).body,
-            helmet: p.c.bolt,
-            stripe: true,
-            highlight: true,
-          };
-        }
-        return { body: carColor(colorIndex(s, id)).body, helmet: p.c.helmet, stripe: false };
+        const { body, livery } = carColor(colorIndex(s, id));
+        return id === s.playerId
+          ? { body, livery, helmet: p.c.bolt, highlight: true }
+          : { body, livery, helmet: p.c.helmet };
       };
 
     /** The latest server state with every car where it should be drawn at `now`. */

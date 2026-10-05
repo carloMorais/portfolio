@@ -31,8 +31,6 @@ export const PHYSICS = {
   wallBounce: 0.25,
   /** Degrees per tick the nose turns towards the wall it's sliding along. Not in the original. */
   alignStep: 2,
-  /** Hitting a barrel or a log costs this share of the speed on both axes. Not in the original (it took a fixed 5). */
-  obstaclePenalty: 0.7,
   /**
    * With throttle or brake held, steering works as if the car were at least
    * this fast, so a car stopped against a wall can always turn away. Not in the original.
@@ -44,18 +42,21 @@ export const PHYSICS = {
 export const round2 = (n: number) => Math.round(n * 100) / 100;
 
 /**
- * What each item is. `rigid` doesn't change the physics (every obstacle costs
- * `obstaclePenalty`); it tells clients how to show the hit: rigid things
+ * What each item is. `penalty` is the share of the speed an obstacle costs,
+ * on both axes (not in the original, which took a fixed 5). Until 05/10/2026
+ * every obstacle cost 70%: one touch decided a ~30 s lap. Now it follows what
+ * the thing is: a cone gives way (25%), a barrel less so (45%), a log is the
+ * worst (55%). `rigid` tells clients how to show the hit: rigid things
  * shatter, soft ones just burst.
  */
 export const ITEM_KINDS: Record<
   ItemType,
-  { name: "nitro" | "barrel" | "log" | "cone"; rigid: boolean }
+  { name: "nitro" | "barrel" | "log" | "cone"; rigid: boolean; penalty: number }
 > = {
-  1: { name: "nitro", rigid: false },
-  2: { name: "barrel", rigid: true },
-  3: { name: "log", rigid: true },
-  4: { name: "cone", rigid: false },
+  1: { name: "nitro", rigid: false, penalty: 0 },
+  2: { name: "barrel", rigid: true, penalty: 0.45 },
+  3: { name: "log", rigid: true, penalty: 0.55 },
+  4: { name: "cone", rigid: false, penalty: 0.25 },
 };
 
 /**

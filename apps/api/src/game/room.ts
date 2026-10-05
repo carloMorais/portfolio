@@ -4,6 +4,8 @@ import {
   DIFFICULTIES,
   botKeys,
   classicTrack,
+  elasticStyle,
+  raceProgress,
   createRace,
   encodeTick,
   NO_KEYS,
@@ -315,6 +317,13 @@ export class Room {
   private tick() {
     if (!this.raceState) return;
     const inputs: Record<string, Keys> = {};
+    // The leading human, for the bots' rubber band (easy and normal only).
+    const humanLead = Math.max(
+      0,
+      ...this.raceState.cars
+        .filter((c) => this.humanIds.includes(c.id))
+        .map((c) => raceProgress(c, this.track, LAPS)),
+    );
     for (const car of this.raceState.cars) {
       const bot = this.botOrder.indexOf(car.id);
       if (bot === -1) {
@@ -323,7 +332,8 @@ export class Room {
       }
       // Bots of the same difficulty still drive a little differently (the three styles).
       const styles = BOT_STYLES[this.botDifficulty.get(car.id) ?? "normal"];
-      inputs[car.id] = botKeys(car, this.track, styles[bot % styles.length]);
+      const gap = raceProgress(car, this.track, LAPS) - humanLead;
+      inputs[car.id] = botKeys(car, this.track, elasticStyle(styles[bot % styles.length]!, gap));
     }
     const s = stepRace(this.raceState, this.track, inputs);
     this.raceState = s;

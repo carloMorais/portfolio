@@ -1,5 +1,5 @@
-import { PHYSICS, round2 } from "./constants.ts";
-import type { Car, Keys } from "./types.ts";
+import { ITEM_KINDS, PHYSICS, round2 } from "./constants.ts";
+import type { Car, ItemType, Keys } from "./types.ts";
 
 const P = PHYSICS;
 const rad = (deg: number) => (deg * Math.PI) / 180;
@@ -98,9 +98,9 @@ function clampVelocity(car: Car, maxVelocity: number) {
   car.vy = Math.max(-maxVelocity, Math.min(maxVelocity, car.vy));
 }
 
-/** Barrels and logs cost a share of the speed (`obstaclePenalty`), whatever it is. */
-export function applySlowdown(car: Car): void {
-  const keep = 1 - P.obstaclePenalty;
+/** An obstacle costs a share of the speed (its `ITEM_KINDS` penalty), whatever the speed is. */
+export function applySlowdown(car: Car, type: ItemType): void {
+  const keep = 1 - ITEM_KINDS[type].penalty;
   car.vx = round2(car.vx * keep);
   car.vy = round2(car.vy * keep);
 }
