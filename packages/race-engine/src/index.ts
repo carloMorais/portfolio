@@ -12,5 +12,5 @@ export {
   stepRace,
   wrongWay,
 } from "./race.ts";
-export { botKeys, type BotStyle } from "./bot.ts";
+export { BOT_STYLES, DIFFICULTIES, botKeys, type BotStyle, type Difficulty } from "./bot.ts";
 export { classicTrack } from "./track.ts";

@@ -140,6 +140,19 @@ describe("GameGateway (e2e)", () => {
     bob.socket.close();
   });
 
+  test("the leader picks the bots' difficulty and everyone's lobby shows it", async () => {
+    const { socket, next } = await connect();
+    await next(); // welcome
+    expect(await next()).toEqual(expect.objectContaining({ difficulty: "normal" }));
+
+    socket.send(JSON.stringify({ event: "difficulty", data: "hard" }));
+    expect(await next()).toEqual(expect.objectContaining({ type: "lobby", difficulty: "hard" }));
+
+    socket.send(JSON.stringify({ event: "difficulty", data: "impossible" }));
+    expect(await next()).toEqual(expect.objectContaining({ type: "error" }));
+    socket.close();
+  });
+
   test("the leader can't start alone; the error names the rule", async () => {
     const { socket, next } = await connect();
     await next(); // welcome

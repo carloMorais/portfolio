@@ -1,61 +1,84 @@
 "use client";
 
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useCallback, useEffect, useReducer, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
-import { NO_KEYS, classicTrack as track, type Keys } from "race-engine";
 import {
-  drawCar,
-  drawItem,
-  drawLabel,
-  drawTrack,
-  readPalette,
-  type CarLook,
-  type Palette,
-} from "./draw";
-import { drawScenery } from "./scenery";
-import { formatTime } from "./session";
-import { KEY_MAP } from "./PracticeRace";
-import { TouchButton } from "./TouchControls";
-import { BoltIcon } from "./icons";
+  NO_KEYS,
+  classicTrack as track,
+  createRace,
+  standings,
+  type Keys,
+  type RaceState,
+} from "race-engine";
+import { readPalette, type CarLook, type Palette } from "./draw";
+import {
+  DifficultyPicker,
+  FinishingVeil,
+  LapPanel,
+  RACE_GRID,
+  ResultsCard,
+  RestartButton,
+  StandingsBoard,
+  TRACK_COLUMN,
+  TouchPad,
+  TrackOverlays,
+  VEIL,
+  makeConfetti,
+  type ConfettiPiece,
+} from "./hud";
 import {
   apiWsUrl,
   applyServerMessage,
   initialOnlineState,
   isLeader,
-  type CarSnapshot,
+  toRaceState,
   type ClientMessage,
+  type OnlineState,
   type ServerMessage,
 } from "./online";
+import {
+  bestLap,
+  loadBest,
+  resultRows,
+  saveBest,
+  storage,
+  updateBest,
+  type PersonalBest,
+} from "./session";
+import {
+  KEY_MAP,
+  RaceView,
+  buildTrackLayer,
+  emptyHud,
+  litLights,
+  sizeCanvas,
+  type Hud,
+} from "./view";
 
 const STEP_MS = 1000 / 30;
 /** How long "couldn't complete that action" stays up before fading. */
 const ERROR_MS = 3000;
 /** After this long still connecting, the Render cold-start hint shows up. */
 const COLD_START_MS = 4000;
+const ITEM_IDS = track.items.map((it) => it.id);
 
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const racerNumber = (s: OnlineState, id: string) =>
+  s.numbers[id] ?? s.participants.find((p) => p.id === id)?.number ?? 0;
 
-function interpolateSnapshot(prev: CarSnapshot | undefined, next: CarSnapshot, t: number) {
-  if (!prev) return next;
-  if (Math.abs(prev.x - next.x) > 40 || Math.abs(prev.y - next.y) > 40) return next;
-  let dr = next.rotation - prev.rotation;
-  if (dr > 180) dr -= 360;
-  if (dr < -180) dr += 360;
-  return {
-    ...next,
-    x: lerp(prev.x, next.x, t),
-    y: lerp(prev.y, next.y, t),
-    rotation: prev.rotation + dr * t,
-  };
-}
+const nameIn = (s: OnlineState, id: string, t: ReturnType<typeof useTranslations<"Play">>) =>
+  id === s.playerId ? t("you") : t("bot", { n: racerNumber(s, id) });
+const EMPTY = createRace(track, [], 2);
 
-type LiveHud = { tick: number; cars: CarSnapshot[] };
+type Outcome = { newRace: boolean; newLap: boolean };
 
 /**
  * Online mode: the race itself runs on the server (`apps/api`'s WebSocket
- * gateway), 30 ticks/s; this draws the same track with the same renderer as
- * practice mode, interpolating between the last two snapshots it received.
- * No local physics, no bots computed here — just a lobby, input, and drawing.
+ * gateway), 30 ticks/s. Everything practice mode shows — start lights,
+ * effects, the next checkpoint, wrong way, last lap, live standings, sector
+ * delta, lap times, record, confetti, results — is drawn here from the
+ * server's ticks with the same `RaceView` and HUD, interpolating between the
+ * last two. No local physics and no bots computed here. No pause either: the
+ * race goes on for everyone.
  */
 export function OnlineRace() {
   const t = useTranslations("Online");
@@ -64,28 +87,61 @@ export function OnlineRace() {
   const trackLayer = useRef<HTMLCanvasElement | null>(null);
   const palette = useRef<Palette | null>(null);
   const keysRef = useRef<Keys>({ ...NO_KEYS });
-  const carsRef = useRef<{ prev: CarSnapshot[] | null; current: CarSnapshot[]; at: number }>({
-    prev: null,
-    current: [],
-    at: 0,
-  });
-  const itemsRef = useRef<Set<string>>(new Set());
+  const race = useRef<RaceState>(EMPTY);
+  const prev = useRef<RaceState | null>(null);
+  /** When the latest tick arrived, to interpolate towards it. */
+  const tickAt = useRef(0);
   const wsRef = useRef<WebSocket | null>(null);
-  const phaseRef = useRef(initialOnlineState.phase);
-  const myIdRef = useRef<string | null>(null);
+  const view = useRef<RaceView | null>(null);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const restartRef = useRef<HTMLButtonElement>(null);
+  const countdownEnd = useRef<number | null>(null);
+  const countdownMs = useRef(0);
+  const doneRef = useRef(false);
+  /** The record is updated once per race, whether you skip to the results or not. */
+  const recordedRef = useRef(false);
+  const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
 
   const [state, dispatch] = useReducer(applyServerMessage, initialOnlineState);
+  const stateRef = useRef(state);
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [transientError, setTransientError] = useState<string | null>(null);
   const [showColdStartHint, setShowColdStartHint] = useState(false);
-  const [liveHud, setLiveHud] = useState<LiveHud>({ tick: 0, cars: [] });
+  const [hud, setHud] = useState<Hud>(() => emptyHud(EMPTY));
+  const [result, setResult] = useState<RaceState | null>(null);
+  const [best, setBest] = useState<PersonalBest>({ race: null, lap: null, splits: null });
+  const [outcome, setOutcome] = useState<Outcome | null>(null);
+  const [announcement, setAnnouncement] = useState("");
+  const [confetti, setConfetti] = useState<ConfettiPiece[] | null>(null);
 
   useEffect(() => {
-    phaseRef.current = state.phase;
-  }, [state.phase]);
+    stateRef.current = state;
+    if (view.current && state.playerId) view.current.me = state.playerId;
+  }, [state]);
   useEffect(() => {
-    myIdRef.current = state.playerId;
-  }, [state.playerId]);
+    bestRef.current = best;
+  }, [best]);
+
+  // Online races keep one record of their own, in this browser only.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setBest(loadBest(storage(), "online")));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  /** Everyone is "Piloto N" in your language, except you. The draw loop reads the latest state. */
+  const names = useCallback((id: string) => nameIn(stateRef.current, id, tPlay), [tPlay]);
+  const renderName = (id: string) => nameIn(state, id, tPlay);
+
+  // In the lobby, everyone who's in waits on the grid.
+  useEffect(() => {
+    if (state.phase !== "lobby") return;
+    race.current = createRace(
+      track,
+      state.participants.map((p) => p.id),
+      state.laps,
+    );
+    prev.current = null;
+  }, [state.phase, state.participants, state.laps]);
 
   // Track and colours, same renderer as practice mode.
   useEffect(() => {
@@ -93,13 +149,7 @@ export function OnlineRace() {
       const canvas = canvasRef.current;
       if (!canvas) return;
       palette.current = readPalette(canvas);
-      const layer = document.createElement("canvas");
-      layer.width = track.width;
-      layer.height = track.height;
-      const lctx = layer.getContext("2d")!;
-      drawTrack(lctx, track, palette.current);
-      drawScenery(lctx, palette.current);
-      trackLayer.current = layer;
+      trackLayer.current = buildTrackLayer(palette.current);
     };
     build();
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -107,25 +157,52 @@ export function OnlineRace() {
     return () => media.removeEventListener("change", build);
   }, []);
 
+  const finish = useCallback((s: RaceState) => {
+    setResult(s);
+    const me = s.cars.find((c) => c.id === stateRef.current.playerId);
+    if (!me || me.finishedAt === null || recordedRef.current) return;
+    recordedRef.current = true;
+    const lap = bestLap(me);
+    const lapIndex = lap !== null ? me.lapTicks.indexOf(lap) : -1;
+    const splits = lapIndex >= 0 ? (view.current?.lapHistory[lapIndex] ?? null) : null;
+    const next = updateBest(loadBest(storage(), "online"), me.finishedAt, lap, splits);
+    saveBest(storage(), "online", next.best);
+    setBest(next.best);
+    setOutcome({ newRace: next.newRace, newLap: next.newLap });
+  }, []);
+
   // The WebSocket connection: one room per connection, no resume on reconnect yet.
   useEffect(() => {
-    carsRef.current = { prev: null, current: [], at: 0 };
-    itemsRef.current = new Set();
+    let live = true;
+    race.current = EMPTY;
+    prev.current = null;
     const coldStartTimer = setTimeout(() => setShowColdStartHint(true), COLD_START_MS);
 
     const ws = new WebSocket(apiWsUrl());
     wsRef.current = ws;
 
     ws.addEventListener("message", (event) => {
+      if (!live) return;
       const msg = JSON.parse(event.data as string) as ServerMessage;
+      const now = performance.now();
+      const v = view.current;
+      const me = stateRef.current.playerId;
       if (msg.type === "state") {
-        carsRef.current = {
-          prev: carsRef.current.current,
-          current: msg.cars,
-          at: performance.now(),
-        };
-        itemsRef.current = new Set(msg.items);
-        setLiveHud({ tick: msg.tick, cars: msg.cars });
+        prev.current = race.current;
+        race.current = toRaceState(msg, stateRef.current.laps, ITEM_IDS);
+        tickAt.current = now;
+        const p = palette.current;
+        if (v && p && v.react(race.current, p, now, bestRef.current.splits)) {
+          setAnnouncement(tPlay("announceLastLap"));
+        }
+        const mine = race.current.cars.find((c) => c.id === me);
+        if (mine && mine.finishedAt !== null && !doneRef.current) {
+          doneRef.current = true;
+          dispatch({ type: "you-finished" });
+          if (race.current.finished[0] === me && p) {
+            setConfetti(makeConfetti([p.accent, p.c.bolt, ...p.c.bots]));
+          }
+        }
         return;
       }
       if (msg.type === "error") {
@@ -133,186 +210,292 @@ export function OnlineRace() {
         setTimeout(() => setTransientError(null), ERROR_MS);
         return;
       }
+      if (msg.type === "start") {
+        race.current = createRace(track, msg.carIds, stateRef.current.laps);
+        prev.current = null;
+        keysRef.current = { ...NO_KEYS };
+        v?.reset();
+        doneRef.current = false;
+        recordedRef.current = false;
+        countdownMs.current = msg.countdownMs;
+        countdownEnd.current = now + msg.countdownMs;
+        setResult(null);
+        setOutcome(null);
+        setConfetti(null);
+        canvasRef.current?.focus({ preventScroll: true });
+        // Bring the whole track into view: you can't drive what you can't see.
+        rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      }
+      if (msg.type === "finished") finish(race.current);
       dispatch(msg);
     });
-    const onLost = () => dispatch({ type: "room-closed" });
+    const onLost = () => live && dispatch({ type: "room-closed" });
     ws.addEventListener("close", onLost);
     ws.addEventListener("error", onLost);
 
     return () => {
+      live = false;
       clearTimeout(coldStartTimer);
       ws.close();
       wsRef.current = null;
     };
-  }, [connectAttempt]);
+  }, [connectAttempt, finish, tPlay]);
 
-  const send = (message: ClientMessage) => wsRef.current?.send(JSON.stringify(message));
+  const send = (message: ClientMessage) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) wsRef.current.send(JSON.stringify(message));
+  };
 
-  // Driving keys, only while racing; sent on change, not every frame.
+  const reconnect = useCallback(() => {
+    setShowColdStartHint(false);
+    setResult(null);
+    setConfetti(null);
+    setOutcome(null);
+    setHud(emptyHud(EMPTY));
+    dispatch({ type: "reconnect" });
+    setConnectAttempt((n) => n + 1);
+  }, []);
+
+  // Keyboard: driving keys (sent on change, not every frame) during the lights
+  // and the race; Enter starts (leader) or plays again, and so does R.
   useEffect(() => {
+    const driving = () => {
+      const p = stateRef.current.phase;
+      return p === "countdown" || p === "racing";
+    };
+    const sendKeys = () =>
+      wsRef.current?.readyState === WebSocket.OPEN &&
+      wsRef.current.send(JSON.stringify({ event: "input", data: keysRef.current }));
     const onDown = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      const s = stateRef.current;
+      if (!e.repeat) {
+        const over = s.phase === "finished" || s.phase === "disconnected";
+        if (e.code === "KeyR" && over) {
+          e.preventDefault();
+          reconnect();
+          return;
+        }
+        // A focused button already answers Enter with a click.
+        if (e.code === "Enter" && !(e.target instanceof HTMLButtonElement)) {
+          if (over) reconnect();
+          if (s.phase === "lobby" && isLeader(s) && s.participants.length >= 2) {
+            wsRef.current?.send(JSON.stringify({ event: "start" }));
+          }
+          return;
+        }
+      }
       const key = KEY_MAP[e.code];
-      if (!key || phaseRef.current !== "racing") return;
+      if (!key || !driving()) return;
       e.preventDefault();
+      if (keysRef.current[key]) return;
       keysRef.current = { ...keysRef.current, [key]: true };
-      send({ event: "input", data: keysRef.current });
+      sendKeys();
     };
     const onUp = (e: KeyboardEvent) => {
       const key = KEY_MAP[e.code];
-      if (!key) return;
+      if (!key || !keysRef.current[key]) return;
       keysRef.current = { ...keysRef.current, [key]: false };
-      if (phaseRef.current === "racing") send({ event: "input", data: keysRef.current });
+      sendKeys();
     };
+    // Leaving the tab or the window lets go of every key (the race can't pause).
     const away = () => {
-      if (phaseRef.current !== "racing") return;
       keysRef.current = { ...NO_KEYS };
-      send({ event: "input", data: keysRef.current });
+      if (driving() || stateRef.current.phase === "finishing") sendKeys();
     };
+    const onVisibility = () => document.visibilityState === "hidden" && away();
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
     window.addEventListener("blur", away);
+    document.addEventListener("visibilitychange", onVisibility);
     return () => {
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
       window.removeEventListener("blur", away);
+      document.removeEventListener("visibilitychange", onVisibility);
     };
-  }, []);
+  }, [reconnect]);
+
+  // The results take the keyboard focus, so Enter races again.
+  useEffect(() => {
+    if (state.phase === "finished") restartRef.current?.focus({ preventScroll: true });
+  }, [state.phase]);
 
   const press = (key: keyof Keys, down: boolean) => {
     keysRef.current = { ...keysRef.current, [key]: down };
     send({ event: "input", data: keysRef.current });
   };
 
-  // Draw loop: interpolates between the last two server snapshots.
+  // Draw loop: interpolates between the last two server ticks.
   useEffect(() => {
     let raf = 0;
-    const names = (id: string, number: number) =>
-      id === myIdRef.current ? tPlay("you") : tPlay("bot", { n: number });
+    let hudAt = 0;
+    const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    view.current ??= new RaceView(stateRef.current.playerId ?? "", stateRef.current.laps, reduced);
+    const v = view.current;
+    // You in the site's blue with a stripe; everyone else in a colour by number.
+    const look =
+      (p: Palette) =>
+      (id: string): CarLook => {
+        const s = stateRef.current;
+        if (id === s.playerId) {
+          return { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true };
+        }
+        const n = racerNumber(s, id);
+        return { body: p.c.bots[n % p.c.bots.length]!, helmet: p.c.helmet, stripe: false };
+      };
 
-    const draw = (now: number) => {
+    const frame = (now: number) => {
+      const phase = stateRef.current.phase;
+      if (countdownEnd.current !== null && now >= countdownEnd.current) {
+        countdownEnd.current = null;
+        dispatch({ type: "lights-out" });
+        v.lightsOut(now);
+        setAnnouncement(tPlay("go"));
+      }
+      const running = phase === "racing" || phase === "finishing" || phase === "finished";
+
       const canvas = canvasRef.current;
       const p = palette.current;
-      if (!canvas || !p || !trackLayer.current) {
-        raf = requestAnimationFrame(draw);
-        return;
-      }
-      const dpr = window.devicePixelRatio || 1;
-      const w = track.width * dpr;
-      if (canvas.width !== w) {
-        canvas.width = w;
-        canvas.height = track.height * dpr;
-      }
-      const ctx = canvas.getContext("2d")!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.drawImage(trackLayer.current, 0, 0);
-
-      if (phaseRef.current === "racing" || phaseRef.current === "finished") {
-        const { prev, current, at } = carsRef.current;
-        const alpha = Math.min(1, (now - at) / STEP_MS);
-        const active = track.items.filter((it) => itemsRef.current.has(it.id));
-        for (const item of active) drawItem(ctx, item, p, Math.sin(now / 450));
-
-        const numbers = state.numbers;
-        const ordered = [
-          ...current.filter((c) => c.id !== myIdRef.current),
-          ...current.filter((c) => c.id === myIdRef.current),
-        ].map((car) => {
-          const before = prev?.find((c) => c.id === car.id);
-          return { car, at: interpolateSnapshot(before, car, alpha) };
+      if (canvas && p && trackLayer.current) {
+        const ctx = sizeCanvas(canvas);
+        const alpha = Math.min(1, (now - tickAt.current) / STEP_MS);
+        v.draw(ctx, trackLayer.current, race.current, prev.current, alpha, p, now, {
+          moving: running,
+          running,
+          look: look(p),
+          name: names,
         });
-        for (const { car, at: pos } of ordered) {
-          const mine = car.id === myIdRef.current;
-          const look: CarLook = mine
-            ? { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true }
-            : {
-                body: p.c.bots[(numbers[car.id] ?? 0) % p.c.bots.length]!,
-                helmet: p.c.helmet,
-                stripe: false,
-              };
-          drawCar(ctx, { ...pos, width: 25, height: 25 }, look, p, false);
-        }
-        for (const { car, at: pos } of ordered) {
-          drawLabel(
-            ctx,
-            { ...pos, width: 25, height: 25 },
-            names(car.id, numbers[car.id] ?? 0),
-            car.nitro,
-            p,
-            track.width,
-            null,
-            car.id === myIdRef.current,
-          );
+      }
+      const me = stateRef.current.playerId;
+      if (now - hudAt > 100 && me && race.current.cars.some((c) => c.id === me)) {
+        hudAt = now;
+        const lit =
+          phase === "countdown" && countdownEnd.current !== null
+            ? litLights(now - (countdownEnd.current - countdownMs.current))
+            : 0;
+        const { hud: next, announce } = v.hud(race.current, now, phase === "racing", lit);
+        setHud(next);
+        if (announce) {
+          setAnnouncement(tPlay("announcePosition", { place: tPlay("ordinal", { n: announce }) }));
         }
       }
-      raf = requestAnimationFrame(draw);
+      raf = requestAnimationFrame(frame);
     };
-    raf = requestAnimationFrame(draw);
+    raf = requestAnimationFrame(frame);
     return () => cancelAnimationFrame(raf);
-  }, [state.numbers, tPlay]);
+  }, [names, tPlay]);
 
-  const reconnect = () => setConnectAttempt((n) => n + 1);
+  const skip = () => {
+    finish(race.current);
+    dispatch({ type: "skip" });
+  };
+
   const leading = isLeader(state);
-  const totalParticipants = state.participants.length;
-  const me = liveHud.cars.find((c) => c.id === state.playerId);
+  const enough = state.participants.length >= 2;
+  const me = state.playerId ?? "";
+  const phase = state.phase;
+  const inRace = phase === "countdown" || phase === "racing" || phase === "finishing";
+
+  // On lg it sits over the track; below it there's no room, so it goes under it.
+  const lobby = (
+    <div className="flex w-full max-w-xs flex-col items-center gap-4">
+      <ul className="w-full space-y-1.5 text-sm">
+        {state.participants.map((p) => (
+          <li
+            key={p.id}
+            className={`flex items-center justify-between rounded-lg px-3 py-1.5 ring-1 ring-line ${
+              p.id === state.playerId ? "bg-bg text-accent" : ""
+            }`}
+          >
+            <span>{renderName(p.id)}</span>
+            <span className="flex gap-1.5 text-xs text-muted">
+              {p.isBot && <span>{t("botBadge")}</span>}
+              {p.id === state.leaderId && <span className="text-accent">{t("leaderBadge")}</span>}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <p className="text-center text-sm text-muted">
+        {leading ? t("youAreLeader") : t("waitingForLeader")}
+      </p>
+      <DifficultyPicker
+        value={state.difficulty}
+        onChange={leading ? (d) => send({ event: "difficulty", data: d }) : undefined}
+        t={tPlay}
+      />
+      {leading && (
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={() => send({ event: "add-bot" })}
+              className="btn btn-ghost text-sm"
+            >
+              {t("addBot")}
+            </button>
+            <button
+              type="button"
+              onClick={() => send({ event: "remove-bot" })}
+              className="btn btn-ghost text-sm"
+            >
+              {t("removeBot")}
+            </button>
+          </div>
+          <button
+            type="button"
+            onClick={() => send({ event: "start" })}
+            disabled={!enough}
+            className="btn btn-primary disabled:opacity-40"
+          >
+            {tPlay("start")}
+          </button>
+          {enough ? (
+            <p className="hidden text-xs text-muted lg:block">{tPlay("startHint")}</p>
+          ) : (
+            <p className="text-xs text-muted">{t("needTwoPlayers")}</p>
+          )}
+        </div>
+      )}
+      {transientError && <p className="text-xs text-accent">{t("actionFailed")}</p>}
+    </div>
+  );
+
+  const results = (focus: boolean) =>
+    result && (
+      <ResultsCard
+        rows={resultRows(standings(result, track))}
+        me={me}
+        place={result.finished.indexOf(me) + 1}
+        myTime={result.cars.find((c) => c.id === me)?.finishedAt ?? null}
+        outcome={outcome}
+        name={renderName}
+        t={tPlay}
+      >
+        <RestartButton
+          buttonRef={focus ? restartRef : undefined}
+          onClick={reconnect}
+          label={t("playAgain")}
+          hint={tPlay("restartHint")}
+        />
+      </ResultsCard>
+    );
 
   return (
-    <div className="grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,1fr)_6.5rem] lg:gap-x-6">
-      <table className="col-start-1 row-start-1 self-start text-sm tabular-nums">
-        <caption className="sr-only">{tPlay("standings")}</caption>
-        <thead>
-          <tr className="border-b border-line text-left text-xs text-muted">
-            <th scope="col" className="pr-3 pb-2 font-normal">
-              {tPlay("place")}
-            </th>
-            <th scope="col" className="pr-3 pb-2 font-normal">
-              {tPlay("driver")}
-            </th>
-            <th scope="col" className="pb-2 font-normal">
-              {tPlay("lap")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {[...liveHud.cars]
-            .sort((a, b) => b.laps - a.laps)
-            .map((c, i) => (
-              <tr key={c.id} className="border-b border-line last:border-0">
-                <td className="py-2 pr-3 text-muted">{i + 1}</td>
-                <th
-                  scope="row"
-                  className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${c.id === state.playerId ? "text-accent" : ""}`}
-                >
-                  {c.id === state.playerId
-                    ? tPlay("you")
-                    : tPlay("bot", { n: state.numbers[c.id] ?? 0 })}
-                  {c.finishedAt !== null && (
-                    <span className="ml-1.5 text-xs text-muted">· {tPlay("done")}</span>
-                  )}
-                </th>
-                <td className="py-2">
-                  {c.laps}/{state.laps}
-                </td>
-              </tr>
-            ))}
-        </tbody>
-      </table>
+    <div
+      data-phase={phase}
+      data-tick={hud.tick}
+      data-player-x={hud.playerX}
+      ref={rootRef}
+      className={RACE_GRID}
+    >
+      <p className="sr-only" aria-live="polite">
+        {announcement}
+      </p>
 
-      <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3">
-        <div>
-          <dt className="text-xs text-muted">{tPlay("lap")}</dt>
-          <dd className="font-display text-3xl tracking-tight">
-            {Math.min(state.laps, (me?.laps ?? 0) + 1)}
-            <span className="text-muted">/{state.laps}</span>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{tPlay("time")}</dt>
-          <dd className="font-display text-3xl tracking-tight">{formatTime(liveHud.tick)}</dd>
-        </div>
-      </dl>
+      <StandingsBoard board={hud.board} me={state.playerId} name={renderName} t={tPlay} />
+      <LapPanel hud={hud} laps={state.laps} best={best} t={tPlay} />
 
-      <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
+      <div className={TRACK_COLUMN}>
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -322,11 +505,25 @@ export function OnlineRace() {
             className="block aspect-[760/600] w-full bg-bg outline-none"
           />
 
-          {(state.phase === "connecting" ||
-            state.phase === "lobby" ||
-            state.phase === "disconnected") && (
-            <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]">
-              {state.phase === "connecting" && (
+          <TrackOverlays
+            hud={hud}
+            countdown={phase === "countdown"}
+            racing={phase === "racing" || phase === "finishing"}
+            showLastLap={phase === "racing"}
+            confetti={phase === "finishing" || phase === "finished" ? confetti : null}
+            t={tPlay}
+          />
+
+          {phase === "finishing" && hud.place > 0 && (
+            <FinishingVeil place={hud.place} onSkip={skip} t={tPlay} />
+          )}
+
+          {(phase === "connecting" ||
+            phase === "lobby" ||
+            phase === "disconnected" ||
+            phase === "finished") && (
+            <div className={VEIL}>
+              {phase === "connecting" && (
                 <div className="flex flex-col items-center gap-3 text-center">
                   <p className="font-display text-2xl tracking-tight">{t("connecting")}</p>
                   {showColdStartHint && (
@@ -334,66 +531,10 @@ export function OnlineRace() {
                   )}
                 </div>
               )}
-              {state.phase === "lobby" && (
-                <div className="flex w-full max-w-xs flex-col items-center gap-4">
-                  <ul className="w-full space-y-1.5 text-sm">
-                    {state.participants.map((p) => (
-                      <li
-                        key={p.id}
-                        className={`flex items-center justify-between rounded-lg px-3 py-1.5 ring-1 ring-line ${
-                          p.id === state.playerId ? "bg-bg text-accent" : ""
-                        }`}
-                      >
-                        <span>
-                          {p.id === state.playerId ? tPlay("you") : tPlay("bot", { n: p.number })}
-                        </span>
-                        <span className="flex gap-1.5 text-xs text-muted">
-                          {p.isBot && <span>{t("botBadge")}</span>}
-                          {p.id === state.leaderId && (
-                            <span className="text-accent">{t("leaderBadge")}</span>
-                          )}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                  <p className="text-center text-sm text-muted">
-                    {leading ? t("youAreLeader") : t("waitingForLeader")}
-                  </p>
-                  {leading && (
-                    <div className="flex flex-col items-center gap-2">
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={() => send({ event: "add-bot" })}
-                          className="btn btn-ghost text-sm"
-                        >
-                          {t("addBot")}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => send({ event: "remove-bot" })}
-                          className="btn btn-ghost text-sm"
-                        >
-                          {t("removeBot")}
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => send({ event: "start" })}
-                        disabled={totalParticipants < 2}
-                        className="btn btn-primary disabled:opacity-40"
-                      >
-                        {tPlay("start")}
-                      </button>
-                      {totalParticipants < 2 && (
-                        <p className="text-xs text-muted">{t("needTwoPlayers")}</p>
-                      )}
-                    </div>
-                  )}
-                  {transientError && <p className="text-xs text-accent">{t("actionFailed")}</p>}
-                </div>
+              {phase === "lobby" && (
+                <div className="hidden w-full justify-center lg:flex">{lobby}</div>
               )}
-              {state.phase === "disconnected" && (
+              {phase === "disconnected" && (
                 <div className="flex flex-col items-center gap-3 text-center">
                   <p className="font-display text-2xl tracking-tight">{t("disconnected")}</p>
                   <button type="button" onClick={reconnect} className="btn btn-primary">
@@ -401,104 +542,21 @@ export function OnlineRace() {
                   </button>
                 </div>
               )}
-            </div>
-          )}
-
-          {state.phase === "racing" && me?.finishedAt !== null && me !== undefined && (
-            <p
-              role="status"
-              className="pointer-events-none absolute inset-x-0 top-3 flex justify-center"
-            >
-              <span className="rounded-full bg-bg/90 px-4 py-1.5 text-sm text-ink ring-1 ring-line">
-                {tPlay("done")}
-              </span>
-            </p>
-          )}
-
-          {state.phase === "finished" && (
-            <div className="race-fade-in absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/70 p-4 text-center backdrop-blur-[2px]">
-              <p className="font-display text-3xl tracking-tight">{tPlay("standings")}</p>
-              <table className="w-full max-w-xs text-left text-sm tabular-nums">
-                <thead>
-                  <tr className="text-xs text-muted">
-                    <th scope="col" className="pb-1 font-normal">
-                      {tPlay("driver")}
-                    </th>
-                    <th scope="col" className="pb-1 text-right font-normal">
-                      {tPlay("time")}
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.standings?.map((s, i) => (
-                    <tr
-                      key={s.carId}
-                      className={s.carId === state.playerId ? "text-accent" : undefined}
-                    >
-                      <th scope="row" className="py-0.5 pr-3 font-normal whitespace-nowrap">
-                        {i + 1}.{" "}
-                        {s.carId === state.playerId ? tPlay("you") : tPlay("bot", { n: s.number })}
-                      </th>
-                      <td className="py-0.5 text-right">
-                        {s.finishedAt !== null ? formatTime(s.finishedAt) : tPlay("notFinished")}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button type="button" onClick={reconnect} className="btn btn-primary mt-2">
-                {t("playAgain")}
-              </button>
+              {phase === "finished" && (
+                <div className="hidden w-full justify-center lg:flex">{results(true)}</div>
+              )}
             </div>
           )}
         </div>
 
-        {/* Touch controls, only while racing. */}
-        <div
-          className={`mt-4 flex select-none items-center justify-between gap-3 lg:hidden ${
-            state.phase === "racing" ? "" : "hidden"
-          }`}
-        >
-          <div className="flex gap-3">
-            <TouchButton
-              label={tPlay("left")}
-              onDown={() => press("left", true)}
-              onUp={() => press("left", false)}
-            >
-              ←
-            </TouchButton>
-            <TouchButton
-              label={tPlay("right")}
-              onDown={() => press("right", true)}
-              onUp={() => press("right", false)}
-            >
-              →
-            </TouchButton>
-          </div>
-          <div className="flex gap-3">
-            <TouchButton
-              label={tPlay("nitroButton")}
-              onDown={() => press("nitro", true)}
-              onUp={() => press("nitro", false)}
-            >
-              <BoltIcon className="mx-auto size-5 text-accent" />
-            </TouchButton>
-            <TouchButton
-              label={tPlay("brake")}
-              onDown={() => press("down", true)}
-              onUp={() => press("down", false)}
-            >
-              ↓
-            </TouchButton>
-            <TouchButton
-              label={tPlay("gas")}
-              onDown={() => press("up", true)}
-              onUp={() => press("up", false)}
-            >
-              ↑
-            </TouchButton>
-          </div>
-        </div>
+        {phase === "lobby" && <div className="mt-4 flex justify-center lg:hidden">{lobby}</div>}
+
+        {/* Below lg the results don't fit over the track: they take the touch controls' place. */}
+        {phase === "finished" && (
+          <div className="mt-4 flex justify-center lg:hidden">{results(false)}</div>
+        )}
+
+        <TouchPad press={press} hidden={!inRace} t={tPlay} />
       </div>
     </div>
   );

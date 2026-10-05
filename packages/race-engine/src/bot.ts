@@ -36,3 +36,25 @@ export function botKeys(car: Car, track: Track, style: BotStyle = { skill: 1 }):
     nitro: style.topSpeed === undefined && car.nitro > 0 && Math.abs(turn) < 10 && speed > 4,
   };
 }
+
+export const DIFFICULTIES = ["easy", "normal", "hard"] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
+
+/**
+ * Three bot styles per difficulty, shared by practice mode and the online
+ * server. Measured over 2 laps: easy ~68–76 s, normal ~58–64 s, hard ~50 s
+ * (no speed cap, and they use nitro).
+ */
+export const BOT_STYLES: Record<Difficulty, BotStyle[]> = {
+  easy: [
+    { skill: 1, topSpeed: 4 },
+    { skill: 1, topSpeed: 3.75 },
+    { skill: 1, topSpeed: 3.5 },
+  ],
+  normal: [
+    { skill: 1, topSpeed: 5.5 },
+    { skill: 1, topSpeed: 5 },
+    { skill: 1, topSpeed: 4.5 },
+  ],
+  hard: [{ skill: 1 }, { skill: 0.9 }, { skill: 0.8 }],
+};

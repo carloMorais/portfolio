@@ -4,145 +4,68 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslations } from "next-intl";
 import {
   NO_KEYS,
-  PHYSICS,
   TICK_RATE,
-  activeItems,
   botKeys,
   classicTrack as track,
   createRace,
   standings,
   stepRace,
-  wrongWay,
   type Keys,
   type RaceState,
 } from "race-engine";
+import { readPalette, type CarLook, type Palette } from "./draw";
 import {
-  drawCar,
-  drawItem,
-  type CarLook,
-  drawLabel,
-  drawTarget,
-  drawTrack,
-  interpolateCar,
-  readPalette,
-  type Palette,
-} from "./draw";
-import { COLORS } from "./colors";
-import { Effects } from "./effects";
-import { Crowd, STANDS, drawScenery, seatFans } from "./scenery";
-import { BoltIcon } from "./icons";
-import { TouchButton } from "./TouchControls";
+  DifficultyPicker,
+  FinishingVeil,
+  LapPanel,
+  PauseButton,
+  ResultsCard,
+  RestartButton,
+  StandingsBoard,
+  TouchPad,
+  TrackOverlays,
+  RACE_GRID,
+  TRACK_COLUMN,
+  VEIL,
+  makeConfetti,
+  type ConfettiPiece,
+} from "./hud";
 import {
   BOTS,
-  DIFFICULTIES,
-  GATE_WARNING_TICKS,
   LAPS,
   PLAYER,
-  WRONG_WAY_TICKS,
   bestLap,
-  formatGap,
-  formatTime,
   loadBest,
   loadDifficulty,
   resultRows,
   saveBest,
   saveDifficulty,
+  storage,
   updateBest,
   type Difficulty,
   type PersonalBest,
 } from "./session";
+import {
+  KEY_MAP,
+  RaceView,
+  buildTrackLayer,
+  emptyHud,
+  litLights,
+  sizeCanvas,
+  type Hud,
+} from "./view";
 
 const BOT_IDS = BOTS.normal.map((b) => b.id);
 const STEP_MS = 1000 / TICK_RATE;
 const COUNTDOWN_MS = 3000;
 /** After you cross the line, the bots get this long to finish before the results show anyway. */
 const WAIT_TICKS = 45 * TICK_RATE;
-const LAST_LAP_MS = 2200;
 
 /** "finishing": you're done, the bots are still racing. */
 type Phase = "ready" | "countdown" | "racing" | "finishing" | "paused" | "finished";
-type Driver = {
-  id: string;
-  nitro: number;
-  done: boolean;
-  /** Gained or lost a place in the last ~1.6s, for a small arrow in the standings. */
-  change: "up" | "down" | null;
-};
-type Hud = {
-  tick: number;
-  time: number;
-  lap: number;
-  laps: number[];
-  /** Your finishing place, 0 while you race. */
-  place: number;
-  playerX: number;
-  board: Driver[];
-  wrongWay: boolean;
-  lastLap: boolean;
-  justStarted: boolean;
-  /** Ticks ahead (negative) or behind your reference lap at the last checkpoint crossed. */
-  delta: number | null;
-  /** Starting lights lit, 0–5 (only meaningful during the countdown). */
-  lit: number;
-};
 type Outcome = { newRace: boolean; newLap: boolean };
-type ChangeMark = { dir: "up" | "down"; until: number };
-type ConfettiPiece = { id: number; left: number; delay: number; color: string; rotate: number };
-
-/** A one-off handful of confetti pieces, randomised once when you take 1st. */
-const makeConfetti = (colors: string[]): ConfettiPiece[] =>
-  Array.from({ length: 22 }, (_, i) => ({
-    id: i,
-    left: Math.random() * 100,
-    delay: Math.random() * 0.4,
-    color: colors[i % colors.length]!,
-    rotate: Math.round(Math.random() * 360),
-  }));
-
-export const KEY_MAP: Record<string, keyof Keys> = {
-  ArrowUp: "up",
-  KeyW: "up",
-  ArrowDown: "down",
-  KeyS: "down",
-  ArrowLeft: "left",
-  KeyA: "left",
-  ArrowRight: "right",
-  KeyD: "right",
-  Space: "nitro",
-};
 
 const newRace = () => createRace(track, [PLAYER, ...BOT_IDS], LAPS);
-
-const board = (s: RaceState): Driver[] =>
-  standings(s, track).map((c) => ({
-    id: c.id,
-    nitro: c.nitro,
-    done: c.finishedAt !== null,
-    change: null,
-  }));
-
-const initialHud = (): Hud => ({
-  tick: 0,
-  time: 0,
-  lap: 1,
-  laps: [],
-  place: 0,
-  playerX: 0,
-  board: board(newRace()),
-  wrongWay: false,
-  lastLap: false,
-  justStarted: false,
-  delta: null,
-  lit: 0,
-});
-
-const storage = () => {
-  try {
-    return window.localStorage;
-  } catch {
-    return undefined;
-  }
-};
 
 /**
  * Practice mode: the whole race runs in the browser at 30 ticks/s on the
@@ -162,26 +85,13 @@ export function PracticeRace() {
   const countdownEnd = useRef(0);
   const rootRef = useRef<HTMLDivElement>(null);
   const restartRef = useRef<HTMLButtonElement>(null);
-  const effects = useRef<Effects | null>(null);
+  const view = useRef<RaceView | null>(null);
   const difficultyRef = useRef<Difficulty>("normal");
-  // Per-race feedback state, reset on every start.
-  const wrongTicks = useRef(0);
-  const gateAt = useRef<number | null>(null);
-  const lastLapUntil = useRef(0);
-  const startFlashUntil = useRef(0);
-  const position = useRef({ candidate: 0, since: 0, announced: 0 });
-  // Your checkpoint splits this lap, every completed lap's splits, and the
-  // live delta against your best lap's splits (sticky between checkpoints).
-  const splitsRef = useRef<number[]>([]);
-  const lapHistoryRef = useRef<number[][]>([]);
-  const deltaRef = useRef<number | null>(null);
   const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
-  const prevOrderRef = useRef<string[]>([]);
-  const changeUntilRef = useRef(new Map<string, ChangeMark>());
   const celebratedRef = useRef(false);
 
   const [phase, setPhaseState] = useState<Phase>("ready");
-  const [hud, setHud] = useState<Hud>(initialHud);
+  const [hud, setHud] = useState<Hud>(() => emptyHud(newRace()));
   const [result, setResult] = useState<RaceState | null>(null);
   const [difficulty, setDifficultyState] = useState<Difficulty>("normal");
   const [best, setBest] = useState<PersonalBest>({ race: null, lap: null, splits: null });
@@ -221,17 +131,7 @@ export function PracticeRace() {
     race.current = newRace();
     prev.current = null;
     keys.current = { ...NO_KEYS };
-    effects.current?.clear();
-    wrongTicks.current = 0;
-    gateAt.current = null;
-    lastLapUntil.current = 0;
-    startFlashUntil.current = 0;
-    position.current = { candidate: 0, since: 0, announced: 0 };
-    splitsRef.current = [];
-    lapHistoryRef.current = [];
-    deltaRef.current = null;
-    prevOrderRef.current = [];
-    changeUntilRef.current.clear();
+    view.current?.reset();
     celebratedRef.current = false;
     setResult(null);
     setOutcome(null);
@@ -261,13 +161,7 @@ export function PracticeRace() {
       const canvas = canvasRef.current;
       if (!canvas) return;
       palette.current = readPalette(canvas);
-      const layer = document.createElement("canvas");
-      layer.width = track.width;
-      layer.height = track.height;
-      const lctx = layer.getContext("2d")!;
-      drawTrack(lctx, track, palette.current);
-      drawScenery(lctx, palette.current);
-      trackLayer.current = layer;
+      trackLayer.current = buildTrackLayer(palette.current);
     };
     build();
     const media = window.matchMedia("(prefers-color-scheme: dark)");
@@ -339,12 +233,17 @@ export function PracticeRace() {
     let acc = 0;
     let hudAt = 0;
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    effects.current ??= new Effects(reduced);
-    const fx = effects.current;
-    const fans = seatFans(STANDS, 7);
-    const crowd = new Crowd(STANDS.length);
+    view.current ??= new RaceView(PLAYER, LAPS, reduced);
+    const v = view.current;
     const running = () => phaseRef.current === "racing" || phaseRef.current === "finishing";
     const moving = () => running() || phaseRef.current === "paused";
+    // You in the site's blue with a stripe; each bot in its own colour.
+    const look =
+      (p: Palette) =>
+      (id: string): CarLook =>
+        id === PLAYER
+          ? { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true }
+          : { body: p.c.bots[BOT_IDS.indexOf(id)]!, helmet: p.c.helmet, stripe: false };
 
     const finish = (s: RaceState) => {
       setResult(s);
@@ -354,55 +253,11 @@ export function PracticeRace() {
       const d = difficultyRef.current;
       const lap = bestLap(me);
       const lapIndex = lap !== null ? me.lapTicks.indexOf(lap) : -1;
-      const splits = lapIndex >= 0 ? (lapHistoryRef.current[lapIndex] ?? null) : null;
+      const splits = lapIndex >= 0 ? (v.lapHistory[lapIndex] ?? null) : null;
       const next = updateBest(loadBest(storage(), d), me.finishedAt, lap, splits);
       saveBest(storage(), d, next.best);
       setBest(next.best);
       setOutcome({ newRace: next.newRace, newLap: next.newLap });
-    };
-
-    const react = (s: RaceState, now: number) => {
-      const p = palette.current;
-      if (!p) return;
-      for (const ev of s.events) {
-        if (ev.type === "bump") {
-          const car = s.cars.find((c) => c.id === ev.car)!;
-          fx.bump(car, ev.impact, ev.nx, ev.ny, ev.gate, p, now);
-          if (ev.car === PLAYER && ev.gate) gateAt.current = s.tick;
-        } else if (ev.type === "pickup") {
-          const item = track.items.find((it) => it.id === ev.item)!;
-          fx.pickup(item, p, now);
-          if (item.type !== 1) {
-            // The impact star goes exactly where the car met the obstacle.
-            const car = s.cars.find((c) => c.id === ev.car)!;
-            const x =
-              (Math.max(car.x, item.x) + Math.min(car.x + car.width, item.x + item.width)) / 2;
-            const y =
-              (Math.max(car.y, item.y) + Math.min(car.y + car.height, item.y + item.height)) / 2;
-            fx.impact(x, y, now);
-          }
-        } else if (ev.type === "respawn") {
-          const item = track.items.find((it) => it.id === ev.item);
-          if (item) fx.respawn(item, p, now);
-        } else if (ev.type === "checkpoint" && ev.car === PLAYER) {
-          // Sector delta: sticky until the next checkpoint updates it.
-          splitsRef.current[ev.order - 1] = ev.ticks;
-          const ref = bestRef.current.splits;
-          deltaRef.current =
-            ref && ref[ev.order - 1] !== undefined ? ev.ticks - ref[ev.order - 1]! : null;
-        } else if (ev.type === "lap" && ev.car === PLAYER) {
-          lapHistoryRef.current.push([...splitsRef.current]);
-          splitsRef.current = [];
-          deltaRef.current = null;
-          if (!ev.finished && ev.lap === LAPS - 1) {
-            lastLapUntil.current = now + LAST_LAP_MS;
-            setAnnouncement(t("announceLastLap"));
-          }
-        }
-      }
-      const me = s.cars.find((c) => c.id === PLAYER)!;
-      wrongTicks.current =
-        me.finishedAt === null && wrongWay(me, track) ? wrongTicks.current + 1 : 0;
     };
 
     const frame = (now: number) => {
@@ -411,7 +266,7 @@ export function PracticeRace() {
 
       if (phaseRef.current === "countdown" && now >= countdownEnd.current) {
         setPhase("racing");
-        startFlashUntil.current = now + 500;
+        v.lightsOut(now);
         setAnnouncement(t("go"));
       }
 
@@ -428,14 +283,16 @@ export function PracticeRace() {
           const next = stepRace(s, track, inputs);
           race.current = next;
           acc -= STEP_MS;
-          react(next, now);
+          const p = palette.current;
+          if (p && v.react(next, p, now, bestRef.current.splits)) {
+            setAnnouncement(t("announceLastLap"));
+          }
 
           const me = next.cars.find((c) => c.id === PLAYER)!;
           if (phaseRef.current === "racing" && me.finishedAt !== null) {
             setPhase("finishing");
             if (!celebratedRef.current && next.finished[0] === PLAYER) {
               celebratedRef.current = true;
-              const p = palette.current;
               if (p) setConfetti(makeConfetti([p.accent, p.c.bolt, ...p.c.bots]));
             }
           }
@@ -448,148 +305,34 @@ export function PracticeRace() {
         }
       }
 
-      draw(acc / STEP_MS, now);
-      if (now - hudAt > 100) {
-        hudAt = now;
-        const s = race.current;
-        const me = s.cars.find((c) => c.id === PLAYER)!;
-        const ranked = standings(s, track);
-        const order = ranked.map((c) => c.id);
-        const place = order.indexOf(PLAYER) + 1;
-
-        // A small up/down arrow for ~1.6s wherever a driver's place just changed.
-        const prevOrder = prevOrderRef.current;
-        if (prevOrder.length === order.length) {
-          order.forEach((id, i) => {
-            const was = prevOrder.indexOf(id);
-            if (was !== -1 && was !== i) {
-              changeUntilRef.current.set(id, { dir: was > i ? "up" : "down", until: now + 1600 });
-            }
-          });
-        }
-        prevOrderRef.current = order;
-        const boardRows: Driver[] = ranked.map((c) => {
-          const mark = changeUntilRef.current.get(c.id);
-          return {
-            id: c.id,
-            nitro: c.nitro,
-            done: c.finishedAt !== null,
-            change: mark && now < mark.until ? mark.dir : null,
-          };
-        });
-
-        const lit =
-          phaseRef.current === "countdown"
-            ? Math.max(
-                0,
-                Math.min(5, Math.floor((now - (countdownEnd.current - COUNTDOWN_MS)) / 500) + 1),
-              )
-            : 0;
-        setHud({
-          tick: s.tick,
-          time: me.finishedAt ?? s.tick,
-          lap: Math.min(LAPS, me.laps + 1),
-          laps: me.lapTicks,
-          place: s.finished.indexOf(PLAYER) + 1,
-          playerX: Math.round(me.x),
-          board: boardRows,
-          wrongWay:
-            me.finishedAt === null &&
-            (wrongTicks.current >= WRONG_WAY_TICKS ||
-              (gateAt.current !== null && s.tick - gateAt.current < GATE_WARNING_TICKS)),
-          lastLap: now < lastLapUntil.current,
-          justStarted: now < startFlashUntil.current,
-          delta: deltaRef.current,
-          lit,
-        });
-        // Say the position once it has held for a moment, not at every overtake.
-        const pos = position.current;
-        if (place !== pos.candidate) {
-          pos.candidate = place;
-          pos.since = now;
-        } else if (
-          phaseRef.current === "racing" &&
-          place !== pos.announced &&
-          now - pos.since > 1500
-        ) {
-          pos.announced = place;
-          setAnnouncement(t("announcePosition", { place: t("ordinal", { n: place }) }));
-        }
-      }
-      raf = requestAnimationFrame(frame);
-    };
-
-    const draw = (alpha: number, now: number) => {
       const canvas = canvasRef.current;
       const p = palette.current;
-      if (!canvas || !p || !trackLayer.current) return;
-      const dpr = window.devicePixelRatio || 1;
-      const w = track.width * dpr;
-      if (canvas.width !== w) {
-        canvas.width = w;
-        canvas.height = track.height * dpr;
+      if (canvas && p && trackLayer.current) {
+        const ctx = sizeCanvas(canvas);
+        v.draw(ctx, trackLayer.current, race.current, prev.current, acc / STEP_MS, p, now, {
+          moving: moving(),
+          running: running(),
+          look: look(p),
+          name: names,
+        });
       }
-      const ctx = canvas.getContext("2d")!;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx.drawImage(trackLayer.current, 0, 0);
-
-      const s = race.current;
-      // The crowd cheers when a car goes past its stand.
-      crowd.draw(ctx, fans, p.c.fans, STANDS, s.cars, now, reduced);
-      // Nitro badges float gently, each at its own beat; a just-respawned item pops in.
-      activeItems(track, s).forEach((item, i) =>
-        drawItem(
-          ctx,
-          item,
-          p,
-          reduced ? 0 : Math.sin(now / 450 + i * 1.7),
-          reduced ? null : fx.respawnProgress(item.id, now),
-        ),
-      );
-
-      // Where you need to go next.
-      const me = s.cars.find((c) => c.id === PLAYER)!;
-      if (me.finishedAt === null) {
-        const done = me.checkpoint === track.checkpoints.length;
-        const box = done
-          ? track.finishLine
-          : track.checkpoints.find((cp) => cp.order === me.checkpoint + 1)!;
-        drawTarget(ctx, box, done, p, reduced ? 0.6 : (Math.sin(now / 350) + 1) / 2);
+      if (now - hudAt > 100) {
+        hudAt = now;
+        const lit =
+          phaseRef.current === "countdown"
+            ? litLights(now - (countdownEnd.current - COUNTDOWN_MS))
+            : 0;
+        const { hud: next, announce } = v.hud(
+          race.current,
+          now,
+          phaseRef.current === "racing",
+          lit,
+        );
+        setHud(next);
+        if (announce)
+          setAnnouncement(t("announcePosition", { place: t("ordinal", { n: announce }) }));
       }
-
-      // Bots first, the player on top; effects under the cars, names over them.
-      const ordered = [
-        ...s.cars.filter((c) => c.id !== PLAYER),
-        ...s.cars.filter((c) => c.id === PLAYER),
-      ].map((car) => {
-        const before = prev.current?.cars.find((c) => c.id === car.id);
-        return { car, at: moving() ? interpolateCar(before, car, alpha) : car };
-      });
-      for (const { car, at } of ordered) {
-        if (car.nitroUntil !== null && running()) fx.trail(car.id, at, p, now);
-      }
-      fx.draw(ctx, now);
-      // You in the site's blue with a stripe; each bot in its own colour.
-      const looks: CarLook[] = p.c.bots.map((body) => ({
-        body,
-        helmet: p.c.helmet,
-        stripe: false,
-      }));
-      for (const { car, at } of ordered) {
-        const look =
-          car.id === PLAYER
-            ? { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true }
-            : looks[BOT_IDS.indexOf(car.id)]!;
-        drawCar(ctx, at, look, p, car.nitroUntil !== null);
-      }
-      fx.drawImpacts(ctx, p, now);
-      for (const { car, at } of ordered) {
-        const boost =
-          car.nitroUntil === null
-            ? null
-            : Math.max(0, Math.min(1, (car.nitroUntil - s.tick - alpha) / PHYSICS.nitroTicks));
-        drawLabel(ctx, at, names(car.id), car.nitro, p, track.width, boost, car.id === PLAYER);
-      }
+      raf = requestAnimationFrame(frame);
     };
 
     raf = requestAnimationFrame(frame);
@@ -605,89 +348,27 @@ export function PracticeRace() {
     keys.current = { ...keys.current, [key]: down };
   };
 
-  const rows = result ? resultRows(standings(result, track)) : [];
-  const myTime = result?.cars.find((c) => c.id === PLAYER)?.finishedAt ?? null;
-  const fastestLap = hud.laps.length > 0 ? Math.min(...hud.laps) : null;
-
   const results = (focus: boolean) =>
     result && (
-      <div className="race-fade-in my-auto w-full max-w-sm rounded-2xl bg-bg p-4 text-center ring-1 ring-line sm:p-6">
-        <p className="race-elastic-in font-display text-2xl tracking-tight sm:text-3xl">
-          {t("finished", { n: result.finished.indexOf(PLAYER) + 1 })}
-        </p>
-        {myTime !== null && (
-          <p
-            className="race-elastic-in mt-1 text-sm text-muted tabular-nums"
-            style={{ animationDelay: "0.1s" }}
-          >
-            {t("finishedTime", { time: formatTime(myTime) })}
-          </p>
-        )}
-        {(outcome?.newRace || outcome?.newLap) && (
-          <p
-            className="race-elastic-in mt-2 text-sm text-accent"
-            style={{ animationDelay: "0.2s" }}
-          >
-            {outcome.newRace ? t("newRecord") : t("newBestLap")}
-          </p>
-        )}
-        <table
-          className="race-elastic-in mt-4 w-full text-left text-xs tabular-nums sm:text-sm"
-          style={{ animationDelay: "0.3s" }}
-        >
-          <caption className="sr-only">{t("standings")}</caption>
-          <thead>
-            <tr className="text-xs text-muted">
-              <th scope="col" className="pb-1 font-normal">
-                {t("driver")}
-              </th>
-              <th scope="col" className="pb-1 text-right font-normal">
-                {t("time")}
-              </th>
-              <th scope="col" className="pb-1 text-right font-normal">
-                {t("bestLap")}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row, i) => (
-              <tr key={row.id} className={row.id === PLAYER ? "text-accent" : undefined}>
-                <th scope="row" className="py-0.5 pr-3 font-normal whitespace-nowrap">
-                  {i + 1}. {names(row.id)}
-                </th>
-                <td className="py-0.5 text-right">
-                  {row.time === null ? (
-                    <span className="text-muted">{t("notFinished")}</span>
-                  ) : row.time.kind === "total" ? (
-                    formatTime(row.time.ticks)
-                  ) : (
-                    formatGap(row.time.ticks)
-                  )}
-                </td>
-                <td className="py-0.5 pl-3 text-right text-muted">
-                  {row.bestLap !== null ? formatTime(row.bestLap) : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        <div
-          className="race-fade-in mt-5 flex flex-col items-center gap-4"
-          style={{ animationDelay: "0.45s" }}
-        >
-          <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
-          <button
-            ref={focus ? restartRef : undefined}
-            type="button"
-            onClick={start}
-            className="btn btn-primary"
-          >
-            {t("restart")}
-          </button>
-          <p className="hidden text-xs text-muted lg:block">{t("restartHint")}</p>
-        </div>
-      </div>
+      <ResultsCard
+        rows={resultRows(standings(result, track))}
+        me={PLAYER}
+        place={result.finished.indexOf(PLAYER) + 1}
+        myTime={result.cars.find((c) => c.id === PLAYER)?.finishedAt ?? null}
+        outcome={outcome}
+        name={names}
+        t={t}
+      >
+        <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
+        <RestartButton
+          buttonRef={focus ? restartRef : undefined}
+          onClick={start}
+          label={t("restart")}
+          hint={t("restartHint")}
+        />
+      </ResultsCard>
     );
+
   return (
     // Standings on the left, the track in the middle, lap and time on the right.
     // Below lg the track drops under the two panels.
@@ -696,102 +377,16 @@ export function PracticeRace() {
       data-tick={hud.tick}
       data-player-x={hud.playerX}
       ref={rootRef}
-      className="grid scroll-mt-20 grid-cols-[minmax(0,1fr)_auto] gap-x-6 gap-y-4 lg:grid-cols-[10rem_minmax(0,1fr)_6.5rem] lg:gap-x-6"
+      className={RACE_GRID}
     >
       <p className="sr-only" aria-live="polite">
         {announcement}
       </p>
 
-      <table className="col-start-1 row-start-1 self-start text-sm tabular-nums">
-        <caption className="sr-only">{t("standings")}</caption>
-        <thead>
-          <tr className="border-b border-line text-left text-xs text-muted">
-            <th scope="col" className="pr-3 pb-2 font-normal">
-              {t("place")}
-            </th>
-            <th scope="col" className="pr-3 pb-2 font-normal">
-              {t("driver")}
-            </th>
-            <th scope="col" className="pb-2 font-normal">
-              {t("nitro")}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {hud.board.map((d, i) => (
-            <tr key={d.id} className="border-b border-line last:border-0">
-              <td className="py-2 pr-3 text-muted">{i + 1}</td>
-              <th
-                scope="row"
-                className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${d.id === PLAYER ? "text-accent" : ""}`}
-              >
-                <span className="inline-flex items-center gap-1.5">
-                  {names(d.id)}
-                  {d.change && (
-                    <ChangeIcon
-                      dir={d.change}
-                      label={t(d.change === "up" ? "gainedPlace" : "lostPlace")}
-                    />
-                  )}
-                  {d.done && <FlagIcon label={t("done")} />}
-                </span>
-              </th>
-              <td className="py-2">
-                <Nitro count={d.nitro} label={t("nitroCount", { n: d.nitro })} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+      <StandingsBoard board={hud.board} me={PLAYER} name={names} t={t} />
+      <LapPanel hud={hud} laps={LAPS} best={best} t={t} />
 
-      <dl className="col-start-2 row-start-1 flex flex-col gap-4 self-start tabular-nums lg:col-start-3">
-        <div>
-          <dt className="text-xs text-muted">{t("lap")}</dt>
-          <dd className="font-display text-3xl tracking-tight">
-            {hud.lap}
-            <span className="text-muted">/{LAPS}</span>
-          </dd>
-        </div>
-        <div>
-          <dt className="text-xs text-muted">{t("time")}</dt>
-          <dd className="font-display text-3xl tracking-tight">{formatTime(hud.time)}</dd>
-        </div>
-        {hud.delta !== null && (
-          <div>
-            <dt className="text-xs text-muted">{t("delta")}</dt>
-            <dd
-              className={`font-display text-xl tracking-tight tabular-nums ${hud.delta <= 0 ? "text-accent" : "text-ink"}`}
-            >
-              {hud.delta <= 0 ? "−" : "+"}
-              {Math.abs(hud.delta / TICK_RATE).toFixed(1)}
-            </dd>
-          </div>
-        )}
-        {hud.laps.length > 0 && (
-          <div>
-            <dt className="text-xs text-muted">{t("lapTimes")}</dt>
-            <dd>
-              <ol className="mt-1 space-y-0.5 text-sm">
-                {hud.laps.map((ticks, i) => (
-                  <li key={i} className={ticks === fastestLap ? "text-ink" : "text-muted"}>
-                    <span className="mr-2 text-xs text-muted">{t("lapN", { n: i + 1 })}</span>
-                    {formatTime(ticks)}
-                  </li>
-                ))}
-              </ol>
-            </dd>
-          </div>
-        )}
-        <div className="border-t border-line pt-3 text-sm">
-          <dt className="text-xs text-muted">{t("record")}</dt>
-          <dd>{best.race !== null ? formatTime(best.race) : "—"}</dd>
-          <dt className="mt-2 text-xs text-muted">{t("bestLap")}</dt>
-          <dd>{best.lap !== null ? formatTime(best.lap) : "—"}</dd>
-        </div>
-      </dl>
-
-      {/* Never taller than the window: the whole track stays in view while you drive. */}
-      <div className="col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1">
+      <div className={TRACK_COLUMN}>
         <div className="relative overflow-hidden rounded-[var(--radius-photo)] ring-1 ring-line">
           <canvas
             ref={canvasRef}
@@ -801,129 +396,24 @@ export function PracticeRace() {
             className="block aspect-[760/600] w-full bg-bg outline-none"
           />
 
-          {confetti && (phase === "finishing" || phase === "finished") && (
-            <div className="race-confetti" aria-hidden>
-              {confetti.map((piece) => (
-                <span
-                  key={piece.id}
-                  style={{
-                    left: `${piece.left}%`,
-                    backgroundColor: piece.color,
-                    animationDelay: `${piece.delay}s`,
-                    transform: `rotate(${piece.rotate}deg)`,
-                  }}
-                />
-              ))}
-            </div>
-          )}
+          <TrackOverlays
+            hud={hud}
+            countdown={phase === "countdown"}
+            racing={phase === "racing" || phase === "finishing"}
+            showLastLap={phase === "racing"}
+            confetti={phase === "finishing" || phase === "finished" ? confetti : null}
+            t={t}
+          />
 
-          {/* The race stays fully visible; only the lights overlay it, zoomed in and large. */}
-          {phase === "countdown" && (
-            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-4">
-              <div
-                className="race-lights-zoom flex gap-3 rounded-2xl px-6 py-5 ring-1 ring-white/10"
-                style={{ backgroundColor: COLORS.rig }}
-              >
-                {Array.from({ length: 5 }, (_, i) => (
-                  <span
-                    key={i}
-                    className="size-6 rounded-full sm:size-7"
-                    style={{
-                      backgroundColor: i < hud.lit ? COLORS.lightOn : "rgba(255,255,255,0.12)",
-                    }}
-                  />
-                ))}
-              </div>
-              <p className="race-pop-in rounded-full bg-bg/90 px-4 py-1.5 text-sm text-ink ring-1 ring-line">
-                {t("lightsHint")}
-              </p>
-            </div>
-          )}
-
-          {/* Lights out: the same rig flashes and zooms away as the race starts. */}
-          {hud.justStarted && (
-            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-              <div
-                className="race-lights-out flex gap-3 rounded-2xl px-6 py-5"
-                style={{ backgroundColor: COLORS.rig }}
-              >
-                {Array.from({ length: 5 }, () => null).map((_, i) => (
-                  <span
-                    key={i}
-                    className="size-6 rounded-full sm:size-7"
-                    style={{ backgroundColor: COLORS.lightOn }}
-                  />
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Banners over the race, never blocking it. */}
-          <div className="pointer-events-none absolute inset-x-0 top-3 flex flex-col items-center gap-2 px-3">
-            {hud.wrongWay && (phase === "racing" || phase === "finishing") && (
-              <p
-                role="status"
-                className="rounded-full bg-ink px-4 py-1.5 text-sm font-medium text-bg"
-              >
-                {t("wrongWay")}
-              </p>
-            )}
-            {hud.lastLap && phase === "racing" && (
-              <p className="race-pop-in font-display text-3xl tracking-tight text-accent drop-shadow-[0_1px_0_var(--bg)]">
-                {t("lastLap")}
-              </p>
-            )}
-            {hud.justStarted && (
-              <p className="race-pop-in font-display text-3xl tracking-tight text-accent drop-shadow-[0_1px_0_var(--bg)]">
-                {t("go")}
-              </p>
-            )}
-          </div>
-
-          {/* You're done: a soft veil, the race still visible behind it; the texts bounce in one by one. */}
           {phase === "finishing" && hud.place > 0 && (
-            <div
-              role="status"
-              className="race-fade-in pointer-events-none absolute inset-0 flex flex-col items-center justify-center gap-3 bg-bg/60 p-4 text-center"
-            >
-              <p className="race-elastic-in font-display text-4xl tracking-tight sm:text-6xl">
-                {t("finished", { n: hud.place })}
-              </p>
-              <p
-                className="race-elastic-in text-sm text-muted motion-safe:animate-pulse sm:text-base"
-                style={{ animationDelay: "0.12s" }}
-              >
-                {t("waiting")}
-              </p>
-              <button
-                type="button"
-                onClick={skip}
-                className="race-fade-in pointer-events-auto mt-2 text-xs text-muted underline underline-offset-4 hover:text-ink"
-                style={{ animationDelay: "0.3s" }}
-              >
-                {t("skip")}
-              </button>
-            </div>
+            <FinishingVeil place={hud.place} onSkip={skip} t={t} />
           )}
 
-          {/* Pause, any time: top left, out of the way of the banners. */}
-          {(phase === "racing" || phase === "finishing") && (
-            <button
-              type="button"
-              aria-label={t("pause")}
-              onClick={pause}
-              className="absolute top-2.5 left-2.5 grid size-8 place-items-center rounded-full bg-bg/85 text-muted ring-1 ring-line transition-colors hover:text-ink"
-            >
-              <svg viewBox="0 0 12 12" className="size-3" aria-hidden>
-                <rect x="2.5" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
-                <rect x="7" y="2" width="2.5" height="8" rx="1" fill="currentColor" />
-              </svg>
-            </button>
-          )}
+          {(phase === "racing" || phase === "finishing") && <PauseButton onClick={pause} t={t} />}
 
           {/* The countdown has no veil: the grid and the lights stay in full view. */}
           {(phase === "ready" || phase === "paused" || phase === "finished") && (
-            <div className="absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]">
+            <div className={VEIL}>
               {phase === "ready" && (
                 <div className="flex flex-col items-center gap-5">
                   <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
@@ -959,116 +449,8 @@ export function PracticeRace() {
           <div className="mt-4 flex justify-center lg:hidden">{results(false)}</div>
         )}
 
-        {/* Touch controls below lg (phones and tablets; pointer media queries aren't reliable). */}
-        <div
-          className={`mt-4 flex select-none items-center justify-between gap-3 lg:hidden ${phase === "finished" ? "hidden" : ""}`}
-        >
-          <div className="flex gap-3">
-            <TouchButton
-              label={t("left")}
-              onDown={() => press("left", true)}
-              onUp={() => press("left", false)}
-            >
-              ←
-            </TouchButton>
-            <TouchButton
-              label={t("right")}
-              onDown={() => press("right", true)}
-              onUp={() => press("right", false)}
-            >
-              →
-            </TouchButton>
-          </div>
-          <div className="flex gap-3">
-            <TouchButton
-              label={t("nitroButton")}
-              onDown={() => press("nitro", true)}
-              onUp={() => press("nitro", false)}
-            >
-              <BoltIcon className="mx-auto size-5 text-accent" />
-            </TouchButton>
-            <TouchButton
-              label={t("brake")}
-              onDown={() => press("down", true)}
-              onUp={() => press("down", false)}
-            >
-              ↓
-            </TouchButton>
-            <TouchButton
-              label={t("gas")}
-              onDown={() => press("up", true)}
-              onUp={() => press("up", false)}
-            >
-              ↑
-            </TouchButton>
-          </div>
-        </div>
+        <TouchPad press={press} hidden={phase === "finished"} t={t} />
       </div>
     </div>
-  );
-}
-
-function DifficultyPicker({
-  value,
-  onChange,
-  t,
-}: {
-  value: Difficulty;
-  onChange: (d: Difficulty) => void;
-  t: ReturnType<typeof useTranslations<"Play">>;
-}) {
-  return (
-    <div role="group" aria-label={t("difficulty")} className="flex flex-col items-center gap-2">
-      <span className="text-xs text-muted">{t("difficulty")}</span>
-      <div className="flex rounded-full bg-bg p-1 ring-1 ring-line">
-        {DIFFICULTIES.map((d) => (
-          <button
-            key={d}
-            type="button"
-            aria-pressed={value === d}
-            onClick={() => onChange(d)}
-            className={`rounded-full px-3.5 py-1.5 text-sm transition-colors ${
-              value === d ? "bg-ink text-bg" : "text-muted hover:text-ink"
-            }`}
-          >
-            {t(d)}
-          </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-/** Nitro charges as filled bolts out of the tank's size. */
-function Nitro({ count, label }: { count: number; label: string }) {
-  return (
-    <span role="img" aria-label={label} className="inline-flex gap-0.5">
-      {Array.from({ length: PHYSICS.maxNitro }, (_, i) => (
-        <BoltIcon key={i} className={`size-3 ${i < count ? "text-accent" : "text-line"}`} />
-      ))}
-    </span>
-  );
-}
-
-function FlagIcon({ label }: { label: string }) {
-  return (
-    <svg role="img" aria-label={label} viewBox="0 0 12 12" className="size-3 text-muted">
-      <path d="M2 1v10" stroke="currentColor" strokeWidth="1.2" />
-      <path d="M2.5 1.5h7l-1.5 2.5 1.5 2.5h-7z" fill="currentColor" />
-    </svg>
-  );
-}
-
-/** A small arrow for a place just gained (up, accent) or lost (down, muted). */
-function ChangeIcon({ dir, label }: { dir: "up" | "down"; label: string }) {
-  return (
-    <svg
-      role="img"
-      aria-label={label}
-      viewBox="0 0 10 10"
-      className={`size-2.5 ${dir === "up" ? "text-accent" : "text-muted"}`}
-    >
-      <path d={dir === "up" ? "M5 1 9 7H1Z" : "M5 9 1 3H9Z"} fill="currentColor" />
-    </svg>
   );
 }
