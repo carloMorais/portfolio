@@ -181,6 +181,10 @@ export const renova: CaseStudy = {
       en: "I delivered it in about 10 days: the chatbot working end to end, with saved conversations, each reply's duration and everything starting with Docker Compose.",
     },
     {
+      pt: "O processo seletivo terminou na minha contratação: trabalhei nessa startup de abril de 2025 a janeiro de 2026.",
+      en: "The hiring process ended with me being hired: I worked at that startup from April 2025 to January 2026.",
+    },
+    {
       pt: "O código está público no GitHub. A demonstração no topo desta página reproduz a conversa com as mesmas quatro ferramentas, chamando a API da FIPE de verdade.",
       en: "The code is public on GitHub. The demo at the top of this page replays the conversation with the same four tools, calling the real FIPE API.",
     },
