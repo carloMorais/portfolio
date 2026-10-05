@@ -36,6 +36,25 @@ export const work: WorkItem[] = [
     photo: "casePlumaa",
   },
   {
+    slug: "racegame",
+    kind: "project",
+    ready: true,
+    context: { pt: "Alpha EdTech · Líder do projeto", en: "Alpha EdTech · Project lead" },
+    period: { pt: "nov 2024", en: "Nov 2024" },
+    title: {
+      pt: "RaceGame: corrida multiplayer em tempo real",
+      en: "RaceGame: real-time multiplayer racing",
+    },
+    blurb: {
+      pt: "Até 10 corredores numa pista top-down em Canvas, com o servidor como fonte da verdade e predição no cliente, sincronizados por WebSocket, sem Socket.IO.",
+      en: "Up to 10 racers on a top-down Canvas track, with the server as the source of truth and client-side prediction, synced over WebSocket, no Socket.IO.",
+    },
+    tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
+    photo: "projectRacegame",
+    repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
+    playable: true,
+  },
+  {
     slug: "omnichannel-ai",
     kind: "case",
     ready: true,
@@ -69,33 +88,4 @@ export const work: WorkItem[] = [
     tags: ["Power Apps", "Power Automate", "SharePoint"],
     photo: "caseBayer",
   },
-  {
-    slug: "racegame",
-    kind: "project",
-    ready: true,
-    context: { pt: "Alpha EdTech · Líder do projeto", en: "Alpha EdTech · Project lead" },
-    period: { pt: "nov 2024", en: "Nov 2024" },
-    title: {
-      pt: "RaceGame: corrida multiplayer em tempo real",
-      en: "RaceGame: real-time multiplayer racing",
-    },
-    blurb: {
-      pt: "Até 10 corredores numa pista top-down em Canvas, com o servidor como fonte da verdade e predição no cliente, sincronizados por WebSocket, sem Socket.IO.",
-      en: "Up to 10 racers on a top-down Canvas track, with the server as the source of truth and client-side prediction, synced over WebSocket, no Socket.IO.",
-    },
-    tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
-    photo: "projectRacegame",
-    repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
-    playable: true,
-  },
 ];
-
-/**
- * The Demos tab's order: the playable RaceGame comes second, right after the
- * main job (Carlos, 05/10/2026). The home keeps `work`'s own order.
- */
-export const demosOrder = ["plumaa", "racegame", "omnichannel-ai", "bayer"];
-
-export const demos: WorkItem[] = [...work].sort(
-  (a, b) => demosOrder.indexOf(a.slug) - demosOrder.indexOf(b.slug),
-);
