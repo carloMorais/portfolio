@@ -43,7 +43,7 @@ export function WorkCard({ item, headingLevel: Heading = "h3" }: Props) {
       <div className="mt-auto flex flex-wrap items-center gap-x-5 gap-y-2 border-t border-line pt-5 text-sm">
         {item.ready ? (
           <span className="inline-flex items-center gap-1.5 font-medium text-accent">
-            {item.kind === "case" ? t("viewCase") : t("viewProject")}
+            {item.kind === "case" ? t("viewCase") : item.playable ? t("playNow") : t("viewProject")}
             <ArrowIcon className="size-4 transition-transform group-hover:translate-x-1" />
           </span>
         ) : (

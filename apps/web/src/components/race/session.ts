@@ -1,31 +1,30 @@
-import { TICK_RATE, type BotStyle, type Car } from "race-engine";
+import {
+  BOT_STYLES,
+  DIFFICULTIES,
+  TICK_RATE,
+  type BotStyle,
+  type Car,
+  type Difficulty,
+  CAR_COLOR_COUNT,
+} from "race-engine";
 
 export const PLAYER = "you";
 export const LAPS = 2;
 
-export const DIFFICULTIES = ["easy", "normal", "hard"] as const;
-export type Difficulty = (typeof DIFFICULTIES)[number];
+export { DIFFICULTIES, type Difficulty };
 
-/**
- * The three bots for each difficulty. Measured over 2 laps: easy ~68–76 s,
- * normal ~58–64 s, hard ~50 s (no speed cap, and they use nitro).
- */
-export const BOTS: Record<Difficulty, { id: string; style: BotStyle }[]> = {
-  easy: [
-    { id: "bot2", style: { skill: 1, topSpeed: 4 } },
-    { id: "bot3", style: { skill: 1, topSpeed: 3.75 } },
-    { id: "bot4", style: { skill: 1, topSpeed: 3.5 } },
-  ],
-  normal: [
-    { id: "bot2", style: { skill: 1, topSpeed: 5.5 } },
-    { id: "bot3", style: { skill: 1, topSpeed: 5 } },
-    { id: "bot4", style: { skill: 1, topSpeed: 4.5 } },
-  ],
-  hard: [
-    { id: "bot2", style: { skill: 1 } },
-    { id: "bot3", style: { skill: 0.9 } },
-    { id: "bot4", style: { skill: 0.8 } },
-  ],
+/** The three practice bots for each difficulty (styles shared with the online server). */
+export const BOTS: Record<Difficulty, { id: string; style: BotStyle }[]> = Object.fromEntries(
+  DIFFICULTIES.map((d) => [d, BOT_STYLES[d].map((style, i) => ({ id: `bot${i + 2}`, style }))]),
+) as Record<Difficulty, { id: string; style: BotStyle }[]>;
+
+/** This browser's localStorage, or undefined where it's blocked. */
+export const storage = () => {
+  try {
+    return window.localStorage;
+  } catch {
+    return undefined;
+  }
 };
 
 /** 0:27.4 */
@@ -69,11 +68,14 @@ export function resultRows(ordered: Car[]): ResultRow[] {
  */
 export type PersonalBest = { race: number | null; lap: number | null; splits: number[] | null };
 
-const storageKey = (d: Difficulty) => `racegame:best:${d}`;
+/** Practice records are per difficulty; time trial and online races have one each. */
+export type RecordKey = Difficulty | "trial" | "online";
+
+const storageKey = (d: RecordKey) => `racegame:best:${d}`;
 const EMPTY_BEST: PersonalBest = { race: null, lap: null, splits: null };
 
 /** Read from this browser only; any storage error means no record yet. */
-export function loadBest(storage: Storage | undefined, d: Difficulty): PersonalBest {
+export function loadBest(storage: Storage | undefined, d: RecordKey): PersonalBest {
   try {
     const raw = storage?.getItem(storageKey(d));
     const parsed = raw ? (JSON.parse(raw) as Partial<PersonalBest>) : {};
@@ -114,7 +116,7 @@ export function updateBest(
   };
 }
 
-export function saveBest(storage: Storage | undefined, d: Difficulty, best: PersonalBest) {
+export function saveBest(storage: Storage | undefined, d: RecordKey, best: PersonalBest) {
   try {
     storage?.setItem(storageKey(d), JSON.stringify(best));
   } catch {
@@ -140,6 +142,63 @@ export function saveDifficulty(storage: Storage | undefined, d: Difficulty) {
 }
 
 /** Ticks of driving the wrong way before we say so (a bounce flips the velocity for a moment). */
+/**
+ * On/off preferences kept in this browser: `sound` (off by default) and
+ * `autogas` (the throttle held for you on touch screens; on by default).
+ */
+export type Pref = "sound" | "autogas";
+const PREF_DEFAULTS: Record<Pref, boolean> = { sound: false, autogas: true };
+
+export function loadPref(storage: Storage | undefined, pref: Pref): boolean {
+  try {
+    const raw = storage?.getItem(`racegame:${pref}`);
+    return raw === "1" ? true : raw === "0" ? false : PREF_DEFAULTS[pref];
+  } catch {
+    return PREF_DEFAULTS[pref];
+  }
+}
+
+export function savePref(storage: Storage | undefined, pref: Pref, on: boolean) {
+  try {
+    storage?.setItem(`racegame:${pref}`, on ? "1" : "0");
+  } catch {
+    // Not remembered: the default comes back next time.
+  }
+}
+
+/** Your car colour (an index into CAR_COLORS), shared by practice and online; null until you pick one. */
+export function loadColor(storage: Storage | undefined): number | null {
+  try {
+    const raw = storage?.getItem("racegame:color");
+    const n = raw === null || raw === undefined ? NaN : Number(raw);
+    return Number.isInteger(n) && n >= 0 && n < CAR_COLOR_COUNT ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveColor(storage: Storage | undefined, color: number) {
+  try {
+    storage?.setItem("racegame:color", String(color));
+  } catch {
+    // Private mode or storage blocked: the choice just isn't remembered.
+  }
+}
+
+/**
+ * Practice mode's colours: yours, then each bot takes the next colour nobody
+ * has, in palette order (with you in blue, the bots stay coral, yellow, green).
+ */
+export function practiceColors(mine: number, botIds: string[]): Record<string, number> {
+  const out: Record<string, number> = { [PLAYER]: mine };
+  let next = 0;
+  for (const id of botIds) {
+    while (next === mine) next++;
+    out[id] = next++;
+  }
+  return out;
+}
+
 export const WRONG_WAY_TICKS = 20;
 /** How long the wrong-way warning stays after bouncing off an out-of-order checkpoint. */
 export const GATE_WARNING_TICKS = 45;

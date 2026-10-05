@@ -185,8 +185,8 @@ describe("stepRace", () => {
     let s = createRace(track, ["a"]);
     s.cars[0] = { ...s.cars[0]!, x: barrel.x, y: barrel.y, vx: 0, vy: -5.5 };
     s = stepRace(s, track, { a: NO_KEYS });
-    // Coasting drag first (−5.5 → −5.42), then 70% of what is left (the 2024 game took a fixed 5).
-    assert.equal(s.cars[0]!.vy, -1.63);
+    // Coasting drag first (−5.5 → −5.42), then a barrel takes 45% of what is left (the 2024 game took a fixed 5).
+    assert.equal(s.cars[0]!.vy, -2.98);
   });
 
   test("a wall hit is reported with its impact and direction", () => {

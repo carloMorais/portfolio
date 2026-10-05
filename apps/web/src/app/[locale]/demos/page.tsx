@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { useTranslations } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { site } from "@/content/site";
+import { WakeApi } from "@/components/race/WakeApi";
 import { pageMetadata } from "@/lib/seo";
 import { work } from "@/content/work";
 import { SectionHeader } from "@/components/SectionHeader";
@@ -26,6 +27,7 @@ export default function DemosPage() {
 
   return (
     <PageTransition>
+      <WakeApi />
       <section className="container-page pt-12 pb-20 md:pt-20 md:pb-28">
         <SectionHeader
           as="h1"

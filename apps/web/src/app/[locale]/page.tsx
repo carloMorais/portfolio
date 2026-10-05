@@ -4,6 +4,7 @@ import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
 import { jobs, skillGroups, stats } from "@/content/career";
 import { site } from "@/content/site";
+import { WakeApi } from "@/components/race/WakeApi";
 import { work } from "@/content/work";
 import { ContactSection } from "@/components/ContactSection";
 import { CvDownloadLink } from "@/components/CvDownloadLink";
@@ -59,6 +60,7 @@ export default function HomePage() {
 
   return (
     <PageTransition>
+      <WakeApi />
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(person).replace(/</g, "\\u003c") }}

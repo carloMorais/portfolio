@@ -11,7 +11,8 @@ import type { Palette } from "./draw";
 export type Stand = Box & { facing: "up" | "down" | "right" };
 export type Tree = { x: number; y: number; r: number };
 export type Rock = { x: number; y: number; r: number };
-export type Tire = { x: number; y: number };
+/** A barrier of three tire stacks, centred on (x, y), in a row across or down. */
+export type Tire = { x: number; y: number; vertical: boolean };
 export type OilBarrel = { x: number; y: number };
 
 export const STANDS: Stand[] = [
@@ -73,40 +74,48 @@ export const ROCKS: Rock[] = [
 ];
 
 /**
- * Tire stacks and oil barrels: small trackside detail, scattered for texture
- * and, where there's an obstacle on the road, echoed just off it on the
- * grass (like the barriers around a real corner). All clear of the road,
- * the stands and each other (a test checks it).
+ * Tire barriers and oil barrels: trackside detail, never something you hit.
+ * One barrier of three stacks sits outside each corner of the racing line
+ * (behind the gravel), lined up along the road edge; the barrels stand at
+ * least 10 px off the road, in a neutral blue-grey, so only what you can hit
+ * on the road is warm-coloured. Positions found by a script over the actual
+ * wall geometry, not by eye; a test checks they stay clear of the road, the
+ * stands and each other (05/10/2026).
  */
 export const TIRES: Tire[] = [
-  // Near an obstacle on the road.
-  { x: 301, y: 242 },
-  { x: 444, y: 7 },
-  { x: 642, y: 470 },
-  { x: 728, y: 430 },
-  // General detail along the map.
-  { x: 300, y: 10 },
-  { x: 50, y: 20 },
-  { x: 30, y: 130 },
-  { x: 730, y: 150 },
-  { x: 10, y: 230 },
-  { x: 170, y: 330 },
-  { x: 730, y: 330 },
-  { x: 630, y: 490 },
-  { x: 30, y: 570 },
+  { x: 71, y: 580, vertical: false },
+  { x: 71, y: 14, vertical: false },
+  { x: 217, y: 40, vertical: true },
+  { x: 185, y: 332, vertical: false },
+  { x: 484, y: 243, vertical: false },
+  { x: 448, y: 465, vertical: true },
+  { x: 616, y: 470, vertical: true },
+  { x: 598, y: 104, vertical: false },
+  { x: 284, y: 166, vertical: true },
+  { x: 296, y: 22, vertical: false },
+  { x: 712, y: 21, vertical: false },
+  { x: 706, y: 576, vertical: false },
 ];
 
+/** Spacing between the stacks of a tire barrier, and each stack's radius. */
+export const TIRE_GAP = 7.5;
+export const TIRE_R = 3.6;
+
+/** The three stacks of a barrier. */
+export const tireStacks = (t: Tire) =>
+  [-1, 0, 1].map((k) => ({
+    x: t.vertical ? t.x : t.x + k * TIRE_GAP,
+    y: t.vertical ? t.y + k * TIRE_GAP : t.y,
+  }));
+
 export const OIL_BARRELS: OilBarrel[] = [
-  // Near an obstacle on the road.
-  { x: 46, y: 463 },
-  { x: 220, y: 170 },
-  { x: 390, y: 235 },
-  { x: 730, y: 269 },
-  { x: 142, y: 302 },
-  // General detail along the map.
-  { x: 450, y: 470 },
-  { x: 590, y: 490 },
-  { x: 530, y: 270 },
+  { x: 36, y: 465 },
+  { x: 227, y: 170 },
+  { x: 738, y: 271 },
+  { x: 142, y: 324 },
+  { x: 456, y: 484 },
+  { x: 623, y: 490 },
+  { x: 522, y: 252 },
 ];
 
 const SEAT = 6;
@@ -163,11 +172,11 @@ export function drawScenery(ctx: CanvasRenderingContext2D, p: Palette) {
   for (const s of STANDS) {
     const vertical = s.facing === "right";
     ctx.save();
-    // Shadow on the grass behind the stand.
-    ctx.globalAlpha = 0.12;
-    ctx.fillStyle = p.ink;
+    // A cast shadow on the grass, the same way the trees' fall (down and right).
+    ctx.globalAlpha = 0.2;
+    ctx.fillStyle = "#000000";
     ctx.beginPath();
-    ctx.roundRect(s.x + 2, s.y + 3, s.width, s.height, 3);
+    ctx.roundRect(s.x + 4, s.y + 6, s.width, s.height, 3);
     ctx.fill();
     ctx.globalAlpha = 1;
     ctx.fillStyle = c.standFront;
@@ -184,11 +193,17 @@ export function drawScenery(ctx: CanvasRenderingContext2D, p: Palette) {
       else if (s.facing === "up") ctx.fillRect(s.x + 2, s.y + off, s.width - 4, ROW - 0.8);
       else ctx.fillRect(s.x + 2, s.y + s.height - off - ROW, s.width - 4, ROW - 0.8);
     }
-    // Roof along the back edge.
+    // Roof along the back edge, with a band in the site's blue on it.
     ctx.fillStyle = c.standRoof;
-    if (vertical) ctx.fillRect(s.x, s.y, 3, s.height);
-    else if (s.facing === "up") ctx.fillRect(s.x, s.y + s.height - 3, s.width, 3);
-    else ctx.fillRect(s.x, s.y, s.width, 3);
+    if (vertical) ctx.fillRect(s.x, s.y, 4, s.height);
+    else if (s.facing === "up") ctx.fillRect(s.x, s.y + s.height - 4, s.width, 4);
+    else ctx.fillRect(s.x, s.y, s.width, 4);
+    ctx.fillStyle = p.accent;
+    ctx.globalAlpha = 0.85;
+    if (vertical) ctx.fillRect(s.x + 1, s.y + 2, 1.6, s.height - 4);
+    else if (s.facing === "up") ctx.fillRect(s.x + 2, s.y + s.height - 2.6, s.width - 4, 1.6);
+    else ctx.fillRect(s.x + 2, s.y + 1, s.width - 4, 1.6);
+    ctx.globalAlpha = 1;
     ctx.restore();
   }
 
@@ -231,24 +246,32 @@ export function drawScenery(ctx: CanvasRenderingContext2D, p: Palette) {
     ctx.restore();
   }
 
+  // Tire barriers: stacks seen from above, each with a band on its top tire,
+  // red and white in turn like the kerbs.
   for (const t of TIRES) {
-    ctx.save();
-    ctx.globalAlpha = 0.15;
-    ctx.fillStyle = p.ink;
-    ctx.beginPath();
-    ctx.ellipse(t.x + 1, t.y + 2, 6.5, 3, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    // A stacked tire, seen from above: a dark ring with a lighter rim.
-    ctx.fillStyle = c.tire;
-    ctx.beginPath();
-    ctx.ellipse(t.x, t.y, 6, 4.5, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = c.tireRim;
-    ctx.beginPath();
-    ctx.ellipse(t.x, t.y, 2.6, 2, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
+    tireStacks(t).forEach((st, i) => {
+      ctx.save();
+      ctx.globalAlpha = 0.18;
+      ctx.fillStyle = p.ink;
+      ctx.beginPath();
+      ctx.arc(st.x + 1.5, st.y + 2, TIRE_R + 0.5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = c.tire;
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, TIRE_R, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = i % 2 === 0 ? c.tireBand : c.kerbWhite;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, TIRE_R - 1.3, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = c.tireRim;
+      ctx.beginPath();
+      ctx.arc(st.x, st.y, 1.1, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    });
   }
 
   for (const b of OIL_BARRELS) {

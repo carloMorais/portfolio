@@ -1,4 +1,4 @@
-import type { Box, Car, ItemSpawn, Track } from "race-engine";
+import { gridPosition, PHYSICS, type Box, type Car, type ItemSpawn, type Track } from "race-engine";
 import { COLORS, type GameColors } from "./colors";
 
 /**
@@ -32,6 +32,57 @@ export function readPalette(el: Element): Palette {
 function seeded(seed: number) {
   let s = seed;
   return () => (s = (s * 1103515245 + 12345) % 2 ** 31) / 2 ** 31;
+}
+
+type Point = { x: number; y: number };
+
+/**
+ * The corners of the racing line: every waypoint where it turns by more than
+ * 45°, with the direction pointing to the outside of the bend (where a car
+ * that runs wide ends up). Kerbs and gravel are placed from these, so they
+ * follow the track instead of being placed by eye.
+ */
+export function trackCorners(track: Track): (Point & { out: Point })[] {
+  const wps = track.waypoints;
+  const unit = (x: number, y: number) => {
+    const l = Math.hypot(x, y) || 1;
+    return { x: x / l, y: y / l };
+  };
+  return wps.flatMap((p, i) => {
+    const a = wps[(i - 1 + wps.length) % wps.length]!;
+    const b = wps[(i + 1) % wps.length]!;
+    const din = unit(p.x - a.x, p.y - a.y);
+    const dout = unit(b.x - p.x, b.y - p.y);
+    const turn = Math.acos(Math.max(-1, Math.min(1, din.x * dout.x + din.y * dout.y)));
+    if (turn < Math.PI / 4) return [];
+    // The bend pulls towards (dout − din); the outside is the other way.
+    return [{ x: p.x, y: p.y, out: unit(din.x - dout.x, din.y - dout.y) }];
+  });
+}
+
+const KERB_REACH = 42;
+const KERB_WIDTH = 4;
+
+/** The racing line as a closed path, curved through the waypoints (quadratics via their midpoints). */
+function racingLine(ctx: CanvasRenderingContext2D, track: Track) {
+  const wps = track.waypoints;
+  const mid = (a: Point, b: Point) => ({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  const start = mid(wps[wps.length - 1]!, wps[0]!);
+  ctx.beginPath();
+  ctx.moveTo(start.x, start.y);
+  for (let i = 0; i < wps.length; i++) {
+    const cur = wps[i]!;
+    const m = mid(cur, wps[(i + 1) % wps.length]!);
+    ctx.quadraticCurveTo(cur.x, cur.y, m.x, m.y);
+  }
+  ctx.closePath();
+}
+
+/** The walls (grass) as one clip path, optionally grown by `grow` px. */
+function wallsPath(ctx: CanvasRenderingContext2D, track: Track, grow = 0) {
+  ctx.beginPath();
+  for (const w of track.walls)
+    ctx.rect(w.x - grow, w.y - grow, w.width + grow * 2, w.height + grow * 2);
 }
 
 /**
@@ -68,6 +119,29 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.fillStyle = c.kerbInner;
   for (const w of track.walls) ctx.fillRect(w.x - 1, w.y - 1, w.width + 2, w.height + 2);
 
+  // Corners get proper red-and-white kerbs: the band along the road edge
+  // within reach of each bend, striped by angle around it so the blocks run
+  // along the curve.
+  const corners = trackCorners(track);
+  for (const corner of corners) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(corner.x, corner.y, KERB_REACH, 0, Math.PI * 2);
+    ctx.clip();
+    wallsPath(ctx, track, KERB_WIDTH);
+    ctx.clip();
+    const step = 0.2;
+    for (let a = 0, i = 0; a < Math.PI * 2; a += step, i++) {
+      ctx.fillStyle = i % 2 === 0 ? c.kerbRed : c.kerbWhite;
+      ctx.beginPath();
+      ctx.moveTo(corner.x, corner.y);
+      ctx.arc(corner.x, corner.y, KERB_REACH + 2, a, a + step + 0.01);
+      ctx.closePath();
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
   // Grass, clipped to the walls, with scattered blotches instead of a hatch.
   ctx.save();
   ctx.beginPath();
@@ -90,6 +164,32 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
     }
   }
   ctx.globalAlpha = 1;
+
+  // Gravel run-off on the grass outside each bend, where a car running wide
+  // would go: a band hugging the road (the racing line stroked wider than the
+  // lane), only on the outside of the corner. Its grain is a small pattern.
+  const tile = document.createElement("canvas");
+  tile.width = tile.height = 16;
+  const g = tile.getContext("2d")!;
+  g.fillStyle = c.gravel;
+  g.fillRect(0, 0, 16, 16);
+  g.fillStyle = c.gravelDot;
+  const dots = seeded(41);
+  for (let k = 0; k < 14; k++) g.fillRect(dots() * 16, dots() * 16, 1.2, 1.2);
+  const pattern = ctx.createPattern(tile, "repeat");
+  for (const corner of corners) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(corner.x + corner.out.x * 34, corner.y + corner.out.y * 34, 36, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.strokeStyle = pattern ?? c.gravel;
+    ctx.globalAlpha = 0.85;
+    ctx.lineWidth = 100;
+    ctx.lineJoin = "round";
+    racingLine(ctx, track);
+    ctx.stroke();
+    ctx.restore();
+  }
   ctx.restore();
 
   // The racing line, as a dashed centreline (like the 2024 map's). Curved
@@ -102,30 +202,16 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.lineWidth = 2;
   ctx.setLineDash([10, 12]);
   ctx.lineJoin = "round";
-  ctx.beginPath();
-  const wps = track.waypoints;
-  const mid = (a: { x: number; y: number }, b: { x: number; y: number }) => ({
-    x: (a.x + b.x) / 2,
-    y: (a.y + b.y) / 2,
-  });
-  const start = mid(wps[wps.length - 1]!, wps[0]!);
-  ctx.moveTo(start.x, start.y);
-  for (let i = 0; i < wps.length; i++) {
-    const cur = wps[i]!;
-    const next = wps[(i + 1) % wps.length]!;
-    const m = mid(cur, next);
-    ctx.quadraticCurveTo(cur.x, cur.y, m.x, m.y);
-  }
-  ctx.closePath();
+  racingLine(ctx, track);
   ctx.stroke();
   ctx.restore();
 
-  // Checkpoints: a thin dashed line across the road (the box is just its hit area).
+  // Checkpoints: a hairline across the road, barely there (the next one is
+  // marked by its gate; dark dashes here read as a drawing glitch).
   ctx.save();
-  ctx.strokeStyle = c.checkpoint;
-  ctx.globalAlpha = 0.4;
-  ctx.lineWidth = 1.5;
-  ctx.setLineDash([3, 4]);
+  ctx.strokeStyle = c.roadDash;
+  ctx.globalAlpha = 0.14;
+  ctx.lineWidth = 1;
   ctx.beginPath();
   for (const cp of track.checkpoints) {
     if (cp.width > cp.height) {
@@ -137,6 +223,28 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
     }
   }
   ctx.stroke();
+  ctx.restore();
+
+  // Grid slots painted on the asphalt: a line at the front of each slot (cars
+  // face left) and two short arms back along its sides.
+  ctx.save();
+  ctx.strokeStyle = c.gridLine;
+  ctx.globalAlpha = 0.7;
+  ctx.lineWidth = 1.5;
+  ctx.lineCap = "round";
+  const size = PHYSICS.carSize;
+  for (let i = 0; i < 6; i++) {
+    const g = gridPosition(track, i);
+    const x = g.x + 1;
+    const top = g.y + 3;
+    const bottom = g.y + size - 3;
+    ctx.beginPath();
+    ctx.moveTo(x + 7, top);
+    ctx.lineTo(x, top);
+    ctx.lineTo(x, bottom);
+    ctx.lineTo(x + 7, bottom);
+    ctx.stroke();
+  }
   ctx.restore();
 
   // Finish line: a two-column chequer.
@@ -156,6 +264,27 @@ export function drawTrack(ctx: CanvasRenderingContext2D, track: Track, p: Palett
   ctx.globalAlpha = 1;
 }
 
+/**
+ * A faint darkening towards the edges of the map, so the track reads as a
+ * framed picture set into the page rather than a cut-out pasted on it.
+ */
+export function drawVignette(ctx: CanvasRenderingContext2D, width: number, height: number) {
+  const g = ctx.createRadialGradient(
+    width / 2,
+    height / 2,
+    Math.min(width, height) * 0.45,
+    width / 2,
+    height / 2,
+    Math.hypot(width, height) / 2,
+  );
+  g.addColorStop(0, "rgba(20, 24, 16, 0)");
+  g.addColorStop(1, "rgba(20, 24, 16, 0.22)");
+  ctx.save();
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, width, height);
+  ctx.restore();
+}
+
 /** A soft contact shadow under things that sit on the road. */
 function shadow(
   ctx: CanvasRenderingContext2D,
@@ -164,9 +293,10 @@ function shadow(
   rx: number,
   ry: number,
   p: Palette,
+  opacity = 1,
 ) {
   ctx.save();
-  ctx.globalAlpha = 0.13;
+  ctx.globalAlpha = 0.13 * opacity;
   ctx.fillStyle = p.ink;
   ctx.beginPath();
   ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -216,13 +346,14 @@ export function drawItem(
   p: Palette,
   bob = 0,
   spawn: number | null = null,
+  zoom = 1,
 ) {
   const cx = item.x + item.width / 2;
   const cy = item.y + item.height / 2;
   const c = p.c;
   ctx.save();
-  if (spawn !== null) {
-    const scale = Math.max(0.05, easeOutBack(spawn));
+  if (spawn !== null || zoom !== 1) {
+    const scale = Math.max(0.05, spawn === null ? 1 : easeOutBack(spawn)) * zoom;
     ctx.translate(cx, cy);
     ctx.scale(scale, scale);
     ctx.translate(-cx, -cy);
@@ -335,16 +466,86 @@ export function drawItem(
   ctx.restore();
 }
 
-/** `highlight`: a white outline so you can always spot your own car. */
-export type CarLook = { body: string; helmet: string; stripe: boolean; highlight?: boolean };
+/** A livery mark per car colour, so colours that look alike to colour-blind eyes still differ. */
+export type Livery =
+  "stripe" | "band" | "nose" | "twin" | "chevron" | "ring" | "pods" | "split" | "tail" | "none";
+
+/**
+ * `highlight`: a white outline so you can always spot your own car.
+ * `opacity`: other cars fade while they overlap one (cars don't collide, so
+ * passing through each other has to read as a rule, not a glitch).
+ */
+export type CarLook = {
+  body: string;
+  helmet: string;
+  livery: Livery;
+  highlight?: boolean;
+  opacity?: number;
+};
 
 /** Darkens whatever was just filled with `path`: wings and the floor read as carbon. */
-function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number) {
+function darken(ctx: CanvasRenderingContext2D, path: () => void, amount: number, opacity = 1) {
   ctx.save();
-  ctx.globalAlpha = amount;
+  ctx.globalAlpha = amount * opacity;
   ctx.fillStyle = "#000000";
   path();
   ctx.fill();
+  ctx.restore();
+}
+
+/**
+ * The livery mark, clipped to the body by the caller. Light marks on every
+ * colour but white, which gets dark ones; "tail" paints the rear wing.
+ */
+function drawLivery(ctx: CanvasRenderingContext2D, look: CarLook, o: number) {
+  const mark = look.body.toLowerCase() === "#f1efe8" ? "#1c1b19" : "#fffaf0";
+  ctx.save();
+  ctx.fillStyle = mark;
+  ctx.strokeStyle = mark;
+  ctx.globalAlpha = 0.9 * o;
+  switch (look.livery) {
+    case "stripe":
+      ctx.fillRect(-11, -0.55, 23, 1.1);
+      break;
+    case "twin":
+      ctx.fillRect(-11, -2, 23, 0.9);
+      ctx.fillRect(-11, 1.1, 23, 0.9);
+      break;
+    case "band":
+      ctx.fillRect(-6.5, -6, 2.2, 12);
+      break;
+    case "nose":
+      ctx.fillRect(5.5, -3, 7, 6);
+      break;
+    case "chevron":
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(2, -3);
+      ctx.lineTo(5.5, 0);
+      ctx.lineTo(2, 3);
+      ctx.stroke();
+      break;
+    case "ring":
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(-7.5, 0, 1.6, 0, Math.PI * 2);
+      ctx.stroke();
+      break;
+    case "pods":
+      ctx.fillRect(-7, -6, 7, 2);
+      ctx.fillRect(-7, 4, 7, 2);
+      break;
+    case "split":
+      ctx.fillStyle = "#000000";
+      ctx.globalAlpha = 0.3 * o;
+      ctx.fillRect(-11, -6, 8, 12);
+      break;
+    case "tail":
+      // Drawn outside the body clip below; see drawCar.
+      break;
+    case "none":
+      break;
+  }
   ctx.restore();
 }
 
@@ -360,29 +561,37 @@ export function drawCar(
   look: CarLook,
   p: Palette,
   boosted: boolean,
+  zoom = 1,
 ) {
   const c = p.c;
+  const o = look.opacity ?? 1;
   const cx = car.x + car.width / 2;
   const cy = car.y + car.height / 2;
   ctx.save();
-  shadow(ctx, cx + 1, cy + 2, 12.5, 7.5, p);
+  shadow(ctx, cx + zoom, cy + 2 * zoom, 12.5 * zoom, 7.5 * zoom, p, o);
   ctx.translate(cx, cy);
   ctx.rotate(((car.rotation + 180) * Math.PI) / 180);
+  ctx.scale(zoom, zoom);
+  ctx.globalAlpha = o;
 
   if (boosted) {
-    ctx.fillStyle = c.bolt;
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(-12, -2);
-    ctx.quadraticCurveTo(-20.5, 0, -12, 2);
-    ctx.fill();
-    ctx.fillStyle = p.accent;
-    ctx.globalAlpha = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(-12, -1.1);
-    ctx.quadraticCurveTo(-16, 0, -12, 1.1);
-    ctx.fill();
-    ctx.globalAlpha = 1;
+    // A pointed, flickering exhaust flame: an outer spike in the site's blue,
+    // a yellow one inside it and a white-hot core, each a different length.
+    const flicker = 0.8 + 0.2 * Math.sin(performance.now() / 35) * Math.sin(performance.now() / 23);
+    const spike = (length: number, width: number, color: string, alpha: number) => {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha * o;
+      ctx.beginPath();
+      ctx.moveTo(-11.5, -width);
+      ctx.lineTo(-11.5 - length * flicker, 0);
+      ctx.lineTo(-11.5, width);
+      ctx.closePath();
+      ctx.fill();
+    };
+    spike(15, 3.2, p.accent, 0.75);
+    spike(11, 2.2, c.bolt, 0.95);
+    spike(6, 1.1, "#ffffff", 0.95);
+    ctx.globalAlpha = o;
   }
 
   // Wheels, outside the body: wider at the back.
@@ -419,10 +628,17 @@ export function drawCar(
   ctx.fillStyle = look.body;
   rearWing();
   ctx.fill();
-  darken(ctx, rearWing, 0.35);
+  darken(ctx, rearWing, 0.35, o);
   frontWing();
   ctx.fill();
-  darken(ctx, frontWing, 0.2);
+  darken(ctx, frontWing, 0.2, o);
+  if (look.livery === "tail") {
+    ctx.fillStyle = "#fffaf0";
+    ctx.globalAlpha = 0.9 * o;
+    rearWing();
+    ctx.fill();
+    ctx.globalAlpha = o;
+  }
 
   // Body: engine cover, sidepods, then a nose that narrows to the front wing.
   const body = () => {
@@ -453,30 +669,26 @@ export function drawCar(
   ctx.save();
   body();
   ctx.clip();
-  // Livery: a stripe down the middle, and a light sheen on the near side.
-  if (look.stripe) {
-    ctx.fillStyle = c.stripe;
-    ctx.globalAlpha = 0.9;
-    ctx.fillRect(-11, -0.55, 23, 1.1);
-  }
+  // Livery (one mark per colour), and a light sheen on the near side.
+  drawLivery(ctx, look, o);
   ctx.fillStyle = "#ffffff";
-  ctx.globalAlpha = 0.16;
+  ctx.globalAlpha = 0.16 * o;
   ctx.fillRect(-11, -6, 23, 2.6);
   ctx.restore();
 
   // Cockpit and helmet.
   ctx.fillStyle = "#000000";
-  ctx.globalAlpha = 0.55;
+  ctx.globalAlpha = 0.55 * o;
   ctx.beginPath();
   ctx.ellipse(-1.8, 0, 3.2, 1.9, 0, 0, Math.PI * 2);
   ctx.fill();
-  ctx.globalAlpha = 1;
+  ctx.globalAlpha = o;
   ctx.fillStyle = look.helmet;
   ctx.beginPath();
   ctx.arc(-1.4, 0, 1.55, 0, Math.PI * 2);
   ctx.fill();
   ctx.fillStyle = "#000000";
-  ctx.globalAlpha = 0.45;
+  ctx.globalAlpha = 0.45 * o;
   ctx.fillRect(-0.4, -1, 0.7, 2); // visor
   ctx.restore();
 }
@@ -499,31 +711,16 @@ export function drawLabel(
   mapWidth: number,
   boost: number | null,
   mine: boolean,
+  zoom = 1,
 ) {
   ctx.save();
-  ctx.font = `600 10px ${p.font}`;
+  ctx.font = `600 ${10 * Math.min(zoom, 1.2)}px ${p.font}`;
   const textWidth = ctx.measureText(name).width;
   const diamonds = nitro > 0 ? 4 + nitro * 7 : 0;
   const total = textWidth + diamonds;
   const x = Math.max(3, Math.min(mapWidth - total - 3, car.x + car.width / 2 - total / 2));
-  const below = car.y < 22;
-  const bar = boost === null ? 0 : 6;
-  const y = below ? car.y + car.height + 12 + bar : car.y - 5 - bar;
-
-  if (boost !== null) {
-    const barWidth = 24;
-    const bx = car.x + car.width / 2 - barWidth / 2;
-    const by = below ? car.y + car.height + 3 : car.y - 7;
-    ctx.globalAlpha = 0.9;
-    ctx.fillStyle = p.line;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, barWidth, 3, 1.5);
-    ctx.fill();
-    ctx.fillStyle = p.accent;
-    ctx.beginPath();
-    ctx.roundRect(bx, by, Math.max(0, barWidth * boost), 3, 1.5);
-    ctx.fill();
-  }
+  const { y, barY } = labelPlace(car, boost !== null, zoom, 12);
+  if (boost !== null) boostBar(ctx, car, barY, boost, p);
 
   ctx.globalAlpha = mine ? 0.9 : 0.6;
   ctx.lineJoin = "round";
@@ -542,8 +739,66 @@ export function drawLabel(
 }
 
 /**
- * Where to go next: the next checkpoint's line, or the finish line once every
- * checkpoint is done, in the accent colour and gently pulsing (`pulse`, 0–1).
+ * Where a label goes: above the car, or below it at the top edge of the map;
+ * the nitro bar (if any) sits between the label and the car. `zoom` is how
+ * much bigger than its box the car is drawn (phones), `textHeight` the
+ * label's height (its baseline is `y`).
+ */
+function labelPlace(
+  car: Pick<Car, "y" | "height">,
+  hasBar: boolean,
+  zoom: number,
+  textHeight: number,
+) {
+  const grow = ((zoom - 1) * car.height) / 2;
+  const below = car.y < 22;
+  const bar = hasBar ? 6 : 0;
+  return {
+    below,
+    y: below ? car.y + car.height + grow + textHeight + bar : car.y - grow - 5 - bar,
+    barY: below ? car.y + car.height + grow + 3 : car.y - grow - 7,
+  };
+}
+
+/** The nitro left, as a thin bar that empties (`boost`, 1 → 0). */
+function boostBar(
+  ctx: CanvasRenderingContext2D,
+  car: Pick<Car, "x" | "width">,
+  y: number,
+  boost: number,
+  p: Palette,
+) {
+  const barWidth = 24;
+  const bx = car.x + car.width / 2 - barWidth / 2;
+  ctx.save();
+  ctx.globalAlpha = 0.9;
+  ctx.fillStyle = p.line;
+  ctx.beginPath();
+  ctx.roundRect(bx, y, barWidth, 3, 1.5);
+  ctx.fill();
+  ctx.fillStyle = p.accent;
+  ctx.beginPath();
+  ctx.roundRect(bx, y, Math.max(0, barWidth * boost), 3, 1.5);
+  ctx.fill();
+  ctx.restore();
+}
+
+/** Everyone else carries no label (05/10/2026), only the nitro bar while it burns. */
+export function drawBoost(
+  ctx: CanvasRenderingContext2D,
+  car: Pick<Car, "x" | "y" | "width" | "height">,
+  boost: number,
+  p: Palette,
+  zoom = 1,
+) {
+  boostBar(ctx, car, labelPlace(car, true, zoom, 0).barY, boost, p);
+}
+
+/**
+ * Where to go next: a gate across the next checkpoint (or the finish line once
+ * every checkpoint is done), a post at each end and a band between them that
+ * pulses gently (`pulse`, 0–1). It stands on the track like the kerbs do,
+ * instead of reading as a line drawn over the game.
  */
 export function drawTarget(
   ctx: CanvasRenderingContext2D,
@@ -552,24 +807,58 @@ export function drawTarget(
   p: Palette,
   pulse: number,
 ) {
+  const across = box.width > box.height;
+  // The finish gate stands on the chequer's right edge, where cars arrive.
+  const lineX = finish ? box.x + box.width : box.x + box.width / 2;
+  const [a, b] = across
+    ? [
+        { x: box.x, y: box.y + box.height / 2 },
+        { x: box.x + box.width, y: box.y + box.height / 2 },
+      ]
+    : [
+        { x: lineX, y: box.y },
+        { x: lineX, y: box.y + box.height },
+      ];
   ctx.save();
-  ctx.strokeStyle = p.accent;
-  ctx.globalAlpha = 0.45 + 0.45 * pulse;
-  if (finish) {
-    ctx.lineWidth = 2;
-    ctx.strokeRect(box.x - 2, box.y - 2, box.width + 4, box.height + 4);
-  } else {
-    ctx.lineWidth = 2.5;
-    ctx.setLineDash([6, 5]);
+  ctx.lineCap = "round";
+  const band = () => {
     ctx.beginPath();
-    if (box.width > box.height) {
-      ctx.moveTo(box.x, box.y + box.height / 2);
-      ctx.lineTo(box.x + box.width, box.y + box.height / 2);
-    } else {
-      ctx.moveTo(box.x + box.width / 2, box.y);
-      ctx.lineTo(box.x + box.width / 2, box.y + box.height);
-    }
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
     ctx.stroke();
+  };
+  // A soft glow, a light core so it reads on the asphalt, then the dashes.
+  ctx.strokeStyle = p.accent;
+  ctx.lineWidth = 10;
+  ctx.globalAlpha = 0.1 + 0.12 * pulse;
+  band();
+  ctx.strokeStyle = "#ffffff";
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.25 + 0.15 * pulse;
+  band();
+  ctx.strokeStyle = p.accent;
+  ctx.lineWidth = 2.2;
+  ctx.globalAlpha = 0.55 + 0.4 * pulse;
+  ctx.setLineDash([6, 5]);
+  band();
+  ctx.setLineDash([]);
+  // The posts, on the kerbs at either end.
+  for (const post of [a, b]) {
+    ctx.globalAlpha = 0.22;
+    ctx.fillStyle = "#000000";
+    ctx.beginPath();
+    ctx.ellipse(post.x + 1.5, post.y + 2.5, 4.5, 3, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = p.accent;
+    ctx.beginPath();
+    ctx.arc(post.x, post.y, 4, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = 0.45 + 0.45 * pulse;
+    ctx.beginPath();
+    ctx.arc(post.x - 1, post.y - 1, 1.5, 0, Math.PI * 2);
+    ctx.fill();
   }
   ctx.restore();
 }

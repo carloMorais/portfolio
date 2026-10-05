@@ -1,11 +1,15 @@
-import { createCar } from "race-engine";
+import { CAR_COLOR_COUNT, createCar } from "race-engine";
+import { CAR_COLORS } from "./colors";
 import {
   bestLap,
   formatGap,
   formatTime,
   loadBest,
+  loadColor,
   loadDifficulty,
+  practiceColors,
   resultRows,
+  saveColor,
   saveBest,
   updateBest,
 } from "./session";
@@ -84,5 +88,39 @@ describe("race session helpers", () => {
     const garbage = memoryStorage();
     garbage.setItem("racegame:best:easy", "{oops");
     expect(loadBest(garbage, "easy")).toEqual({ race: null, lap: null, splits: null });
+  });
+});
+
+describe("car colours", () => {
+  test("the bots take the colours you didn't pick, in order", () => {
+    expect(practiceColors(0, ["bot2", "bot3", "bot4"])).toEqual({
+      you: 0,
+      bot2: 1,
+      bot3: 2,
+      bot4: 3,
+    });
+    expect(practiceColors(2, ["bot2", "bot3", "bot4"])).toEqual({
+      you: 2,
+      bot2: 0,
+      bot3: 1,
+      bot4: 3,
+    });
+  });
+
+  test("a saved colour comes back; anything else reads as none", () => {
+    const store = new Map<string, string>();
+    const storage = {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => void store.set(k, v),
+    } as unknown as Storage;
+    expect(loadColor(storage)).toBeNull();
+    saveColor(storage, 7);
+    expect(loadColor(storage)).toBe(7);
+    store.set("racegame:color", "42");
+    expect(loadColor(storage)).toBeNull();
+  });
+
+  test("there is one colour per seat in a room", () => {
+    expect(CAR_COLORS).toHaveLength(CAR_COLOR_COUNT);
   });
 });

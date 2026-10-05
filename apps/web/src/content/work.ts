@@ -13,6 +13,8 @@ export type WorkItem = {
   tags: string[];
   photo: PhotoId;
   repo?: string;
+  /** The project page opens on a playable demo: the card says so. */
+  playable?: true;
 };
 
 export const work: WorkItem[] = [
@@ -32,6 +34,25 @@ export const work: WorkItem[] = [
     },
     tags: ["NestJS", "PostgreSQL", "Stripe", "Google OAuth", "Claude"],
     photo: "casePlumaa",
+  },
+  {
+    slug: "racegame",
+    kind: "project",
+    ready: true,
+    context: { pt: "Alpha EdTech · Líder do projeto", en: "Alpha EdTech · Project lead" },
+    period: { pt: "nov 2024", en: "Nov 2024" },
+    title: {
+      pt: "RaceGame: corrida multiplayer em tempo real",
+      en: "RaceGame: real-time multiplayer racing",
+    },
+    blurb: {
+      pt: "Até 10 corredores numa pista top-down em Canvas, com o servidor como fonte da verdade e predição no cliente, sincronizados por WebSocket, sem Socket.IO.",
+      en: "Up to 10 racers on a top-down Canvas track, with the server as the source of truth and client-side prediction, synced over WebSocket, no Socket.IO.",
+    },
+    tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
+    photo: "projectRacegame",
+    repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
+    playable: true,
   },
   {
     slug: "omnichannel-ai",
@@ -66,23 +87,5 @@ export const work: WorkItem[] = [
     },
     tags: ["Power Apps", "Power Automate", "SharePoint"],
     photo: "caseBayer",
-  },
-  {
-    slug: "racegame",
-    kind: "project",
-    ready: true,
-    context: { pt: "Alpha EdTech · Líder do projeto", en: "Alpha EdTech · Project lead" },
-    period: { pt: "nov 2024", en: "Nov 2024" },
-    title: {
-      pt: "RaceGame: corrida multiplayer em tempo real",
-      en: "RaceGame: real-time multiplayer racing",
-    },
-    blurb: {
-      pt: "Até 10 corredores numa pista top-down em Canvas, com o servidor como fonte da verdade e predição no cliente, sincronizados por WebSocket, sem Socket.IO.",
-      en: "Up to 10 racers on a top-down Canvas track, with the server as the source of truth and client-side prediction, synced over WebSocket, no Socket.IO.",
-    },
-    tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
-    photo: "projectRacegame",
-    repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
   },
 ];

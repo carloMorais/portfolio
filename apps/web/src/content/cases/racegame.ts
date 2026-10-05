@@ -173,21 +173,52 @@ export const racegame: CaseStudy = {
     ],
   },
   architecture: {
-    pt: "O navegador envia teclas e desenha; o servidor Express autentica pela API REST, guarda usuários e carros no PostgreSQL e as salas ativas no Redis, e roda o game loop que transmite o estado pelo WebSocket.",
-    en: "The browser sends keys and draws; the Express server authenticates over the REST API, keeps users and cars in PostgreSQL and live rooms in Redis, and runs the game loop that broadcasts state over WebSocket.",
+    pt: "Na versão de 2024, o navegador envia teclas e desenha; o servidor Express autentica pela API REST, guarda usuários e carros no PostgreSQL e as salas ativas no Redis, e roda o game loop que transmite o estado pelo WebSocket.",
+    en: "In the 2024 version, the browser sends keys and draws; the Express server authenticates over the REST API, keeps users and cars in PostgreSQL and live rooms in Redis, and runs the game loop that broadcasts state over WebSocket.",
   },
   result: [
     {
-      pt: "O jogo foi entregue e testado com a sala cheia, 10 jogadores na mesma corrida, rodando num servidor da Alpha EdTech. O vídeo no topo desta página é um recorte dessa partida.",
-      en: "The game shipped and was tested with a full room, 10 players in the same race, running on an Alpha EdTech server. The video at the top of this page is a clip of that match.",
+      pt: "O jogo foi entregue e testado com a sala cheia, 10 jogadores na mesma corrida, rodando num servidor da Alpha EdTech. O vídeo na seção abaixo é um recorte dessa partida.",
+      en: "The game shipped and was tested with a full room, 10 players in the same race, running on an Alpha EdTech server. The video in the next section is a clip of that match.",
     },
   ],
+  rewrite: {
+    title: { pt: "A reescrita de 2026", en: "The 2026 rewrite" },
+    paragraphs: [
+      {
+        pt: "A versão jogável no topo desta página é uma reimplementação de 2026, feita a partir do motor de 2024. O original dependia do login, do banco e do servidor da Alpha EdTech, e a arte dele não tem licença para ser republicada; para dar para jogar aqui, o jogo foi refeito com a mesma direção e o mesmo traçado.",
+        en: "The playable version at the top of this page is a 2026 reimplementation, built from the 2024 engine. The original depended on sign-in, the database and Alpha EdTech's server, and its art isn't licensed for republishing; to make it playable here, the game was rebuilt with the same handling and the same track.",
+      },
+    ],
+    bullets: [
+      {
+        pt: "O motor virou um pacote TypeScript sem dependências, com cada tick determinístico e testado, inclusive um teste de propriedade que garante que o carro nunca termina um movimento dentro de uma parede.",
+        en: "The engine became a dependency-free TypeScript package, with every tick deterministic and tested, including a property test that guarantees a car never ends a move inside a wall.",
+      },
+      {
+        pt: "A colisão foi refeita: o carro anda um eixo por vez e quica na parede em vez de grudar nela, o que acabou com o carro preso num canto da pista.",
+        en: "Collision was redone: the car moves one axis at a time and bounces off walls instead of sticking to them, which ended cars getting stuck in a corner of the track.",
+      },
+      {
+        pt: "Dois modos: o treino roda inteiro no navegador, contra bots; o online roda no servidor (NestJS e ws, 30 ticks por segundo), e o navegador usa o mesmo motor para prever o próprio carro.",
+        en: "Two modes: practice runs entirely in the browser, against bots; online runs on the server (NestJS and ws, 30 ticks per second), and the browser uses the same engine to predict your own car.",
+      },
+      {
+        pt: "Um formato compacto de mensagens (cerca de 11 KB/s por jogador numa sala de 10) e limites contra abuso protegem o servidor gratuito.",
+        en: "A compact message format (about 11 KB/s per player in a room of 10) and abuse limits protect the free-tier server.",
+      },
+      {
+        pt: "A pista é desenhada em código a partir das caixas de colisão do motor.",
+        en: "The track is drawn in code from the engine's collision boxes.",
+      },
+    ],
+  },
   afterword: {
     title: { pt: "O que eu mudaria hoje", en: "What I would change today" },
     paragraphs: [
       {
-        pt: "A colisão usa caixas alinhadas aos eixos, então um carro de lado ocupa mais espaço do que parece. E o game loop não tem testes automatizados: hoje eu isolaria a física em funções puras e testaria cada tick.",
-        en: "Collision uses axis-aligned boxes, so a car turned sideways takes more room than it looks. And the game loop has no automated tests: today I would isolate the physics in pure functions and test each tick.",
+        pt: "Em 2024 o game loop não tinha testes automatizados; a reescrita resolveu isso, com a física em funções puras testadas tick a tick. O que continua: a colisão usa caixas alinhadas aos eixos, então um carro de lado ocupa mais espaço do que parece. E no modo online, se a conexão cair, você volta numa sala nova em vez de retomar a corrida.",
+        en: "In 2024 the game loop had no automated tests; the rewrite fixed that, with the physics in pure functions tested tick by tick. What remains: collision uses axis-aligned boxes, so a car turned sideways takes more room than it looks. And in online mode, if the connection drops you come back in a new room instead of resuming the race.",
       },
     ],
   },

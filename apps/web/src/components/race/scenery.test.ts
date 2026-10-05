@@ -1,5 +1,5 @@
 import { classicTrack, overlaps } from "race-engine";
-import { OIL_BARRELS, ROCKS, STANDS, TIRES, TREES, seatFans } from "./scenery";
+import { OIL_BARRELS, ROCKS, STANDS, TIRES, TIRE_R, TREES, seatFans, tireStacks } from "./scenery";
 
 /** Is the point on the grass, i.e. inside one of the (rounded) walls? */
 const onGrass = (x: number, y: number) =>
@@ -36,21 +36,24 @@ describe("scenery", () => {
     }
   });
 
-  test("every tire sits on the grass", () => {
+  test("every tire barrier sits on the grass, a few pixels off the road", () => {
     for (const t of TIRES) {
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
-        const x = Math.round(t.x + Math.cos(a) * 7);
-        const y = Math.round(t.y + Math.sin(a) * 7);
-        expect([t.x, t.y, onGrass(x, y)]).toEqual([t.x, t.y, true]);
+      for (const st of tireStacks(t)) {
+        for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
+          const x = Math.round(st.x + Math.cos(a) * (TIRE_R + 3));
+          const y = Math.round(st.y + Math.sin(a) * (TIRE_R + 3));
+          expect([t.x, t.y, onGrass(x, y)]).toEqual([t.x, t.y, true]);
+        }
       }
     }
   });
 
-  test("every oil barrel sits on the grass", () => {
+  test("every oil barrel stands at least 10 px off the road (it must never read as an obstacle)", () => {
     for (const b of OIL_BARRELS) {
-      for (let a = 0; a < Math.PI * 2; a += Math.PI / 8) {
-        const x = Math.round(b.x + Math.cos(a) * 8);
-        const y = Math.round(b.y + Math.sin(a) * 8);
+      // The drum is ~7 px from its centre to its side: 17 px leaves 10 px of grass.
+      for (let a = 0; a < Math.PI * 2; a += Math.PI / 16) {
+        const x = Math.round(b.x + Math.cos(a) * 17);
+        const y = Math.round(b.y + Math.sin(a) * 17);
         expect([b.x, b.y, onGrass(x, y)]).toEqual([b.x, b.y, true]);
       }
     }
@@ -59,7 +62,7 @@ describe("scenery", () => {
   test("no two pieces of scenery sit on top of each other", () => {
     const round = [...TREES, ...ROCKS].map((o) => ({ ...o, r: o.r }));
     const small = [
-      ...TIRES.map((t) => ({ ...t, r: 6.5 })),
+      ...TIRES.flatMap((t) => tireStacks(t).map((st) => ({ ...st, r: TIRE_R }))),
       ...OIL_BARRELS.map((b) => ({ ...b, r: 8 })),
     ];
     const points = [...round, ...small];

@@ -1,3 +1,5 @@
+import type { Livery } from "./draw";
+
 /**
  * The game's own, single palette (01/10/2026: dropped the light/dark split —
  * Carlos wanted one version, closer to the 2024 game's own colours: grey
@@ -11,12 +13,19 @@ export type GameColors = {
   roadDash: string;
   kerbOuter: string;
   kerbInner: string;
+  /** Red-and-white kerbs on the corners. */
+  kerbRed: string;
+  kerbWhite: string;
+  /** Gravel run-off outside the corners. */
+  gravel: string;
+  gravelDot: string;
+  /** Painted grid slots. */
+  gridLine: string;
   grass: string;
   grassBlotchDark: string;
   grassBlotchLight: string;
   checkpoint: string;
   border: string;
-  bots: [string, string, string];
   wheel: string;
   stripe: string;
   helmet: string;
@@ -30,6 +39,8 @@ export type GameColors = {
   rockLight: string;
   tire: string;
   tireRim: string;
+  /** The coloured band on top of a tire stack. */
+  tireBand: string;
   oilBarrel: string;
   oilBarrelBand: string;
   fans: string[];
@@ -56,12 +67,17 @@ export const COLORS: GameColors = {
   roadDash: "#eceae2",
   kerbOuter: "#cac6ba",
   kerbInner: "#edebe3",
-  grass: "#3f8f49",
-  grassBlotchDark: "#346f3d",
-  grassBlotchLight: "#4ea655",
+  kerbRed: "#d4544a",
+  kerbWhite: "#f3f1ea",
+  gravel: "#d6c7a0",
+  gravelDot: "#b9a883",
+  gridLine: "#f3f1ea",
+  // 05/10/2026: pulled a little towards olive, so the game sits on the cream page instead of jumping off it.
+  grass: "#4d8a45",
+  grassBlotchDark: "#41733a",
+  grassBlotchLight: "#5c9b50",
   checkpoint: "#232323",
   border: "#232323",
-  bots: ["#ef6f6c", "#f2b134", "#3bb08f"],
   wheel: "#201f1d",
   stripe: "#fffaf0",
   helmet: "#fffaf0",
@@ -69,14 +85,16 @@ export const COLORS: GameColors = {
   standRow: "#b1aca1",
   standRowAlt: "#a39d90",
   standRoof: "#585349",
-  tree: "#3c7a40",
-  treeLight: "#55974f",
+  tree: "#3d6f37",
+  treeLight: "#58894a",
   rock: "#8f8d85",
   rockLight: "#aaa79c",
   tire: "#201f1d",
   tireRim: "#4a4642",
-  oilBarrel: "#30342f",
-  oilBarrelBand: "#1b1e1a",
+  tireBand: "#d4544a",
+  // Scenery stays neutral (blue-grey), so only what you can hit is warm.
+  oilBarrel: "#5f7383",
+  oilBarrelBand: "#475866",
   fans: ["#ef6f6c", "#f2b134", "#3bb08f", "#5b8def", "#f3924a", "#b07cc6", "#fffaf0"],
   bolt: "#ffd166",
   barrel: "#e07a5f",
@@ -93,3 +111,40 @@ export const COLORS: GameColors = {
   rig: "#201f1d",
   lightOn: "#e8432f",
 };
+
+export type CarColorId =
+  "blue" | "coral" | "yellow" | "green" | "orange" | "purple" | "pink" | "cyan" | "lime" | "white";
+
+/**
+ * The colours a car can have (05/10/2026: each driver picks one, so you can
+ * tell who is who). As many as a room's seats (`CAR_COLOR_COUNT`), so online
+ * no two cars share one. `text` and `textDark` are the same hue as a
+ * readable text colour on the site's light and dark surfaces (≥ 4.5:1), for
+ * the driver's name in the standings, lobby and results.
+ */
+export const CAR_COLORS: {
+  id: CarColorId;
+  body: string;
+  text: string;
+  textDark: string;
+  /** A mark of its own on the car, so colours that look alike to colour-blind eyes still differ. */
+  livery: Livery;
+}[] = [
+  { id: "blue", body: "#3d6fe0", text: "#2a55b8", textDark: "#86a8ff", livery: "stripe" },
+  { id: "coral", body: "#ef6f6c", text: "#b3403d", textDark: "#ff9a97", livery: "band" },
+  { id: "yellow", body: "#f2b134", text: "#8a5d00", textDark: "#f6c55e", livery: "nose" },
+  { id: "green", body: "#3bb08f", text: "#1a6e56", textDark: "#5fd0ae", livery: "twin" },
+  { id: "orange", body: "#f3924a", text: "#a3531a", textDark: "#f7ad75", livery: "chevron" },
+  { id: "purple", body: "#9b6bd6", text: "#6f43aa", textDark: "#bb98ea", livery: "ring" },
+  { id: "pink", body: "#e872b0", text: "#a83b78", textDark: "#f39cc9", livery: "pods" },
+  { id: "cyan", body: "#3fb6d6", text: "#196a80", textDark: "#6fd0ea", livery: "split" },
+  { id: "lime", body: "#9bc53d", text: "#4d6e10", textDark: "#b7dc63", livery: "tail" },
+  { id: "white", body: "#f1efe8", text: "#6b665b", textDark: "#e7e4da", livery: "none" },
+];
+
+/** A car colour by index (online: the server's), wrapping just in case. */
+export const carColor = (i: number) =>
+  CAR_COLORS[((i % CAR_COLORS.length) + CAR_COLORS.length) % CAR_COLORS.length]!;
+
+/** Time-trial medals, in the game's own palette. */
+export const MEDAL_COLORS = { gold: "#d9a521", silver: "#a9b0b8", bronze: "#c47a45" } as const;

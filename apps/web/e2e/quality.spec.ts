@@ -12,8 +12,6 @@ const pages = [
   "/pt/demos",
   "/en/projects/racegame",
   "/pt/projects/racegame",
-  "/en/projects/racegame/play",
-  "/pt/projects/racegame/play",
   ...["plumaa", "omnichannel-ai", "bayer"].flatMap((slug) => [
     `/en/cases/${slug}`,
     `/pt/cases/${slug}`,

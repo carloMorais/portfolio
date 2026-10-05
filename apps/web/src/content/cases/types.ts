@@ -39,6 +39,8 @@ export type CaseStudy = {
   /** One-paragraph reading of the diagram; also its accessible name. */
   architecture: Localized;
   result: Localized[];
+  /** A later rebuild of the same project, told next to the original (RaceGame). */
+  rewrite?: CaseBlock;
   /** Optional closing story or honest look back. */
   afterword?: CaseBlock;
 };
