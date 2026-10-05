@@ -4,11 +4,15 @@
   "private": true,
   "description": "RaceGame's online mode gateway (fase 3.4) and health check for Render.",
   "scripts": {
+    "prebuild": "npm run build -w race-engine",
     "build": "nest build",
     "start": "node dist/main.js",
+    "prestart:dev": "npm run build -w race-engine",
     "start:dev": "nest start --watch",
     "lint": "eslint",
+    "pretypecheck": "npm run build -w race-engine",
     "typecheck": "tsc --noEmit",
+    "pretest": "npm run build -w race-engine",
     "test": "jest"
   },
   "dependencies": {
