@@ -217,13 +217,4 @@ export const racegame: CaseStudy = {
       },
     ],
   },
-  afterword: {
-    title: { pt: "O que eu mudaria hoje", en: "What I would change today" },
-    paragraphs: [
-      {
-        pt: "Em 2024 o game loop não tinha testes automatizados; a reescrita resolveu isso, com a física em funções puras testadas tick a tick. O que continua: a colisão usa caixas alinhadas aos eixos, então um carro de lado ocupa mais espaço do que parece.",
-        en: "In 2024 the game loop had no automated tests; the rewrite fixed that, with the physics in pure functions tested tick by tick. What remains: collision uses axis-aligned boxes, so a car turned sideways takes more room than it looks.",
-      },
-    ],
-  },
 };
