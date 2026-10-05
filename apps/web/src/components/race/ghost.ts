@@ -57,7 +57,8 @@ export type MedalId = "gold" | "silver" | "bronze";
 
 /**
  * Two-lap times for each medal, best first. Set against the bots (05/10/2026):
- * a lone hard bot does ~52 s, so gold asks for clean lines and the nitros.
+ * a lone hard bot did ~52 s, so gold asked for clean lines and the nitros.
+ * Since the hard bots got the racing driver (05/10/2026) the fastest does ~42 s.
  */
 export const MEDALS: { id: MedalId; ticks: number }[] = [
   { id: "gold", ticks: 50 * TICK_RATE },
