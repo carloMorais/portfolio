@@ -56,14 +56,15 @@ export function saveGhost(storage: Storage | undefined, ghost: Ghost) {
 export type MedalId = "gold" | "silver" | "bronze";
 
 /**
- * Two-lap times for each medal, best first. Set against the bots (05/10/2026):
- * a lone hard bot did ~52 s, so gold asked for clean lines and the nitros.
- * Since the hard bots got the racing driver (05/10/2026) the fastest does ~42 s.
+ * Two-lap times for each medal, best first, set against the bots (05/10/2026,
+ * see BOT_STYLES): gold keeps up with the hard bots (~42–49 s), bronze beats
+ * the normal ones on average (~56 s), silver sits in between. They were 50,
+ * 55 and 62 s while the hard bots did ~52 s.
  */
 export const MEDALS: { id: MedalId; ticks: number }[] = [
-  { id: "gold", ticks: 50 * TICK_RATE },
-  { id: "silver", ticks: 55 * TICK_RATE },
-  { id: "bronze", ticks: 62 * TICK_RATE },
+  { id: "gold", ticks: 44 * TICK_RATE },
+  { id: "silver", ticks: 49 * TICK_RATE },
+  { id: "bronze", ticks: 56 * TICK_RATE },
 ];
 
 /** The best medal a time earns, or null. */

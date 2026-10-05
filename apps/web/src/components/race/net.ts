@@ -15,6 +15,11 @@ import { interpolateCar } from "./draw";
  *   regions is typical);
  * - `Smoother`: when the server disagrees with the prediction, the car glides
  *   to the right place instead of jumping.
+ *
+ * Effects follow the same split: everyone else's come from the delayed states
+ * as they are shown (`SnapshotBuffer.takeDue`), yours from the predicted ticks
+ * (`Predictor.takeTicks`), so dust, tyre marks and debris appear where each
+ * car is drawn, not where the server last saw it.
  */
 
 export const STEP_MS = 1000 / TICK_RATE;
@@ -37,11 +42,15 @@ type Snapshot = { tick: number; state: RaceState };
 export class SnapshotBuffer {
   private snaps: Snapshot[] = [];
   private clock: { at: number; offset: number }[] = [];
+  /** States not shown yet, for the effects (`takeDue`). */
+  private pending: RaceState[] = [];
 
   /** A decoded server state that arrived at local time `arrival` (ms). */
   push(state: RaceState, arrival: number) {
     this.snaps.push({ tick: state.tick, state });
     if (this.snaps.length > 30) this.snaps.shift();
+    this.pending.push(state);
+    if (this.pending.length > 30) this.pending.shift();
     // Each message says "tick T existed by `arrival`". The smallest
     // arrival − T·step over the last few seconds is the least-delayed message,
     // the best estimate of when the server ran tick 0 in local time.
@@ -58,12 +67,35 @@ export class SnapshotBuffer {
   clear() {
     this.snaps = [];
     this.clock = [];
+    this.pending = [];
+  }
+
+  /** The best estimate of when the server ran tick 0, in local time. */
+  private get base() {
+    return Math.min(...this.clock.map((c) => c.offset));
   }
 
   /** The server tick to show at local time `now` (fractional). */
   renderTick(now: number): number {
-    const base = Math.min(...this.clock.map((c) => c.offset));
-    return (now - base) / STEP_MS - INTERP_DELAY_TICKS;
+    return (now - this.base) / STEP_MS - INTERP_DELAY_TICKS;
+  }
+
+  /**
+   * When tick `tick` reaches this client over the least-delayed path, in local
+   * time. Unlike a message's own arrival it doesn't move with network jitter,
+   * so the prediction anchored on it doesn't either (see `Predictor`).
+   */
+  arrivalOf(tick: number): number {
+    return this.base + tick * STEP_MS;
+  }
+
+  /** The states that came into view since the last call, oldest first (their events become effects). */
+  takeDue(now: number): RaceState[] {
+    if (this.clock.length === 0) return [];
+    const t = this.renderTick(now);
+    const due: RaceState[] = [];
+    while (this.pending.length > 0 && this.pending[0]!.tick <= t) due.push(this.pending.shift()!);
+    return due;
   }
 
   /**
@@ -123,6 +155,11 @@ export class KeyTimeline {
  * engine stepped that many times with those keys. Only your car is simulated
  * (cars don't collide with each other), and the steps are cached: each frame
  * only adds the ticks that became due.
+ *
+ * `baseAt` should be `SnapshotBuffer.arrivalOf(T)`, not the message's own
+ * arrival: a message held up by the network would otherwise pull "now" back
+ * in time, and the car with it, until the smoother dragged it forward again —
+ * a rubber band on every late packet.
  */
 export class Predictor {
   private base: RaceState | null = null;
@@ -133,12 +170,30 @@ export class Predictor {
   /** The single-car state after the last predicted tick, where the next step continues. */
   private last: RaceState | null = null;
   private rttUsed = 0;
+  /** The predicted tick drawn at the last `at` (fractional). */
+  tick = 0;
+  /** Predicted ticks not handed out for effects yet, and the last tick handed out. */
+  private fresh: RaceState[] = [];
+  private shownThrough = -1;
 
   /** Before the race's first server state there's nothing to predict from (the lights). */
   clear() {
     this.base = null;
     this.last = null;
     this.cars = [];
+    this.fresh = [];
+    this.shownThrough = -1;
+  }
+
+  /**
+   * Your car's predicted ticks since the last call (a one-car state each,
+   * with its events), for the effects. Each tick is handed out once, even
+   * when a new server state makes the predictor step it again.
+   */
+  takeTicks(): RaceState[] {
+    const out = this.fresh;
+    this.fresh = [];
+    return out;
   }
 
   reset(base: RaceState, baseAt: number, me: string) {
@@ -166,7 +221,13 @@ export class Predictor {
       const keys = keysAt(this.baseAt - rtt + i * STEP_MS);
       this.last = stepRace(this.last!, track, { [this.me]: keys });
       this.cars.push(this.last.cars[0]!);
+      if (this.last.tick > this.shownThrough) {
+        this.shownThrough = this.last.tick;
+        this.fresh.push(this.last);
+        if (this.fresh.length > 30) this.fresh.shift();
+      }
     }
+    this.tick = this.base.tick + ahead;
     return interpolateCar(this.cars[whole], this.cars[whole + 1]!, ahead - whole);
   }
 }

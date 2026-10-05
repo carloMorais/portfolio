@@ -60,6 +60,25 @@ describe("SnapshotBuffer", () => {
     expect(buffer.renderTick(4 * STEP_MS)).toBeCloseTo(4 - INTERP_DELAY_TICKS);
   });
 
+  test("arrivalOf ignores jitter: a late message keeps the same clock", () => {
+    const states = serverRace(10, () => UP);
+    const buffer = new SnapshotBuffer();
+    buffer.push(states[2]!, 2 * STEP_MS);
+    buffer.push(states[4]!, 4 * STEP_MS + 80);
+    expect(buffer.arrivalOf(4)).toBeCloseTo(4 * STEP_MS);
+  });
+
+  test("takeDue hands each state out once, when it comes into view", () => {
+    const states = serverRace(20, () => UP);
+    const buffer = new SnapshotBuffer();
+    for (let t = 2; t <= 20; t += 2) buffer.push(states[t]!, t * STEP_MS);
+    // At tick 20, tick 16 is on screen: 2…16 are due, 18 and 20 not yet.
+    const due = buffer.takeDue(20 * STEP_MS).map((s) => s.tick);
+    expect(due).toEqual([2, 4, 6, 8, 10, 12, 14, 16]);
+    expect(buffer.takeDue(20 * STEP_MS)).toEqual([]);
+    expect(buffer.takeDue(22 * STEP_MS).map((s) => s.tick)).toEqual([18]);
+  });
+
   test("past the newest state it holds it, rather than guessing", () => {
     const states = serverRace(4, () => UP);
     const buffer = new SnapshotBuffer();
@@ -109,6 +128,43 @@ describe("Predictor", () => {
     // Right as tick 10 arrives, the car shown is where it'll be 6 ticks later.
     const car = predictor.at(0, rtt, (t) => timeline.keysAt(t))!;
     expect(car.x).toBeCloseTo(states[16]!.cars[0]!.x);
+  });
+
+  test("each predicted tick goes to the effects once, even when a new state re-steps it", () => {
+    const states = serverRace(30, () => UP);
+    const timeline = new KeyTimeline();
+    timeline.record(-1000, UP);
+    const predictor = new Predictor();
+    const rtt = 4 * STEP_MS;
+    const keys = (t: number) => timeline.keysAt(t);
+    predictor.reset(states[10]!, 10 * STEP_MS, "me");
+    predictor.at(10 * STEP_MS, rtt, keys);
+    const first = predictor.takeTicks().map((s) => s.tick);
+    expect(first).toEqual([11, 12, 13, 14, 15]);
+    // Tick 12 arrives: the predictor starts over from it, but 13–15 were already shown.
+    predictor.reset(states[12]!, 12 * STEP_MS, "me");
+    predictor.at(12 * STEP_MS, rtt, keys);
+    expect(predictor.takeTicks().map((s) => s.tick)).toEqual([16, 17]);
+    expect(predictor.tick).toBeCloseTo(16);
+  });
+
+  test("anchored on arrivalOf, a late message doesn't pull your car back", () => {
+    const states = serverRace(30, () => UP);
+    const timeline = new KeyTimeline();
+    timeline.record(-1000, UP);
+    const buffer = new SnapshotBuffer();
+    const predictor = new Predictor();
+    const keys = (t: number) => timeline.keysAt(t);
+    const rtt = 4 * STEP_MS;
+    buffer.push(states[10]!, 10 * STEP_MS);
+    predictor.reset(states[10]!, buffer.arrivalOf(10), "me");
+    const before = predictor.at(12 * STEP_MS + 60, rtt, keys)!;
+    // Tick 12 shows up 60 ms late; drawn at that same moment, the car is no further back.
+    buffer.push(states[12]!, 12 * STEP_MS + 60);
+    predictor.reset(states[12]!, buffer.arrivalOf(12), "me");
+    const after = predictor.at(12 * STEP_MS + 60, rtt, keys)!;
+    expect(after.y).toBeCloseTo(before.y);
+    expect(after.x).toBeCloseTo(before.x);
   });
 
   test("nothing to predict before the race's first state", () => {

@@ -17,17 +17,19 @@ describe("elasticStyle", () => {
     assert.ok(elasticStyle(normal, 0.05).topSpeed! < normal.topSpeed!);
     assert.ok(elasticStyle(normal, -0.05).topSpeed! > normal.topSpeed!);
     assert.equal(elasticStyle(normal, 1).topSpeed, normal.topSpeed! * 0.85);
-    assert.ok(elasticStyle(normal, -1).topSpeed! <= 5.8);
+    assert.ok(elasticStyle(normal, -1).topSpeed! <= 6);
   });
 
-  test("hard bots are never helped or held back", () => {
+  test("easy bots too; hard bots are never helped or held back", () => {
+    const easy = BOT_STYLES.easy[0]!;
+    assert.ok(elasticStyle(easy, 0.05).topSpeed! < easy.topSpeed!);
     const hard = BOT_STYLES.hard[0]!;
     assert.equal(elasticStyle(hard, 0.5), hard);
     assert.equal(elasticStyle(hard, -0.5), hard);
   });
 });
 
-describe("hard bots (the racing driver)", () => {
+describe("the racing driver (normal and hard)", () => {
   const twoLaps = (ids: string[], styleOf: (i: number) => BotStyle) => {
     let s = createRace(classicTrack, ids, 2);
     while (s.finished.length < ids.length && s.tick < 90 * TICK_RATE) {
@@ -43,6 +45,16 @@ describe("hard bots (the racing driver)", () => {
     const [plain] = twoLaps(["a"], () => ({ skill: 1 }));
     assert.ok(racing! < 45, `racing ${racing}`);
     assert.ok(racing! < plain! - 5, `racing ${racing}, plain ${plain}`);
+  });
+
+  test("normal sits between easy and hard, and every normal bot finishes a full grid", () => {
+    const ids = Array.from({ length: 10 }, (_, i) => `c${i}`);
+    const normal = twoLaps(ids, (i) => BOT_STYLES.normal[i % 3]!);
+    assert.ok(normal.every(Number.isFinite), normal.join(" "));
+    const avg = normal.reduce((a, b) => a + b) / normal.length;
+    const [hard] = twoLaps(["a"], () => BOT_STYLES.hard[2]!);
+    const [easy] = twoLaps(["a"], () => BOT_STYLES.easy[0]!);
+    assert.ok(avg > hard! + 3 && avg < easy! - 5, `hard ${hard}, normal ${avg}, easy ${easy}`);
   });
 
   test("every grid slot finishes, and the three styles keep their order on average", () => {

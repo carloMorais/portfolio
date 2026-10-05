@@ -182,10 +182,10 @@ export class RaceView {
   private delta: number | null = null;
   private prevOrder: string[] = [];
   private readonly changeUntil = new Map<string, { dir: "up" | "down"; until: number }>();
-  /** Each car's rotation and speed at the last tick, for tyre marks and exhaust. */
+  /** Each car's rotation and speed at the last state seen, for tyre marks and exhaust. */
   private readonly motion = new Map<
     string,
-    { rotation: number; speed: number; boosting: boolean }
+    { tick: number; rotation: number; speed: number; boosting: boolean }
   >();
   /** Ticks you've sat still since the lights went out. */
   private stillTicks = 0;
@@ -234,13 +234,36 @@ export class RaceView {
    * you just started the last lap.
    */
   react(s: RaceState, p: Palette, now: number, reference: number[] | null): boolean {
-    let lastLap = false;
+    this.effects(s, p, now);
+    return this.follow(s, now, reference);
+  }
+
+  /**
+   * What a state looks and sounds like: dust, debris, tyre marks, nitro
+   * bursts, items popping back, for the cars `only` picks (all of them by
+   * default) and, with `items`, the items coming back. The online mode calls it
+   * apart from `follow`, so each car's effects come from the state it is
+   * drawn at: yours from the prediction, everyone else's from the delayed
+   * states they are interpolated between.
+   */
+  effects(
+    s: RaceState,
+    p: Palette,
+    now: number,
+    only: (id: string) => boolean = () => true,
+    items = true,
+  ) {
     for (const ev of s.events) {
+      if (ev.type === "respawn") {
+        const item = items && track.items.find((it) => it.id === ev.item);
+        if (item) this.fx.respawn(item, p, now);
+        continue;
+      }
+      if (!only(ev.car)) continue;
       if (ev.type === "bump") {
         const car = s.cars.find((c) => c.id === ev.car);
         if (!car) continue;
         this.fx.bump(car, ev.impact, ev.nx, ev.ny, ev.gate, p, now);
-        if (ev.car === this.me && ev.gate) this.gateAt = s.tick;
         if (ev.car === this.me && !ev.gate && ev.impact >= 1.2) {
           this.sound?.thud(ev.impact / 6);
           this.buzz(ev.impact >= 3 ? 30 : 15);
@@ -265,9 +288,44 @@ export class RaceView {
             (Math.max(car.y, item.y) + Math.min(car.y + car.height, item.y + item.height)) / 2;
           this.fx.impact(x, y, now);
         }
-      } else if (ev.type === "respawn") {
-        const item = track.items.find((it) => it.id === ev.item);
-        if (item) this.fx.respawn(item, p, now);
+      }
+    }
+    // Tyre marks on hard turns and heavy braking; a puff pulling away. The
+    // online server sends every other tick: changes are per tick either way.
+    for (const car of s.cars) {
+      if (!only(car.id)) continue;
+      const speed = Math.hypot(car.vx, car.vy);
+      const last = this.motion.get(car.id);
+      const boosting = car.nitroUntil !== null;
+      this.motion.set(car.id, { tick: s.tick, rotation: car.rotation, speed, boosting });
+      if (!last || car.finishedAt !== null) continue;
+      const ticks = s.tick - last.tick;
+      if (ticks <= 0) continue;
+      if (boosting && !last.boosting) {
+        this.fx.nitroBurst(car, p, now);
+        if (car.id === this.me) this.sound?.whoosh();
+      }
+      let turn = Math.abs(car.rotation - last.rotation) % 360;
+      if (turn > 180) turn = 360 - turn;
+      turn /= ticks;
+      const braking = (last.speed - speed) / ticks;
+      const skids =
+        (speed > SKID_SPEED && turn >= SKID_TURN) || (speed > 2 && braking > SKID_BRAKE);
+      this.fx.tyres(car.id, car, skids, now);
+      if (speed < 2.2 && speed > last.speed + 0.05 * ticks) this.fx.exhaust(car.id, car, now);
+    }
+  }
+
+  /**
+   * Your race, from a state: the delta at each checkpoint against `reference`
+   * (your best lap's splits), laps, wrong way, sitting still. No effects.
+   * Returns true when you just started the last lap.
+   */
+  follow(s: RaceState, now: number, reference: number[] | null): boolean {
+    let lastLap = false;
+    for (const ev of s.events) {
+      if (ev.type === "bump" && ev.car === this.me && ev.gate) {
+        this.gateAt = s.tick;
       } else if (ev.type === "checkpoint" && ev.car === this.me) {
         this.splits[ev.order - 1] = ev.ticks;
         this.delta =
@@ -283,24 +341,6 @@ export class RaceView {
           lastLap = true;
         }
       }
-    }
-    // Tyre marks on hard turns and heavy braking; a puff pulling away.
-    for (const car of s.cars) {
-      const speed = Math.hypot(car.vx, car.vy);
-      const last = this.motion.get(car.id);
-      const boosting = car.nitroUntil !== null;
-      this.motion.set(car.id, { rotation: car.rotation, speed, boosting });
-      if (!last || car.finishedAt !== null) continue;
-      if (boosting && !last.boosting) {
-        this.fx.nitroBurst(car, p, now);
-        if (car.id === this.me) this.sound?.whoosh();
-      }
-      let turn = Math.abs(car.rotation - last.rotation) % 360;
-      if (turn > 180) turn = 360 - turn;
-      const skids =
-        (speed > SKID_SPEED && turn >= SKID_TURN) || (speed > 2 && last.speed - speed > SKID_BRAKE);
-      this.fx.tyres(car.id, car, skids, now);
-      if (speed < 2.2 && speed > last.speed + 0.05) this.fx.exhaust(car.id, car, now);
     }
 
     const me = s.cars.find((c) => c.id === this.me);

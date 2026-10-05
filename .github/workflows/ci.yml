@@ -23,7 +23,11 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      # The online E2E tests play against a local API (see playwright.config.ts).
       - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: ws://localhost:17101
+      - run: npm run build:api
       - run: npx playwright install --with-deps chromium
         working-directory: apps/web
       - run: npm run test:e2e
