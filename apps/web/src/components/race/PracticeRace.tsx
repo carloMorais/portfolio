@@ -13,10 +13,11 @@ import {
   type Keys,
   type RaceState,
 } from "race-engine";
-import { COLORS } from "./colors";
+import { carColor } from "./colors";
 import { readPalette, type CarLook, type Palette } from "./draw";
 import { Controls } from "./Controls";
 import {
+  ColorPicker,
   CompactHud,
   DifficultyPicker,
   FinishingVeil,
@@ -41,9 +42,12 @@ import {
   PLAYER,
   bestLap,
   loadBest,
+  loadColor,
   loadDifficulty,
+  practiceColors,
   resultRows,
   saveBest,
+  saveColor,
   saveDifficulty,
   storage,
   updateBest,
@@ -74,8 +78,6 @@ type Outcome = { newRace: boolean; newLap: boolean };
 const newRace = () => createRace(track, [PLAYER, ...BOT_IDS], LAPS);
 /** Behind the start card, the bots lap on their own (many laps: it never ends while you read). */
 const newDemo = () => createRace(track, BOT_IDS, 99);
-/** A bot's race number, as in its name ("Driver 2"). */
-const botNumber = (id: string) => Number(id.replace("bot", ""));
 
 /**
  * Practice mode: the whole race runs in the browser at 30 ticks/s on the
@@ -104,6 +106,8 @@ export function PracticeRace({
   const restartRef = useRef<HTMLButtonElement>(null);
   const view = useRef<RaceView | null>(null);
   const difficultyRef = useRef<Difficulty>("normal");
+  /** Everyone's colour: yours, and the bots' (the next free ones). */
+  const colorsRef = useRef(practiceColors(0, BOT_IDS));
   const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
   const celebratedRef = useRef(false);
 
@@ -111,6 +115,11 @@ export function PracticeRace({
   const [hud, setHud] = useState<Hud>(() => emptyHud(newRace()));
   const [result, setResult] = useState<RaceState | null>(null);
   const [difficulty, setDifficultyState] = useState<Difficulty>("normal");
+  const [myColor, setMyColor] = useState(0);
+  const colorOf = useCallback(
+    (id: string) => carColor(practiceColors(myColor, BOT_IDS)[id] ?? 0),
+    [myColor],
+  );
   const [best, setBest] = useState<PersonalBest>({ race: null, lap: null, splits: null });
   const [outcome, setOutcome] = useState<Outcome | null>(null);
   const [announcement, setAnnouncement] = useState("");
@@ -137,12 +146,22 @@ export function PracticeRace({
     saveDifficulty(storage(), d);
   }, []);
 
-  // The last difficulty and the record live in this browser only, so they're
-  // read after hydration (the server renders the defaults).
+  const chooseColor = useCallback((c: number) => {
+    colorsRef.current = practiceColors(c, BOT_IDS);
+    setMyColor(c);
+    saveColor(storage(), c);
+  }, []);
+
+  // The last difficulty, colour and the record live in this browser only, so
+  // they're read after hydration (the server renders the defaults).
   useEffect(() => {
-    const id = requestAnimationFrame(() => chooseDifficulty(loadDifficulty(storage())));
+    const id = requestAnimationFrame(() => {
+      chooseDifficulty(loadDifficulty(storage()));
+      const saved = loadColor(storage());
+      if (saved !== null) chooseColor(saved);
+    });
     return () => cancelAnimationFrame(id);
-  }, [chooseDifficulty]);
+  }, [chooseDifficulty, chooseColor]);
 
   const start = useCallback(() => {
     race.current = newRace();
@@ -266,13 +285,15 @@ export function PracticeRace({
       }
       return inputs;
     };
-    // You in the site's blue with a stripe; each bot in its own colour.
+    // Each car in its colour (yours picked on the start card), you with a stripe and an outline.
     const look =
       (p: Palette) =>
-      (id: string): CarLook =>
-        id === PLAYER
-          ? { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true }
-          : { body: p.c.bots[BOT_IDS.indexOf(id)]!, helmet: p.c.helmet, stripe: false };
+      (id: string): CarLook => {
+        const body = carColor(colorsRef.current[id] ?? 0).body;
+        return id === PLAYER
+          ? { body, helmet: p.c.bolt, stripe: true, highlight: true }
+          : { body, helmet: p.c.helmet, stripe: false };
+      };
 
     const finish = (s: RaceState) => {
       setResult(s);
@@ -318,7 +339,10 @@ export function PracticeRace({
             setPhase("finishing");
             if (!celebratedRef.current && next.finished[0] === PLAYER) {
               celebratedRef.current = true;
-              if (p) setConfetti(makeConfetti([p.accent, p.c.bolt, ...p.c.bots]));
+              if (p) {
+                const cars = Object.values(colorsRef.current).map((c) => carColor(c).body);
+                setConfetti(makeConfetti([p.c.bolt, ...cars]));
+              }
             }
           }
           const allDone = next.finished.length === next.cars.length;
@@ -364,7 +388,6 @@ export function PracticeRace({
             running: attract || running(),
             look: look(p),
             name: names,
-            number: botNumber,
             zoom: zoomFor(canvas.clientWidth),
           },
         );
@@ -414,9 +437,11 @@ export function PracticeRace({
         myTime={result.cars.find((c) => c.id === PLAYER)?.finishedAt ?? null}
         outcome={outcome}
         name={names}
+        color={colorOf}
         header={modeSwitch}
         t={t}
       >
+        <ColorPicker value={myColor} onChange={chooseColor} t={t} />
         <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
         <RestartButton
           buttonRef={focus ? restartRef : undefined}
@@ -443,13 +468,7 @@ export function PracticeRace({
 
       {/* Standings and times only while a race is on screen. */}
       {onTrack && (
-        <StandingsBoard
-          board={hud.board}
-          me={PLAYER}
-          name={names}
-          tag={(id) => ({ color: COLORS.bots[BOT_IDS.indexOf(id)]!, n: botNumber(id) })}
-          t={t}
-        />
+        <StandingsBoard board={hud.board} me={PLAYER} name={names} color={colorOf} t={t} />
       )}
       {onTrack && <LapPanel hud={hud} laps={LAPS} best={best} t={t} />}
 
@@ -488,6 +507,10 @@ export function PracticeRace({
                   <div className="w-full max-lg:hidden">
                     <Controls />
                   </div>
+                  {/* Phones: the colour goes under the track too (the card must fit over it). */}
+                  <div className="max-lg:hidden">
+                    <ColorPicker value={myColor} onChange={chooseColor} t={t} />
+                  </div>
                   <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
                   <div className="flex flex-col items-center gap-2">
                     <button type="button" onClick={start} className="btn btn-primary">
@@ -523,6 +546,11 @@ export function PracticeRace({
           <div className="mt-4 flex justify-center lg:hidden">{results(false)}</div>
         )}
 
+        {phase === "ready" && (
+          <div className="mt-4 lg:hidden">
+            <ColorPicker value={myColor} onChange={chooseColor} t={t} />
+          </div>
+        )}
         {phase === "ready" && (
           <p className="mt-4 text-center text-xs text-muted lg:hidden">{t("controlsTouch")}</p>
         )}

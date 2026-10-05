@@ -32,7 +32,7 @@ import { RoomService } from "./room.service";
  * matchmaking (ciclo 2 RaceGame put you straight into a room, never a name
  * prompt), but server-authoritative. Unlike the original, starting is
  * manual: the room's leader adds/removes bots and starts when ready, never a
- * timer — `add-bot`/`remove-bot`/`bot-difficulty`/`start` reply with an `error`
+ * timer — `add-bot`/`remove-bot`/`bot-difficulty`/`color`/`start` reply with an `error`
  * (sent back to just the caller, via Nest's own response-to-sender) when
  * rejected; a successful action needs no reply, since the room already
  * broadcasts the updated lobby.
@@ -118,6 +118,15 @@ export class GameGateway implements OnGatewayConnection, OnGatewayDisconnect, On
   ): ServerMessage | undefined {
     if (!this.allow(client)) return undefined;
     return this.reply(this.rooms.setBotDifficulty(client, data));
+  }
+
+  @SubscribeMessage("color")
+  handleColor(
+    @ConnectedSocket() client: WebSocket,
+    @MessageBody() data: unknown,
+  ): ServerMessage | undefined {
+    if (!this.allow(client)) return undefined;
+    return this.reply(this.rooms.setColor(client, data));
   }
 
   @SubscribeMessage("start")

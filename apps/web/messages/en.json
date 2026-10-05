@@ -192,7 +192,21 @@
     "delta": "Delta",
     "gainedPlace": "Gained a place",
     "lostPlace": "Lost a place",
-    "lightsHint": "Accelerate when the lights go out"
+    "lightsHint": "Accelerate when the lights go out",
+    "carColor": "Car colour",
+    "colorTaken": "{color} (taken)",
+    "colors": {
+      "blue": "Blue",
+      "coral": "Coral",
+      "yellow": "Yellow",
+      "green": "Green",
+      "orange": "Orange",
+      "purple": "Purple",
+      "pink": "Pink",
+      "cyan": "Cyan",
+      "lime": "Lime",
+      "white": "White"
+    }
   },
   "Online": {
     "modeTraining": "Practice",

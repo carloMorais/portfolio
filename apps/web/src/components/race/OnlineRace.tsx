@@ -13,7 +13,7 @@ import {
   type Keys,
   type RaceState,
 } from "race-engine";
-import { COLORS } from "./colors";
+import { carColor } from "./colors";
 import { interpolateCar, readPalette, type CarLook, type Palette } from "./draw";
 import {
   CompactHud,
@@ -23,6 +23,10 @@ import {
   ResultsCard,
   RestartButton,
   StandingsBoard,
+  Spinner,
+  ColorPicker,
+  CAR_TEXT,
+  carText,
   StartCard,
   TRACK_COLUMN,
   TouchPad,
@@ -38,6 +42,7 @@ import {
   initialOnlineState,
   inviteUrl,
   isLeader,
+  colorIndex,
   type ClientMessage,
   type OnlineState,
   type ServerMessage,
@@ -49,6 +54,8 @@ import {
   loadBest,
   resultRows,
   saveBest,
+  saveColor,
+  loadColor,
   storage,
   updateBest,
   type PersonalBest,
@@ -68,6 +75,18 @@ import {
 const ERROR_MS = 3000;
 /** After this long still connecting, the Render cold-start hint shows up. */
 const COLD_START_MS = 4000;
+/** The mode card's slide (globals.css, .race-slide-from-*). */
+const SLIDE_MS = 450;
+
+/** Runs `fn` after the next paint (rAF fires before it, the timeout after); returns a cancel. */
+function afterPaint(fn: () => void) {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const raf = requestAnimationFrame(() => (timer = setTimeout(fn, 0)));
+  return () => {
+    cancelAnimationFrame(raf);
+    clearTimeout(timer);
+  };
+}
 /** How long "link copied" stays up. */
 const COPIED_MS = 2000;
 /** How often the round trip is measured (also keeps idle lobby connections alive). */
@@ -104,7 +123,14 @@ export function OnlineRace({
   onPracticeInstead,
   modeSwitch,
   slideFrom,
+  onBusy,
 }: {
+  /**
+   * Connecting: every button on the card waits (the mode switch too, see
+   * RaceModeSwitcher) until the server answers, or until the wake-up hint
+   * offers to practise meanwhile.
+   */
+  onBusy: (busy: boolean) => void;
   /** A room code from an invite link (`?room=`), or null for any open room. */
   invite: string | null;
   /** While the server wakes up, the visitor can race the bots instead. */
@@ -139,6 +165,8 @@ export function OnlineRace({
   const bestRef = useRef<PersonalBest>({ race: null, lap: null, splits: null });
 
   const [state, dispatch] = useReducer(applyServerMessage, initialOnlineState);
+  /** The first connection waits for the mode's card to slide in; reconnecting doesn't. */
+  const connectDelay = useRef(slideFrom ? SLIDE_MS : 0);
   const stateRef = useRef(state);
   const [connectAttempt, setConnectAttempt] = useState(0);
   const [transientError, setTransientError] = useState<string | null>(null);
@@ -177,6 +205,7 @@ export function OnlineRace({
   /** Everyone is "Piloto N" in your language, except you. The draw loop reads the latest state. */
   const names = useCallback((id: string) => nameIn(stateRef.current, id, tPlay), [tPlay]);
   const renderName = (id: string) => nameIn(state, id, tPlay);
+  const colorOf = (id: string) => carColor(colorIndex(state, id));
 
   // In the lobby, everyone who's in waits on the grid.
   useEffect(() => {
@@ -196,10 +225,14 @@ export function OnlineRace({
       palette.current = readPalette(canvas);
       trackLayer.current = buildTrackLayer(palette.current);
     };
-    build();
+    // After the switch to this mode has painted: drawing the track takes a moment.
+    const cancel = afterPaint(build);
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     media.addEventListener("change", build);
-    return () => media.removeEventListener("change", build);
+    return () => {
+      cancel();
+      media.removeEventListener("change", build);
+    };
   }, []);
 
   const finish = useCallback((s: RaceState) => {
@@ -230,97 +263,130 @@ export function OnlineRace({
       1000,
     );
     const requested = roomRef.current;
+    /** Your saved colour is asked for once, on the first lobby (if nobody else has it). */
+    let colorAsked = false;
+    /** Our car, straight from `welcome` (the lobby can arrive before React has stored it). */
+    let myId: string | null = null;
+    let socket: WebSocket | null = null;
+    let pinger: ReturnType<typeof setInterval> | undefined;
 
-    const ws = new WebSocket(apiWsUrl(requested));
-    wsRef.current = ws;
-    const ping = () =>
-      ws.readyState === WebSocket.OPEN &&
-      ws.send(JSON.stringify({ event: "ping", data: performance.now() }));
-    ws.addEventListener("open", ping);
-    const pinger = setInterval(ping, PING_MS);
-
-    ws.addEventListener("message", (event) => {
+    // The mode switch shows first: the socket opens once the online card has
+    // painted (and, when it slides in, once it has slid), never before.
+    const connect = () => {
       if (!live) return;
-      const msg = JSON.parse(event.data as string) as ServerMessage;
-      const now = performance.now();
-      const v = view.current;
-      const me = stateRef.current.playerId;
-      if (msg.type === "welcome") {
-        clearInterval(waitTimer);
-        setInviteMissed(requested !== null && requested !== msg.roomId);
-        roomRef.current = msg.roomId;
-        // The address bar is an invite too: copy it and send it.
-        window.history.replaceState(null, "", inviteUrl(window.location.href, msg.roomId));
-      }
-      if (msg.type === "pong") {
-        rtt.current.sample(now - msg.t);
-        return;
-      }
-      if (msg.type === "state") {
-        if (!decoder.current) return;
-        race.current = decoder.current.apply(msg);
-        buffer.current.push(race.current, now);
-        // Re-base the prediction on the server's truth; the smoother hides the correction.
-        if (me) {
-          predictor.current.reset(race.current, now, me);
-          smoother.current.correct(
-            predictor.current.at(now, rtt.current.value, (t) => timeline.current.keysAt(t)),
+      const ws = new WebSocket(apiWsUrl(requested));
+      socket = ws;
+      wsRef.current = ws;
+      const ping = () =>
+        ws.readyState === WebSocket.OPEN &&
+        ws.send(JSON.stringify({ event: "ping", data: performance.now() }));
+      ws.addEventListener("open", ping);
+      pinger = setInterval(ping, PING_MS);
+
+      ws.addEventListener("message", (event) => {
+        if (!live) return;
+        const msg = JSON.parse(event.data as string) as ServerMessage;
+        const now = performance.now();
+        const v = view.current;
+        const me = stateRef.current.playerId;
+        if (msg.type === "welcome") {
+          myId = msg.playerId;
+          clearInterval(waitTimer);
+          setInviteMissed(requested !== null && requested !== msg.roomId);
+          roomRef.current = msg.roomId;
+          // The address bar is an invite too: copy it and send it.
+          window.history.replaceState(null, "", inviteUrl(window.location.href, msg.roomId));
+        }
+        if (msg.type === "lobby" && !colorAsked) {
+          colorAsked = true;
+          const wanted = loadColor(storage());
+          const mine = msg.participants.find((p) => p.id === myId);
+          const held = msg.participants.some(
+            (p) => !p.isBot && p.id !== myId && p.color === wanted,
           );
-        }
-        const p = palette.current;
-        if (v && p && v.react(race.current, p, now, bestRef.current.splits)) {
-          setAnnouncement(tPlay("announceLastLap"));
-        }
-        const mine = race.current.cars.find((c) => c.id === me);
-        if (mine && mine.finishedAt !== null && !doneRef.current) {
-          doneRef.current = true;
-          dispatch({ type: "you-finished" });
-          if (race.current.finished[0] === me && p) {
-            setConfetti(makeConfetti([p.accent, p.c.bolt, ...p.c.bots]));
+          if (wanted !== null && mine && mine.color !== wanted && !held) {
+            ws.send(JSON.stringify({ event: "color", data: { color: wanted } }));
           }
         }
-        return;
-      }
-      if (msg.type === "error") {
-        setTransientError(msg.message);
-        setTimeout(() => setTransientError(null), ERROR_MS);
-        return;
-      }
-      if (msg.type === "start") {
-        decoder.current = new RaceDecoder(track, msg.carIds, stateRef.current.laps);
-        race.current = decoder.current.initial();
-        buffer.current.clear();
-        timeline.current.clear();
-        predictor.current.clear();
-        smoother.current.clear();
-        keysRef.current = { ...NO_KEYS };
-        v?.reset();
-        doneRef.current = false;
-        recordedRef.current = false;
-        countdownMs.current = msg.countdownMs;
-        countdownEnd.current = now + msg.countdownMs;
-        setResult(null);
-        setOutcome(null);
-        setConfetti(null);
-        canvasRef.current?.focus({ preventScroll: true });
-        // Bring the whole track into view: you can't drive what you can't see.
-        rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
-      }
-      if (msg.type === "finished") finish(race.current);
-      dispatch(msg);
-    });
-    ws.addEventListener(
-      "close",
-      (e) => live && dispatch({ type: "room-closed", busy: e.code === CLOSE_BUSY }),
-    );
-    ws.addEventListener("error", () => live && dispatch({ type: "room-closed" }));
+        if (msg.type === "pong") {
+          rtt.current.sample(now - msg.t);
+          return;
+        }
+        if (msg.type === "state") {
+          if (!decoder.current) return;
+          race.current = decoder.current.apply(msg);
+          buffer.current.push(race.current, now);
+          // Re-base the prediction on the server's truth; the smoother hides the correction.
+          if (me) {
+            predictor.current.reset(race.current, now, me);
+            smoother.current.correct(
+              predictor.current.at(now, rtt.current.value, (t) => timeline.current.keysAt(t)),
+            );
+          }
+          const p = palette.current;
+          if (v && p && v.react(race.current, p, now, bestRef.current.splits)) {
+            setAnnouncement(tPlay("announceLastLap"));
+          }
+          const mine = race.current.cars.find((c) => c.id === me);
+          if (mine && mine.finishedAt !== null && !doneRef.current) {
+            doneRef.current = true;
+            dispatch({ type: "you-finished" });
+            if (race.current.finished[0] === me && p) {
+              const cars = race.current.cars.map(
+                (c) => carColor(colorIndex(stateRef.current, c.id)).body,
+              );
+              setConfetti(makeConfetti([p.c.bolt, ...cars]));
+            }
+          }
+          return;
+        }
+        if (msg.type === "error") {
+          setTransientError(msg.message);
+          setTimeout(() => setTransientError(null), ERROR_MS);
+          return;
+        }
+        if (msg.type === "start") {
+          decoder.current = new RaceDecoder(track, msg.carIds, stateRef.current.laps);
+          race.current = decoder.current.initial();
+          buffer.current.clear();
+          timeline.current.clear();
+          predictor.current.clear();
+          smoother.current.clear();
+          keysRef.current = { ...NO_KEYS };
+          v?.reset();
+          doneRef.current = false;
+          recordedRef.current = false;
+          countdownMs.current = msg.countdownMs;
+          countdownEnd.current = now + msg.countdownMs;
+          setResult(null);
+          setOutcome(null);
+          setConfetti(null);
+          canvasRef.current?.focus({ preventScroll: true });
+          // Bring the whole track into view: you can't drive what you can't see.
+          rootRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+        }
+        if (msg.type === "finished") finish(race.current);
+        dispatch(msg);
+      });
+      ws.addEventListener(
+        "close",
+        (e) => live && dispatch({ type: "room-closed", busy: e.code === CLOSE_BUSY }),
+      );
+      ws.addEventListener("error", () => live && dispatch({ type: "room-closed" }));
+    };
+    const delay = connectDelay.current;
+    connectDelay.current = 0;
+    let delayTimer: ReturnType<typeof setTimeout> | undefined;
+    const cancelPaint = afterPaint(() => (delayTimer = setTimeout(connect, delay)));
 
     return () => {
       live = false;
       clearTimeout(coldStartTimer);
       clearInterval(waitTimer);
+      cancelPaint();
+      clearTimeout(delayTimer);
       clearInterval(pinger);
-      ws.close();
+      socket?.close();
       wsRef.current = null;
     };
   }, [connectAttempt, finish, tPlay]);
@@ -426,16 +492,20 @@ export function OnlineRace({
     const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     view.current ??= new RaceView(stateRef.current.playerId ?? "", stateRef.current.laps, reduced);
     const v = view.current;
-    // You in the site's blue with a stripe; everyone else in a colour by number.
+    // Each car in the colour its driver picked (or was given); you with a stripe and an outline.
     const look =
       (p: Palette) =>
       (id: string): CarLook => {
         const s = stateRef.current;
         if (id === s.playerId) {
-          return { body: p.accent, helmet: p.c.bolt, stripe: true, highlight: true };
+          return {
+            body: carColor(colorIndex(s, id)).body,
+            helmet: p.c.bolt,
+            stripe: true,
+            highlight: true,
+          };
         }
-        const n = racerNumber(s, id);
-        return { body: p.c.bots[n % p.c.bots.length]!, helmet: p.c.helmet, stripe: false };
+        return { body: carColor(colorIndex(s, id)).body, helmet: p.c.helmet, stripe: false };
       };
 
     /** The latest server state with every car where it should be drawn at `now`. */
@@ -476,7 +546,6 @@ export function OnlineRace({
           running,
           look: look(p),
           name: names,
-          number: (id) => racerNumber(stateRef.current, id),
           zoom: zoomFor(canvas.clientWidth),
         });
       }
@@ -515,6 +584,10 @@ export function OnlineRace({
     }
   };
 
+  const busy = state.phase === "connecting" && !showColdStartHint;
+  useEffect(() => onBusy(busy), [busy, onBusy]);
+  useEffect(() => () => onBusy(false), [onBusy]);
+
   const leading = isLeader(state);
   const enough = state.participants.length >= 2;
   const me = state.playerId ?? "";
@@ -529,7 +602,8 @@ export function OnlineRace({
     <StartCard header={modeSwitch} slideFrom={slideFrom}>
       {phase === "connecting" && (
         <div className="flex flex-col items-center gap-3" role="status">
-          <p className="font-display text-2xl tracking-tight">
+          <p className="flex items-center gap-3 font-display text-2xl tracking-tight">
+            <Spinner />
             {t("connecting")}
             {showColdStartHint && <span className="ml-2 text-muted tabular-nums">{waited} s</span>}
           </p>
@@ -584,11 +658,21 @@ export function OnlineRace({
             {state.participants.map((p) => (
               <li
                 key={p.id}
-                className={`flex min-h-10 items-center justify-between gap-3 rounded-lg px-3 py-1.5 ring-1 ring-line ${
-                  p.id === state.playerId ? "text-accent" : ""
-                }`}
+                className="flex min-h-10 items-center justify-between gap-3 rounded-lg px-3 py-1.5 ring-1 ring-line"
               >
-                <span>{renderName(p.id)}</span>
+                <span className="flex items-center gap-2">
+                  <span
+                    aria-hidden
+                    className="size-3 rounded-full ring-1 ring-black/15"
+                    style={{ backgroundColor: colorOf(p.id).body }}
+                  />
+                  <span
+                    className={`${CAR_TEXT} ${p.id === state.playerId ? "font-semibold" : ""}`}
+                    style={carText(colorOf(p.id))}
+                  >
+                    {renderName(p.id)}
+                  </span>
+                </span>
                 <span className="flex items-center gap-2 text-xs text-muted">
                   {p.id === state.leaderId && (
                     <span className="text-accent">{t("leaderBadge")}</span>
@@ -621,6 +705,17 @@ export function OnlineRace({
               </li>
             ))}
           </ul>
+          <ColorPicker
+            value={colorIndex(state, me)}
+            taken={state.participants
+              .filter((p) => !p.isBot && p.id !== state.playerId)
+              .map((p) => p.color)}
+            onChange={(color) => {
+              saveColor(storage(), color);
+              send({ event: "color", data: { color } });
+            }}
+            t={tPlay}
+          />
           {leading && (
             <div className="flex gap-2">
               <button
@@ -678,6 +773,7 @@ export function OnlineRace({
         myTime={result.cars.find((c) => c.id === me)?.finishedAt ?? null}
         outcome={outcome}
         name={renderName}
+        color={colorOf}
         header={modeSwitch}
         t={tPlay}
       >
@@ -708,10 +804,7 @@ export function OnlineRace({
           board={hud.board}
           me={state.playerId}
           name={renderName}
-          tag={(id) => {
-            const n = racerNumber(state, id);
-            return { color: COLORS.bots[n % COLORS.bots.length]!, n };
-          }}
+          color={colorOf}
           t={tPlay}
         />
       )}

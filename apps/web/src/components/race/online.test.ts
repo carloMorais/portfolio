@@ -2,6 +2,7 @@ import {
   apiHttpUrl,
   apiWsUrl,
   applyServerMessage,
+  colorIndex,
   initialOnlineState,
   inviteUrl,
   isLeader,
@@ -29,8 +30,8 @@ describe("applyServerMessage", () => {
     const next = applyServerMessage(withError, {
       type: "lobby",
       participants: [
-        { id: "p-0-1", number: 1, isBot: false },
-        { id: "b-0-2", number: 2, isBot: true, difficulty: "hard" },
+        { id: "p-0-1", number: 1, color: 0, isBot: false },
+        { id: "b-0-2", number: 2, color: 1, isBot: true, difficulty: "hard" },
       ],
       leaderId: "p-0-1",
     });
@@ -44,7 +45,7 @@ describe("applyServerMessage", () => {
     const racing: OnlineState = { ...initialOnlineState, phase: "racing", participants: [] };
     const next = applyServerMessage(racing, {
       type: "lobby",
-      participants: [{ id: "p-0-1", number: 1, isBot: false }],
+      participants: [{ id: "p-0-1", number: 1, color: 0, isBot: false }],
       leaderId: "p-0-1",
     });
     expect(next).toBe(racing);
@@ -57,12 +58,23 @@ describe("applyServerMessage", () => {
         type: "start",
         carIds: ["p-0-1", "b-0-2"],
         numbers: { "p-0-1": 1, "b-0-2": 2 },
+        colors: { "p-0-1": 4, "b-0-2": 0 },
         countdownMs: 3000,
       },
     );
     expect(next.phase).toBe("countdown");
     expect(next.countdownMs).toBe(3000);
     expect(next.carIds).toEqual(["p-0-1", "b-0-2"]);
+    expect(colorIndex(next, "p-0-1")).toBe(4);
+  });
+
+  test("in the lobby, a car's colour is its participant's", () => {
+    const lobby: OnlineState = {
+      ...initialOnlineState,
+      phase: "lobby",
+      participants: [{ id: "p-0-1", number: 1, color: 6, isBot: false }],
+    };
+    expect(colorIndex(lobby, "p-0-1")).toBe(6);
   });
 
   test("lights out races, crossing the line is finishing, and skip shows the results", () => {

@@ -19,12 +19,68 @@ function fakeClient(): RoomClient & { messages: unknown[] } {
 function lastLobby(client: RoomClient & { messages: unknown[] }) {
   const lobbies = client.messages.filter((m) => (m as { type: string }).type === "lobby");
   return lobbies.at(-1) as {
-    participants: { id: string; number: number; isBot: boolean; difficulty?: string }[];
+    participants: {
+      id: string;
+      number: number;
+      color: number;
+      isBot: boolean;
+      difficulty?: string;
+    }[];
     leaderId: string | null;
   };
 }
 
 describe("Room", () => {
+  test("every car gets its own colour, players and bots alike", () => {
+    const room = new Room("c1", jest.fn(), jest.fn());
+    const alice = fakeClient();
+    const bob = fakeClient();
+    room.join(alice);
+    room.join(bob);
+    room.addBot(alice);
+    expect(lastLobby(alice).participants.map((p) => p.color)).toEqual([0, 1, 2]);
+  });
+
+  test("a player can take a bot's colour (they swap) but not another player's", () => {
+    const room = new Room("c2", jest.fn(), jest.fn());
+    const alice = fakeClient();
+    const bob = fakeClient();
+    room.join(alice);
+    room.join(bob);
+    room.addBot(alice);
+
+    expect(room.setColor(bob, { color: 0 })).toEqual(
+      expect.objectContaining({ ok: false, message: "color taken" }),
+    );
+    expect(room.setColor(bob, { color: 2 })).toEqual({ ok: true });
+    expect(lastLobby(alice).participants.map((p) => p.color)).toEqual([0, 2, 1]);
+    expect(room.setColor(bob, { color: 7 })).toEqual({ ok: true });
+    expect(lastLobby(alice).participants.map((p) => p.color)).toEqual([0, 7, 1]);
+  });
+
+  test("colours off the wire are checked", () => {
+    const room = new Room("c3", jest.fn(), jest.fn());
+    const alice = fakeClient();
+    room.join(alice);
+    for (const color of [-1, 10, 1.5, "2", null]) {
+      expect(room.setColor(alice, { color })).toEqual(
+        expect.objectContaining({ ok: false, message: "unknown color" }),
+      );
+    }
+    expect(room.setColor(alice, undefined).ok).toBe(false);
+  });
+
+  test("the start message carries every car's colour", () => {
+    const room = new Room("c4", jest.fn(), jest.fn(), undefined, { countdownMs: 0 });
+    const alice = fakeClient();
+    room.join(alice);
+    room.addBot(alice);
+    room.setColor(alice, { color: 5 });
+    room.startRace(alice);
+    const start = ofType(alice, "start")[0]!;
+    expect(Object.values(start.colors as Record<string, number>).sort()).toEqual([1, 5]);
+  });
+
   test("the first join gets number 1 and becomes the leader", () => {
     const room = new Room("r1", jest.fn(), jest.fn());
     const alice = fakeClient();

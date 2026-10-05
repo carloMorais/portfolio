@@ -192,7 +192,21 @@
     "delta": "Diferença",
     "gainedPlace": "Subiu uma posição",
     "lostPlace": "Desceu uma posição",
-    "lightsHint": "Acelere quando as luzes se apagarem"
+    "lightsHint": "Acelere quando as luzes se apagarem",
+    "carColor": "Cor do carro",
+    "colorTaken": "{color} (já escolhida)",
+    "colors": {
+      "blue": "Azul",
+      "coral": "Coral",
+      "yellow": "Amarelo",
+      "green": "Verde",
+      "orange": "Laranja",
+      "purple": "Roxo",
+      "pink": "Rosa",
+      "cyan": "Ciano",
+      "lime": "Lima",
+      "white": "Branco"
+    }
   },
   "Online": {
     "modeTraining": "Treino",

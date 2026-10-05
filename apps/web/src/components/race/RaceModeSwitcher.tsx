@@ -19,6 +19,8 @@ export function RaceModeSwitcher() {
   const [mode, setMode] = useState<RaceMode>("training");
   const [invite, setInvite] = useState<string | null>(null);
   const [slideFrom, setSlideFrom] = useState<SlideFrom>(null);
+  /** Online mode is connecting: the switch waits with the rest of the card. */
+  const [busy, setBusy] = useState(false);
 
   // The address is read after hydration: the page itself is static.
   useEffect(() => {
@@ -50,7 +52,7 @@ export function RaceModeSwitcher() {
     setMode(next);
   };
 
-  const modeSwitch = <ModeSwitch mode={mode} onChange={choose} t={t} />;
+  const modeSwitch = <ModeSwitch mode={mode} onChange={choose} disabled={busy} t={t} />;
 
   return (
     // The game gets more room than the text column: as wide as the window allows.
@@ -62,6 +64,7 @@ export function RaceModeSwitcher() {
           key={invite ?? "any"}
           invite={invite}
           onPracticeInstead={() => choose("training")}
+          onBusy={setBusy}
           modeSwitch={modeSwitch}
           slideFrom={slideFrom}
         />

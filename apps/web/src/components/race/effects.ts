@@ -12,14 +12,15 @@ import { itemColors, type Palette } from "./draw";
  * - hitting an obstacle flashes a little impact star where the two touched;
  * - an item coming back onto the track pops in with a ring (see `draw.ts`'s
  *   overshoot scale, driven by `respawnProgress`);
- * - nitro leaves a long, glowing trail;
+ * - nitro fires a burst of sharp shards as it kicks in, then trails pointed
+ *   flames and thin speed lines (no round dots: points read as speed);
  * - hard corners and heavy braking leave tyre marks that fade over a few
  *   seconds, and pulling away from a standstill puffs a little exhaust.
  * With reduced motion none of this is drawn.
  */
 
 type Particle = {
-  kind: "dot" | "square" | "puff" | "shard" | "spark";
+  kind: "dot" | "square" | "puff" | "shard" | "spark" | "spike" | "needle";
   x: number;
   y: number;
   /** px per ms */
@@ -30,6 +31,8 @@ type Particle = {
   born: number;
   life: number;
   alpha: number;
+  /** Spikes and needles: the direction their point faces (radians). */
+  dir?: number;
   /** Shards: starting angle, spin (rad per ms) and shape. */
   angle?: number;
   spin?: number;
@@ -194,13 +197,15 @@ export class Effects {
     for (let i = 0; i < count; i++) {
       const angle = (i / count) * Math.PI * 2 + rand(0, 0.4);
       const speed = rand(0.05, 0.12);
+      // Nitro bursts into sharp sparks (speed); a cone into round bits.
       this.particles.push({
-        kind: "dot",
+        kind: ring ? "spike" : "dot",
+        dir: angle,
         x: cx,
         y: cy,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed,
-        size: rand(2, 3.2),
+        size: ring ? rand(6, 9) : rand(2, 3.2),
         color: i % 3 === 0 ? second : main,
         born: now,
         life: rand(420, 620),
@@ -333,37 +338,98 @@ export class Effects {
     }
   }
 
-  /** Called every frame for a car on nitro: warm circles that shrink behind it, over a soft blue glow. */
+  /**
+   * Called every frame for a car on nitro: pointed flames spat out behind it
+   * (yellow, blue, a white-hot one now and then) and thin speed lines
+   * streaming past its sides.
+   */
   trail(id: string, car: CarPose, p: Palette, now: number) {
     if (this.reduced || now - (this.lastTrail.get(id) ?? 0) < TRAIL_EVERY_MS) return;
     this.lastTrail.set(id, now);
     const facing = ((car.rotation + 180) * Math.PI) / 180;
-    const rearX = car.x + car.width / 2 - Math.cos(facing) * 12;
-    const rearY = car.y + car.height / 2 - Math.sin(facing) * 12;
+    const back = facing + Math.PI;
+    const cx = car.x + car.width / 2;
+    const cy = car.y + car.height / 2;
+    const side = { x: -Math.sin(facing), y: Math.cos(facing) };
+    const rearX = cx - Math.cos(facing) * 13;
+    const rearY = cy - Math.sin(facing) * 13;
+    for (let i = 0; i < 2; i++) {
+      const dir = back + rand(-0.35, 0.35);
+      const speed = rand(0.05, 0.09);
+      const roll = Math.random();
+      this.particles.push({
+        kind: "spike",
+        x: rearX + rand(-1.5, 1.5),
+        y: rearY + rand(-1.5, 1.5),
+        vx: Math.cos(dir) * speed,
+        vy: Math.sin(dir) * speed,
+        size: rand(7, 12),
+        color: roll < 0.5 ? p.c.bolt : roll < 0.85 ? p.accent : "#ffffff",
+        born: now,
+        life: rand(260, TRAIL_MS * 0.6),
+        alpha: 0.9,
+        dir,
+      });
+    }
+    // Speed lines: along the car, off to either side, rushing backwards.
+    const off = rand(5, 11) * (Math.random() < 0.5 ? -1 : 1);
     this.particles.push({
-      kind: "dot",
-      x: rearX + rand(-2, 2),
-      y: rearY + rand(-2, 2),
-      vx: -Math.cos(facing) * 0.03,
-      vy: -Math.sin(facing) * 0.03,
-      size: rand(4, 6),
-      color: Math.random() < 0.6 ? p.c.bolt : p.accent,
+      kind: "needle",
+      x: cx + side.x * off - Math.cos(facing) * rand(0, 8),
+      y: cy + side.y * off - Math.sin(facing) * rand(0, 8),
+      vx: Math.cos(back) * 0.12,
+      vy: Math.sin(back) * 0.12,
+      size: rand(12, 20),
+      color: Math.random() < 0.7 ? "#ffffff" : p.accent,
       born: now,
-      life: TRAIL_MS,
+      life: rand(200, 300),
       alpha: 0.7,
+      dir: back,
     });
-    this.particles.push({
-      kind: "dot",
-      x: rearX,
-      y: rearY,
-      vx: -Math.cos(facing) * 0.015,
-      vy: -Math.sin(facing) * 0.015,
-      size: rand(7, 9),
-      color: p.accent,
-      born: now,
-      life: TRAIL_MS * 0.8,
-      alpha: 0.18,
-    });
+  }
+
+  /** Nitro kicking in: a fan of sharp shards out the back and speed lines down the sides. */
+  nitroBurst(car: CarPose, p: Palette, now: number) {
+    if (this.reduced) return;
+    const facing = ((car.rotation + 180) * Math.PI) / 180;
+    const back = facing + Math.PI;
+    const cx = car.x + car.width / 2 - Math.cos(facing) * 10;
+    const cy = car.y + car.height / 2 - Math.sin(facing) * 10;
+    for (let i = 0; i < 12; i++) {
+      const dir = back + (i / 11 - 0.5) * 2.4 + rand(-0.1, 0.1);
+      const speed = rand(0.1, 0.18);
+      this.particles.push({
+        kind: "spike",
+        x: cx,
+        y: cy,
+        vx: Math.cos(dir) * speed,
+        vy: Math.sin(dir) * speed,
+        size: rand(8, 13),
+        color: i % 3 === 0 ? "#ffffff" : i % 3 === 1 ? p.c.bolt : p.accent,
+        born: now,
+        life: rand(320, 460),
+        alpha: 1,
+        dir,
+      });
+    }
+    for (const sign of [-1, 1]) {
+      for (let i = 0; i < 3; i++) {
+        const off = sign * (8 + i * 4);
+        this.particles.push({
+          kind: "needle",
+          x: car.x + car.width / 2 - Math.sin(facing) * off,
+          y: car.y + car.height / 2 + Math.cos(facing) * off,
+          vx: Math.cos(back) * 0.16,
+          vy: Math.sin(back) * 0.16,
+          size: rand(18, 26),
+          color: "#ffffff",
+          born: now + i * 25,
+          life: 260,
+          alpha: 0.8,
+          dir: back,
+        });
+      }
+    }
   }
 
   /** Particles and rings: drawn under the cars. */
@@ -392,6 +458,33 @@ export class Effects {
       } else if (pt.kind === "square") {
         ctx.globalAlpha = pt.alpha * (1 - t);
         ctx.fillRect(x - pt.size / 2, y - pt.size / 2, pt.size, pt.size);
+      } else if (pt.kind === "spike") {
+        // A sharp triangle pointing the way it flies, shrinking as it goes.
+        const len = pt.size * (1 - t * 0.7);
+        const half = Math.max(0.4, pt.size * 0.2 * (1 - t));
+        const ux = Math.cos(pt.dir!);
+        const uy = Math.sin(pt.dir!);
+        ctx.globalAlpha = pt.alpha * (1 - t);
+        ctx.beginPath();
+        ctx.moveTo(x + ux * len, y + uy * len);
+        ctx.lineTo(x - uy * half, y + ux * half);
+        ctx.lineTo(x + uy * half, y - ux * half);
+        ctx.closePath();
+        ctx.fill();
+      } else if (pt.kind === "needle") {
+        // A speed line: a long, thin sliver, sharp at both ends.
+        if (age < 0) return true;
+        const len = pt.size * (1 - t * 0.4);
+        const ux = Math.cos(pt.dir!);
+        const uy = Math.sin(pt.dir!);
+        ctx.globalAlpha = pt.alpha * Math.sin(Math.PI * t);
+        ctx.beginPath();
+        ctx.moveTo(x - (ux * len) / 2, y - (uy * len) / 2);
+        ctx.lineTo(x - uy * 1.1, y + ux * 1.1);
+        ctx.lineTo(x + (ux * len) / 2, y + (uy * len) / 2);
+        ctx.lineTo(x + uy * 1.1, y - ux * 1.1);
+        ctx.closePath();
+        ctx.fill();
       } else if (pt.kind === "spark") {
         // A short streak along its own motion.
         const len = pt.size * (1 - t);

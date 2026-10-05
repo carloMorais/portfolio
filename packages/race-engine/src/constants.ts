@@ -57,3 +57,10 @@ export const ITEM_KINDS: Record<
   3: { name: "log", rigid: true },
   4: { name: "cone", rigid: false },
 };
+
+/**
+ * How many car colours there are to pick from (as many as a room's seats, so
+ * no two cars ever share one). Only the index travels: the colours themselves
+ * are the client's (apps/web's race/colors.ts).
+ */
+export const CAR_COLOR_COUNT = 10;

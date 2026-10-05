@@ -502,18 +502,22 @@ export function drawCar(
   ctx.scale(zoom, zoom);
 
   if (boosted) {
-    ctx.fillStyle = c.bolt;
-    ctx.globalAlpha = 0.8;
-    ctx.beginPath();
-    ctx.moveTo(-12, -2);
-    ctx.quadraticCurveTo(-20.5, 0, -12, 2);
-    ctx.fill();
-    ctx.fillStyle = p.accent;
-    ctx.globalAlpha = 0.7;
-    ctx.beginPath();
-    ctx.moveTo(-12, -1.1);
-    ctx.quadraticCurveTo(-16, 0, -12, 1.1);
-    ctx.fill();
+    // A pointed, flickering exhaust flame: an outer spike in the site's blue,
+    // a yellow one inside it and a white-hot core, each a different length.
+    const flicker = 0.8 + 0.2 * Math.sin(performance.now() / 35) * Math.sin(performance.now() / 23);
+    const spike = (length: number, width: number, color: string, alpha: number) => {
+      ctx.fillStyle = color;
+      ctx.globalAlpha = alpha;
+      ctx.beginPath();
+      ctx.moveTo(-11.5, -width);
+      ctx.lineTo(-11.5 - length * flicker, 0);
+      ctx.lineTo(-11.5, width);
+      ctx.closePath();
+      ctx.fill();
+    };
+    spike(15, 3.2, p.accent, 0.75);
+    spike(11, 2.2, c.bolt, 0.95);
+    spike(6, 1.1, "#ffffff", 0.95);
     ctx.globalAlpha = 1;
   }
 
@@ -703,42 +707,15 @@ function boostBar(
   ctx.restore();
 }
 
-/**
- * Everyone else's tag over their car: a small disc in the car's colour with
- * its number, like a race number, instead of the full name (names overlap in
- * a pack; the standings pair each number and colour with its name).
- */
-export function drawBadge(
+/** Everyone else carries no label (05/10/2026), only the nitro bar while it burns. */
+export function drawBoost(
   ctx: CanvasRenderingContext2D,
   car: Pick<Car, "x" | "y" | "width" | "height">,
-  n: number,
-  color: string,
+  boost: number,
   p: Palette,
-  boost: number | null,
   zoom = 1,
 ) {
-  const r = 6 * Math.min(zoom, 1.2);
-  const { below, barY } = labelPlace(car, boost !== null, zoom, 0);
-  if (boost !== null) boostBar(ctx, car, barY, boost, p);
-  const grow = ((zoom - 1) * car.height) / 2;
-  const bar = boost === null ? 0 : 6;
-  const cx = car.x + car.width / 2;
-  const cy = below ? car.y + car.height + grow + bar + r + 2 : car.y - grow - bar - r - 1;
-  ctx.save();
-  ctx.globalAlpha = 0.92;
-  ctx.fillStyle = color;
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 1.4;
-  ctx.beginPath();
-  ctx.arc(cx, cy, r, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.stroke();
-  ctx.fillStyle = "#1a1a1a";
-  ctx.font = `700 ${r * 1.45}px ${p.font}`;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText(String(n), cx, cy + 0.5);
-  ctx.restore();
+  boostBar(ctx, car, labelPlace(car, true, zoom, 0).barY, boost, p);
 }
 
 /**

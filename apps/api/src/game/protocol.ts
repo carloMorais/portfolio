@@ -14,6 +14,8 @@ export type ClientMessage =
   /** The leader sets one bot's difficulty. */
   | { event: "bot-difficulty"; data: { bot: string; difficulty: Difficulty } }
   | { event: "start" }
+  /** Any player picks their car's colour (an index below `CAR_COLOR_COUNT`), in the lobby. */
+  | { event: "color"; data: { color: number } }
   | { event: "ping"; data: number };
 
 /**
@@ -23,6 +25,8 @@ export type ClientMessage =
 export type LobbyParticipant = {
   id: string;
   number: number;
+  /** The car's colour, an index below `CAR_COLOR_COUNT`: unique in the room. */
+  color: number;
   isBot: boolean;
   /** Bots only: how this one drives, set by the leader. */
   difficulty?: Difficulty;
@@ -55,7 +59,13 @@ export type ServerMessage =
    * The first tick runs `countdownMs` after this: the start lights, as in
    * practice mode. `carIds` is also the order of the cars in every `state`.
    */
-  | { type: "start"; carIds: string[]; numbers: Record<string, number>; countdownMs: number }
+  | {
+      type: "start";
+      carIds: string[];
+      numbers: Record<string, number>;
+      colors: Record<string, number>;
+      countdownMs: number;
+    }
   /** The race, in the compact format of `race-engine`'s wire.ts (see there). */
   | ({ type: "state" } & WireTick)
   | { type: "finished"; standings: StandingEntry[] }

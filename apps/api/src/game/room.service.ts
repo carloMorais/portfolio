@@ -86,6 +86,10 @@ export class RoomService {
     return this.room(client)?.setBotDifficulty(client, data);
   }
 
+  setColor(client: RoomClient, data: unknown) {
+    return this.room(client)?.setColor(client, data);
+  }
+
   /**
    * Starts the client's room, unless `MAX_RACING_ROOMS` are already racing:
    * each running room costs CPU every tick, and Render's free plan has 0.1 CPU

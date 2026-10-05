@@ -8,6 +8,8 @@ import type { Difficulty, Keys, WireTick } from "race-engine";
 export type LobbyParticipant = {
   id: string;
   number: number;
+  /** The car's colour (an index into CAR_COLORS), unique in the room. */
+  color: number;
   isBot: boolean;
   /** Bots only: how this one drives, set by the leader. */
   difficulty?: Difficulty;
@@ -38,7 +40,13 @@ export type ServerMessage =
       participants: LobbyParticipant[];
       leaderId: string | null;
     }
-  | { type: "start"; carIds: string[]; numbers: Record<string, number>; countdownMs: number }
+  | {
+      type: "start";
+      carIds: string[];
+      numbers: Record<string, number>;
+      colors: Record<string, number>;
+      countdownMs: number;
+    }
   | StateMessage
   | { type: "finished"; standings: StandingEntry[] }
   /** `code: "busy"`: the server is at its race limit (the visitor is told). */
@@ -54,6 +62,8 @@ export type ClientMessage =
   /** The leader sets one bot's difficulty. */
   | { event: "bot-difficulty"; data: { bot: string; difficulty: Difficulty } }
   | { event: "start" }
+  /** Any player picks their car's colour in the lobby (another player's is refused, a bot's is swapped). */
+  | { event: "color"; data: { color: number } }
   /** Our clock reading, echoed back in `pong` to measure the round trip. */
   | { event: "ping"; data: number };
 
@@ -117,6 +127,8 @@ export type OnlineState = {
   error: string | null;
   carIds: string[];
   numbers: Record<string, number>;
+  /** Each car's colour for the race (from `start`; in the lobby, the participants carry it). */
+  colors: Record<string, number>;
   countdownMs: number;
   /** The server is full (too many races or connections): shown instead of a generic error. */
   busy: boolean;
@@ -135,6 +147,7 @@ export const initialOnlineState: OnlineState = {
   error: null,
   carIds: [],
   numbers: {},
+  colors: {},
   countdownMs: 0,
   busy: false,
   standings: null,
@@ -178,6 +191,7 @@ export function applyServerMessage(
         ...state,
         carIds: msg.carIds,
         numbers: msg.numbers,
+        colors: msg.colors,
         countdownMs: msg.countdownMs,
         phase: "countdown",
         standings: null,
@@ -209,3 +223,7 @@ export function applyServerMessage(
 
 export const isLeader = (state: OnlineState) =>
   state.playerId !== null && state.playerId === state.leaderId;
+
+/** A car's colour index: the race's, or in the lobby the participant's. */
+export const colorIndex = (state: OnlineState, id: string) =>
+  state.colors[id] ?? state.participants.find((p) => p.id === id)?.color ?? 0;

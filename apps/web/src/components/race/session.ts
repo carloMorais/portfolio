@@ -5,6 +5,7 @@ import {
   type BotStyle,
   type Car,
   type Difficulty,
+  CAR_COLOR_COUNT,
 } from "race-engine";
 
 export const PLAYER = "you";
@@ -141,6 +142,39 @@ export function saveDifficulty(storage: Storage | undefined, d: Difficulty) {
 }
 
 /** Ticks of driving the wrong way before we say so (a bounce flips the velocity for a moment). */
+/** Your car colour (an index into CAR_COLORS), shared by practice and online; null until you pick one. */
+export function loadColor(storage: Storage | undefined): number | null {
+  try {
+    const raw = storage?.getItem("racegame:color");
+    const n = raw === null || raw === undefined ? NaN : Number(raw);
+    return Number.isInteger(n) && n >= 0 && n < CAR_COLOR_COUNT ? n : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveColor(storage: Storage | undefined, color: number) {
+  try {
+    storage?.setItem("racegame:color", String(color));
+  } catch {
+    // Private mode or storage blocked: the choice just isn't remembered.
+  }
+}
+
+/**
+ * Practice mode's colours: yours, then each bot takes the next colour nobody
+ * has, in palette order (with you in blue, the bots stay coral, yellow, green).
+ */
+export function practiceColors(mine: number, botIds: string[]): Record<string, number> {
+  const out: Record<string, number> = { [PLAYER]: mine };
+  let next = 0;
+  for (const id of botIds) {
+    while (next === mine) next++;
+    out[id] = next++;
+  }
+  return out;
+}
+
 export const WRONG_WAY_TICKS = 20;
 /** How long the wrong-way warning stays after bouncing off an out-of-order checkpoint. */
 export const GATE_WARNING_TICKS = 45;

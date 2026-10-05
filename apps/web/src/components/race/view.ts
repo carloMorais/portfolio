@@ -8,7 +8,7 @@ import {
   type RaceState,
 } from "race-engine";
 import {
-  drawBadge,
+  drawBoost,
   drawCar,
   drawItem,
   drawLabel,
@@ -126,8 +126,6 @@ type DrawOptions = {
   running: boolean;
   look: (id: string) => CarLook;
   name: (id: string) => string;
-  /** Everyone else's race number, shown on a disc over their car instead of the name. */
-  number: (id: string) => number;
   /** How much bigger than their boxes cars and items are drawn (phones: the map is tiny). */
   zoom?: number;
 };
@@ -165,7 +163,10 @@ export class RaceView {
   private prevOrder: string[] = [];
   private readonly changeUntil = new Map<string, { dir: "up" | "down"; until: number }>();
   /** Each car's rotation and speed at the last tick, for tyre marks and exhaust. */
-  private readonly motion = new Map<string, { rotation: number; speed: number }>();
+  private readonly motion = new Map<
+    string,
+    { rotation: number; speed: number; boosting: boolean }
+  >();
 
   constructor(
     public me: string,
@@ -244,8 +245,10 @@ export class RaceView {
     for (const car of s.cars) {
       const speed = Math.hypot(car.vx, car.vy);
       const last = this.motion.get(car.id);
-      this.motion.set(car.id, { rotation: car.rotation, speed });
+      const boosting = car.nitroUntil !== null;
+      this.motion.set(car.id, { rotation: car.rotation, speed, boosting });
       if (!last || car.finishedAt !== null) continue;
+      if (boosting && !last.boosting) this.fx.nitroBurst(car, p, now);
       let turn = Math.abs(car.rotation - last.rotation) % 360;
       if (turn > 180) turn = 360 - turn;
       const skids =
@@ -314,9 +317,6 @@ export class RaceView {
     }
     fx.drawImpacts(ctx, p, now);
     for (const { car, at } of ordered) {
-      // On the grid the cars sit nose to tail and every name would overlap:
-      // only yours shows until the race is under way.
-      if (s.tick === 0 && car.id !== this.me) continue;
       const boost =
         car.nitroUntil === null
           ? null
@@ -324,7 +324,8 @@ export class RaceView {
       if (car.id === this.me) {
         drawLabel(ctx, at, o.name(car.id), car.nitro, p, track.width, boost, true, zoom);
       } else {
-        drawBadge(ctx, at, o.number(car.id), o.look(car.id).body, p, boost, zoom);
+        // Everyone else is told apart by colour (the standings name it): no label, just the nitro bar.
+        if (boost !== null) drawBoost(ctx, at, boost, p, zoom);
       }
     }
   }

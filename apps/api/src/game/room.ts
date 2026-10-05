@@ -1,4 +1,5 @@
 import {
+  CAR_COLOR_COUNT,
   BOT_STYLES,
   DIFFICULTIES,
   botKeys,
@@ -79,6 +80,8 @@ export class Room {
   /** Bots in the order they were added, so "remove" takes the most recent one. */
   private readonly botOrder: string[] = [];
   private readonly numbers = new Map<string, number>();
+  /** Each car's colour (an index, `CAR_COLOR_COUNT` of them): never two alike in a room. */
+  private readonly colors = new Map<string, number>();
   private readonly keys = new Map<string, Keys>();
   private nextNumber = 1;
   /** Each bot's difficulty, chosen by the leader per bot (the same styles as practice mode's). */
@@ -135,6 +138,7 @@ export class Room {
     this.players.set(client, player);
     this.playerOrder.push(client);
     this.numbers.set(player.carId, number);
+    this.colors.set(player.carId, this.freeColor());
     this.keys.set(player.carId, NO_KEYS);
 
     this.send(client, {
@@ -156,6 +160,7 @@ export class Room {
     const orderIndex = this.playerOrder.indexOf(client);
     if (orderIndex !== -1) this.playerOrder.splice(orderIndex, 1);
     if (this.state === "waiting") {
+      this.colors.delete(player.carId);
       if (this.players.size === 0) {
         this.onEmpty(this);
       } else {
@@ -185,6 +190,7 @@ export class Room {
     const carId = `b-${this.botOrder.length}-${number}`;
     this.botOrder.push(carId);
     this.numbers.set(carId, number);
+    this.colors.set(carId, this.freeColor());
     this.botDifficulty.set(carId, "normal");
     this.broadcastLobby();
     return { ok: true };
@@ -196,6 +202,7 @@ export class Room {
     const carId = this.botOrder.pop();
     if (!carId) return { ok: false, message: "no bots to remove" };
     this.numbers.delete(carId);
+    this.colors.delete(carId);
     this.botDifficulty.delete(carId);
     this.broadcastLobby();
     return { ok: true };
@@ -217,6 +224,39 @@ export class Room {
     return { ok: true };
   }
 
+  /**
+   * Any player picks their car's colour before the race. `data` comes off
+   * the wire (`{ color }`), checked here. A colour another player has is
+   * refused; one a bot has is swapped (the bot takes yours), so you can always
+   * have any colour no other person picked.
+   */
+  setColor(client: RoomClient, data: unknown): ActionResult {
+    if (this.state !== "waiting") return { ok: false, message: "race already started" };
+    const player = this.players.get(client);
+    if (!player) return { ok: false, message: "not in this room" };
+    const { color } = (data ?? {}) as { color?: unknown };
+    if (typeof color !== "number" || !Number.isInteger(color) || color < 0) {
+      return { ok: false, message: "unknown color" };
+    }
+    if (color >= CAR_COLOR_COUNT) return { ok: false, message: "unknown color" };
+    const holder = [...this.colors].find(([, c]) => c === color)?.[0];
+    if (holder === player.carId) return { ok: true };
+    if (holder !== undefined && !this.botOrder.includes(holder)) {
+      return { ok: false, message: "color taken" };
+    }
+    if (holder !== undefined) this.colors.set(holder, this.colors.get(player.carId)!);
+    this.colors.set(player.carId, color);
+    this.broadcastLobby();
+    return { ok: true };
+  }
+
+  /** The first colour no car in the room has (there are as many colours as seats). */
+  private freeColor() {
+    const taken = new Set(this.colors.values());
+    for (let c = 0; c < CAR_COLOR_COUNT; c++) if (!taken.has(c)) return c;
+    return 0;
+  }
+
   startRace(client: RoomClient): ActionResult {
     if (this.state !== "waiting") return { ok: false, message: "race already started" };
     if (!this.isLeader(client)) return { ok: false, message: "only the leader can start the race" };
@@ -231,7 +271,8 @@ export class Room {
     this.state = "countdown";
 
     const numbers = Object.fromEntries(carIds.map((id) => [id, this.numbers.get(id)!]));
-    this.broadcast({ type: "start", carIds, numbers, countdownMs: this.countdownMs });
+    const colors = Object.fromEntries(carIds.map((id) => [id, this.colors.get(id) ?? 0]));
+    this.broadcast({ type: "start", carIds, numbers, colors, countdownMs: this.countdownMs });
 
     // unref: a room ticking away doesn't need to keep the process (or a test) alive by itself.
     this.countdownTimer = setTimeout(() => {
@@ -336,10 +377,16 @@ export class Room {
   private broadcastLobby() {
     const leaderId = this.leader ? this.players.get(this.leader)!.carId : null;
     const participants = [
-      ...[...this.players.values()].map((p) => ({ id: p.carId, number: p.number, isBot: false })),
+      ...[...this.players.values()].map((p) => ({
+        id: p.carId,
+        number: p.number,
+        color: this.colors.get(p.carId) ?? 0,
+        isBot: false,
+      })),
       ...this.botOrder.map((id) => ({
         id,
         number: this.numbers.get(id)!,
+        color: this.colors.get(id) ?? 0,
         isBot: true,
         difficulty: this.botDifficulty.get(id) ?? "normal",
       })),

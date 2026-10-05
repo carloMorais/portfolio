@@ -1,9 +1,9 @@
 "use client";
 
-import type { ReactNode, Ref } from "react";
+import type { CSSProperties, ReactNode, Ref } from "react";
 import { useTranslations } from "next-intl";
 import { TICK_RATE, type Keys } from "race-engine";
-import { COLORS } from "./colors";
+import { CAR_COLORS, COLORS, type CarColorId } from "./colors";
 import { BoltIcon } from "./icons";
 import { TouchButton } from "./TouchControls";
 import { DIFFICULTIES, formatGap, formatTime, type Difficulty, type ResultRow } from "./session";
@@ -27,6 +27,16 @@ export const TRACK_COLUMN =
   "col-span-2 row-start-2 mx-auto w-full max-w-[calc((100svh-6rem)*760/600)] lg:col-span-1 lg:col-start-2 lg:row-start-1";
 /** The standings and lap panels: small cards that sit against the track, not loose text on the page. */
 const PANEL = "self-start rounded-2xl bg-surface p-3 ring-1 ring-line";
+type CarColor = (typeof CAR_COLORS)[number];
+
+/**
+ * A driver's name in their car's colour: a text shade of the same hue that
+ * reads on the site's surfaces, the lighter one in dark mode.
+ */
+export const CAR_TEXT = "text-(--car-text) dark:text-(--car-text-dark)";
+export const carText = (c: CarColor) =>
+  ({ "--car-text": c.text, "--car-text-dark": c.textDark }) as CSSProperties;
+
 export const VEIL =
   "absolute inset-0 flex items-center justify-center overflow-y-auto bg-bg/70 p-3 backdrop-blur-[2px]";
 
@@ -59,14 +69,14 @@ export function StandingsBoard({
   board,
   me,
   name,
-  tag,
+  color,
   t,
 }: {
   board: Driver[];
   me: string | null;
   name: (id: string) => string;
-  /** Each other car's colour and race number, as drawn over it on the track. */
-  tag: (id: string) => { color: string; n: number };
+  /** Each car's colour: the names are written in it, so you can tell who's who on the track. */
+  color: (id: string) => CarColor;
   t: T;
 }) {
   return (
@@ -92,10 +102,10 @@ export function StandingsBoard({
               <td className="py-2 pr-3 text-muted">{i + 1}</td>
               <th
                 scope="row"
-                className={`py-2 pr-3 text-left font-normal whitespace-nowrap ${d.id === me ? "text-accent" : ""}`}
+                className={`py-2 pr-3 text-left whitespace-nowrap ${CAR_TEXT} ${d.id === me ? "font-semibold" : "font-normal"}`}
+                style={carText(color(d.id))}
               >
                 <span className="inline-flex items-center gap-1.5">
-                  <CarTag {...(d.id === me ? { mine: true } : tag(d.id))} />
                   {name(d.id)}
                   {d.change && (
                     <ChangeIcon
@@ -350,6 +360,7 @@ export function ResultsCard({
   myTime,
   outcome,
   name,
+  color,
   t,
   header,
   children,
@@ -360,6 +371,8 @@ export function ResultsCard({
   myTime: number | null;
   outcome: { newRace: boolean; newLap: boolean } | null;
   name: (id: string) => string;
+  /** Each car's colour, for the names (as in the standings). */
+  color: (id: string) => CarColor;
   t: T;
   /** On top of the card: the mode switch, so you can change modes after a race. */
   header?: ReactNode;
@@ -405,8 +418,12 @@ export function ResultsCard({
         </thead>
         <tbody>
           {rows.map((row, i) => (
-            <tr key={row.id} className={row.id === me ? "text-accent" : undefined}>
-              <th scope="row" className="py-0.5 pr-3 font-normal whitespace-nowrap">
+            <tr key={row.id} className={row.id === me ? "font-semibold" : undefined}>
+              <th
+                scope="row"
+                className={`py-0.5 pr-3 whitespace-nowrap ${CAR_TEXT} ${row.id === me ? "font-semibold" : "font-normal"}`}
+                style={carText(color(row.id))}
+              >
                 {i + 1}. {name(row.id)}
               </th>
               <td className="py-0.5 text-right">
@@ -599,10 +616,13 @@ export type SlideFrom = "left" | "right" | null;
 export function ModeSwitch({
   mode,
   onChange,
+  disabled = false,
   t,
 }: {
   mode: RaceMode;
   onChange: (mode: RaceMode) => void;
+  /** While online mode connects, the switch waits too. */
+  disabled?: boolean;
   t: ReturnType<typeof useTranslations<"Online">>;
 }) {
   return (
@@ -616,9 +636,10 @@ export function ModeSwitch({
           key={m}
           type="button"
           aria-pressed={mode === m}
+          disabled={disabled}
           onClick={() => onChange(m)}
-          className={`rounded-full px-4 py-1.5 text-sm transition-colors ${
-            mode === m ? "bg-ink text-bg" : "text-muted hover:text-ink"
+          className={`cursor-pointer rounded-full px-4 py-1.5 text-sm transition-colors disabled:cursor-wait ${
+            mode === m ? "bg-ink text-bg" : "text-muted enabled:hover:text-ink disabled:opacity-60"
           }`}
         >
           {m === "training" ? t("modeTraining") : t("modeOnline")}
@@ -658,23 +679,57 @@ export function StartCard({
 }
 
 /**
- * The car's mark in the standings, matching the track: your car's blue dot,
- * or the other car's colour with its race number (the disc drawn over it).
+ * Your car's colour: one swatch per colour. `taken` ones (another player's,
+ * online) can't be picked; a bot's can (online, the bot takes yours instead).
  */
-function CarTag(props: { mine: true } | { color: string; n: number }) {
-  if ("mine" in props) {
-    return (
-      <span aria-hidden className="size-3.5 shrink-0 rounded-full bg-accent ring-2 ring-white/80" />
-    );
-  }
+export function ColorPicker({
+  value,
+  onChange,
+  taken = [],
+  disabled = false,
+  t,
+}: {
+  value: number;
+  onChange: (color: number) => void;
+  taken?: number[];
+  disabled?: boolean;
+  t: T;
+}) {
+  const label = (id: CarColorId) => t(`colors.${id}`);
+  return (
+    <div role="group" aria-label={t("carColor")} className="flex flex-col items-center gap-2">
+      <span className="text-xs text-muted">{t("carColor")}</span>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {CAR_COLORS.map((c, i) => {
+          const isTaken = taken.includes(i) && i !== value;
+          return (
+            <button
+              key={c.id}
+              type="button"
+              aria-pressed={value === i}
+              aria-label={isTaken ? t("colorTaken", { color: label(c.id) }) : label(c.id)}
+              title={isTaken ? t("colorTaken", { color: label(c.id) }) : label(c.id)}
+              disabled={disabled || isTaken}
+              onClick={() => onChange(i)}
+              className={`size-6 cursor-pointer rounded-full ring-offset-2 sm:size-7 ring-offset-bg transition-transform enabled:hover:scale-110 disabled:cursor-not-allowed disabled:opacity-25 ${
+                value === i ? "ring-2 ring-ink" : "ring-1 ring-black/15"
+              }`}
+              style={{ backgroundColor: c.body }}
+            />
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/** A small turning ring, for "connecting" (still with reduced motion). */
+export function Spinner({ className = "" }: { className?: string }) {
   return (
     <span
       aria-hidden
-      className="grid size-4 shrink-0 place-items-center rounded-full text-[0.6rem] leading-none font-bold text-[#1a1a1a] ring-1 ring-white/80"
-      style={{ backgroundColor: props.color }}
-    >
-      {props.n}
-    </span>
+      className={`inline-block size-5 rounded-full border-2 border-line border-t-accent motion-safe:animate-spin ${className}`}
+    />
   );
 }
 

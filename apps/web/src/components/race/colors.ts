@@ -24,7 +24,6 @@ export type GameColors = {
   grassBlotchLight: string;
   checkpoint: string;
   border: string;
-  bots: [string, string, string];
   wheel: string;
   stripe: string;
   helmet: string;
@@ -77,7 +76,6 @@ export const COLORS: GameColors = {
   grassBlotchLight: "#5c9b50",
   checkpoint: "#232323",
   border: "#232323",
-  bots: ["#ef6f6c", "#f2b134", "#3bb08f"],
   wheel: "#201f1d",
   stripe: "#fffaf0",
   helmet: "#fffaf0",
@@ -111,3 +109,30 @@ export const COLORS: GameColors = {
   rig: "#201f1d",
   lightOn: "#e8432f",
 };
+
+export type CarColorId =
+  "blue" | "coral" | "yellow" | "green" | "orange" | "purple" | "pink" | "cyan" | "lime" | "white";
+
+/**
+ * The colours a car can have (05/10/2026: each driver picks one, so you can
+ * tell who is who). As many as a room's seats (`CAR_COLOR_COUNT`), so online
+ * no two cars share one. `text` and `textDark` are the same hue as a
+ * readable text colour on the site's light and dark surfaces (≥ 4.5:1), for
+ * the driver's name in the standings, lobby and results.
+ */
+export const CAR_COLORS: { id: CarColorId; body: string; text: string; textDark: string }[] = [
+  { id: "blue", body: "#3d6fe0", text: "#2a55b8", textDark: "#86a8ff" },
+  { id: "coral", body: "#ef6f6c", text: "#b3403d", textDark: "#ff9a97" },
+  { id: "yellow", body: "#f2b134", text: "#8a5d00", textDark: "#f6c55e" },
+  { id: "green", body: "#3bb08f", text: "#1a6e56", textDark: "#5fd0ae" },
+  { id: "orange", body: "#f3924a", text: "#a3531a", textDark: "#f7ad75" },
+  { id: "purple", body: "#9b6bd6", text: "#6f43aa", textDark: "#bb98ea" },
+  { id: "pink", body: "#e872b0", text: "#a83b78", textDark: "#f39cc9" },
+  { id: "cyan", body: "#3fb6d6", text: "#196a80", textDark: "#6fd0ea" },
+  { id: "lime", body: "#9bc53d", text: "#4d6e10", textDark: "#b7dc63" },
+  { id: "white", body: "#f1efe8", text: "#6b665b", textDark: "#e7e4da" },
+];
+
+/** A car colour by index (online: the server's), wrapping just in case. */
+export const carColor = (i: number) =>
+  CAR_COLORS[((i % CAR_COLORS.length) + CAR_COLORS.length) % CAR_COLORS.length]!;
