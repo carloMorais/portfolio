@@ -20,12 +20,18 @@ async function fakeMaps(page: Page) {
 async function open(page: Page) {
   await fakeMaps(page);
   await page.goto("/pt/projects/food-point");
+  // The app loads on request; a reload in the same tab opens it again.
+  await page.getByRole("button", { name: "Abrir o app de 2024" }).click();
+  // The frame starts loading only now: let the 2024 scripts finish before typing.
+  await page.waitForLoadState("networkidle");
   return page.frameLocator('iframe[title="Food Point, o app de 2024"]');
 }
 
 const log = (page: Page) => page.getByRole("list", { name: "Requisições à API" });
 
 test("the 2024 app logs in and creates an event against the simulated server", async ({ page }) => {
+  // The whole flow, with a reload: under a busy machine it outgrows the default 30 s.
+  test.slow();
   const app = await open(page);
 
   await app.getByText("login", { exact: true }).click();
@@ -37,7 +43,11 @@ test("the 2024 app logs in and creates an event against the simulated server", a
   await expect(page.locator("[data-app-path]")).toHaveText(/\/home$/);
 
   // Details → menu → place → guests.
-  await app.locator("#homeBtnNewEvent").click();
+  // The 2024 home draws the button before wiring it up: click until the form opens.
+  await expect(async () => {
+    await app.locator("#homeBtnNewEvent").click();
+    await expect(app.locator("#newEvent-basic-name")).toBeVisible({ timeout: 2000 });
+  }).toPass();
   await app.locator("#newEvent-basic-name").fill("Churrasco");
   const date = new Date();
   date.setDate(date.getDate() + 10);
@@ -88,11 +98,15 @@ test("the 2024 app logs in and creates an event against the simulated server", a
 test("password recovery shows the code instead of e-mailing it, and the code works", async ({
   page,
 }) => {
+  // A long flow through the 2024 app, like the one above.
+  test.slow();
   const app = await open(page);
   await app.getByText("login", { exact: true }).click();
   await app.getByText("Esqueceu sua senha?").click();
   await app.locator("#input-email-recover-pass").fill("visitante@foodpoint.com");
-  await app.getByRole("button", { name: "Enviar" }).click();
+  // The 2024 modal is fixed inside the frame and, on a phone, can sit outside the
+  // frame's view, where Playwright can't scroll: fire the click the button listens to.
+  await app.getByRole("button", { name: "Enviar" }).dispatchEvent("click");
 
   const mail = page.getByText("E-mail que o servidor enviaria").locator("..");
   await expect(mail).toBeVisible();

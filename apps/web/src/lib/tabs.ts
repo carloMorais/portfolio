@@ -6,7 +6,7 @@
 export const tabs = [
   { key: "home", href: "/" },
   { key: "experience", href: "/experience" },
-  { key: "demos", href: "/demos" },
+  { key: "work", href: "/work" },
 ] as const;
 
 /** Index of the tab that owns `pathname` (locale already stripped), or -1. */

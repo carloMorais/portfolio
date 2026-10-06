@@ -14,15 +14,15 @@ export async function generateMetadata(): Promise<Metadata> {
   const [t, locale] = await Promise.all([getTranslations("Demos"), getLocale()]);
   return pageMetadata({
     locale,
-    path: "/demos",
+    path: "/work",
     title: t("metaTitle"),
     description: t("metaDescription"),
     siteName: site.shortName,
   });
 }
 
-// For now this mirrors the "selected work" section of the home page.
-export default function DemosPage() {
+// The same cards as the "selected work" section of the home page.
+export default function WorkPage() {
   const t = useTranslations("Demos");
 
   return (

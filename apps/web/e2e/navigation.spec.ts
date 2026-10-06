@@ -10,7 +10,7 @@ test("the three tabs are pages and mark where the reader is", async ({ page, isM
 
   for (const [tab, url, heading] of [
     ["Experience", /\/en\/experience$/, "Career"],
-    ["Demos", /\/en\/demos$/, "Real problems, in production."],
+    ["Work", /\/en\/work$/, "Real problems, in production."],
     ["Home", /\/en$/, /I build web products/],
   ] as const) {
     await openNav(page, isMobile, "Open menu");
@@ -33,10 +33,10 @@ test("the mobile menu closes after choosing a tab", async ({ page, isMobile }) =
 
   await page
     .getByRole("navigation", { name: "Main navigation" })
-    .getByRole("link", { name: "Demos", exact: true })
+    .getByRole("link", { name: "Work", exact: true })
     .click();
 
-  await expect(page).toHaveURL(/\/en\/demos$/);
+  await expect(page).toHaveURL(/\/en\/work$/);
   await expect(page.getByRole("button", { name: "Open menu" })).toHaveAttribute(
     "aria-expanded",
     "false",
@@ -64,10 +64,10 @@ test("the tab pill slides to the active tab", async ({ page, isMobile }) => {
   const nav = page.getByRole("navigation", { name: "Main navigation" });
   const pill = nav.locator('li[aria-hidden="true"]');
 
-  await nav.getByRole("link", { name: "Demos", exact: true }).click();
-  await expect(page).toHaveURL(/\/en\/demos$/);
+  await nav.getByRole("link", { name: "Work", exact: true }).click();
+  await expect(page).toHaveURL(/\/en\/work$/);
 
-  const target = nav.getByRole("link", { name: "Demos", exact: true });
+  const target = nav.getByRole("link", { name: "Work", exact: true });
   await expect(async () => {
     const [p, t] = await Promise.all([pill.boundingBox(), target.boundingBox()]);
     expect(Math.abs(p!.x - t!.x)).toBeLessThanOrEqual(1);
@@ -76,7 +76,7 @@ test("the tab pill slides to the active tab", async ({ page, isMobile }) => {
 });
 
 test("a ready work card opens its case study", async ({ page }) => {
-  await page.goto("/pt/demos");
+  await page.goto("/pt/work");
   await page.getByRole("link", { name: "RaceGame: corrida multiplayer em tempo real" }).click();
 
   await expect(page).toHaveURL(/\/pt\/projects\/racegame$/);
@@ -96,20 +96,26 @@ test("a ready work card opens its case study", async ({ page }) => {
   }
   await expect(page.getByRole("img", { name: /PostgreSQL/ })).toBeVisible();
 
-  await page.getByRole("article").getByRole("link", { name: "Demonstrações" }).click();
-  await expect(page).toHaveURL(/\/pt\/demos$/);
+  await page.getByRole("article").getByRole("link", { name: "Trabalhos", exact: true }).click();
+  await expect(page).toHaveURL(/\/pt\/work$/);
 });
 
-test("every work card on Demos opens a page with its title", async ({ page }) => {
-  await page.goto("/en/demos");
+test("every work card on Work opens a page with its title", async ({ page }) => {
+  await page.goto("/en/work");
   const links = page.locator("[data-work] h2 a");
   const count = await links.count();
   expect(count).toBe(6);
   for (let i = 0; i < count; i++) {
-    await page.goto("/en/demos");
+    await page.goto("/en/work");
     const link = page.locator("[data-work] h2 a").nth(i);
     const title = (await link.textContent())!;
     await link.click();
     await expect(page.getByRole("heading", { level: 1 })).toHaveText(title);
   }
+});
+
+test("the old Demos address still lands on the Work tab", async ({ page }) => {
+  await page.goto("/pt/demos");
+  await expect(page).toHaveURL(/\/pt\/work$/);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Problemas reais, em produção.");
 });

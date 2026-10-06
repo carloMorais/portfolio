@@ -12,6 +12,20 @@ export const renova: CaseStudy = {
     pt: "Um chatbot que consulta a Tabela FIPE: o modelo conversa, e quatro ferramentas buscam marca, modelo, ano e preço na API pública, na ordem que ela exige.",
     en: "A chatbot that looks up Brazil's FIPE vehicle price table: the model does the talking, and four tools fetch brand, model, year and price from the public API, in the order it demands.",
   },
+  summary: [
+    {
+      pt: "Projeto solo, feito em cerca de 10 dias como desafio de um processo seletivo.",
+      en: "A solo project, built in about 10 days as a hiring challenge.",
+    },
+    {
+      pt: "Um chatbot com GPT-4o e quatro ferramentas que consultam a API da FIPE na ordem certa, num laço de chamadas próprio.",
+      en: "A GPT-4o chatbot with four tools that query the FIPE API in the right order, in a tool-calling loop of my own.",
+    },
+    {
+      pt: "O processo seletivo terminou na minha contratação. A demonstração acima usa a FIPE de verdade.",
+      en: "The hiring process ended with me hired. The demo above uses the real FIPE API.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },

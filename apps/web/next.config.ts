@@ -12,6 +12,8 @@ const nextConfig: NextConfig = {
         destination: "/:locale/projects/racegame",
         permanent: true,
       },
+      // The "Demos" tab became "Work" (most cards are case studies, not demos).
+      { source: "/:locale(pt|en)/demos", destination: "/:locale/work", permanent: true },
     ];
   },
   async rewrites() {

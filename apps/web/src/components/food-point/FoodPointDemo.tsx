@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
+import Image from "next/image";
 import { useLocale, useTranslations } from "next-intl";
+import { photos } from "@/content/photos";
 import { DEMO_USER, createHost, type DemoHost, type LogEntry } from "./host";
 import type { Mail } from "./server";
 
@@ -14,6 +16,9 @@ declare global {
 
 /** The 2024 index.html, plus the shim that connects it to this page. */
 const APP_URL = "/food-point-demo/index.html";
+
+/** Remembers, for this tab, that the visitor opened the app: a reload opens it again. */
+const OPENED_KEY = "foodpoint-demo:opened";
 
 /** The log keeps the latest requests only. */
 const MAX_LOG = 80;
@@ -29,6 +34,17 @@ const safeStorage = () => {
   }
 };
 
+/** The flag only changes by our own click, which re-renders anyway. */
+const noSubscribe = () => () => {};
+
+const wasOpened = () => {
+  try {
+    return window.sessionStorage.getItem(OPENED_KEY) === "1";
+  } catch {
+    return false;
+  }
+};
+
 /**
  * The Food Point frontend of 2024, unchanged, in a frame. Its requests to
  * the Express API go to a server simulated on this page (`server.ts`), and
@@ -39,6 +55,11 @@ export function FoodPointDemo() {
   const locale = useLocale();
   const nf = useMemo(() => new Intl.NumberFormat(locale === "pt" ? "pt-BR" : "en-US"), [locale]);
 
+  // The 2024 app weighs ~3 MB of images: it loads when the visitor asks for it.
+  // A reload in the same tab opens it again (read after hydration: the server never knows).
+  const [clicked, setClicked] = useState(false);
+  const reopened = useSyncExternalStore(noSubscribe, wasOpened, () => false);
+  const opened = clicked || reopened;
   const [frame, setFrame] = useState(0);
   const [path, setPath] = useState("/");
   const [log, setLog] = useState<LogEntry[]>([]);
@@ -65,8 +86,17 @@ export function FoodPointDemo() {
 
   // Only now load the app (again, after a reset: the frame is keyed).
   useEffect(() => {
-    if (frameRef.current) frameRef.current.src = APP_URL;
-  }, [frame]);
+    if (opened && frameRef.current) frameRef.current.src = APP_URL;
+  }, [frame, opened]);
+
+  function open() {
+    setClicked(true);
+    try {
+      window.sessionStorage.setItem(OPENED_KEY, "1");
+    } catch {
+      // Without storage, a reload just shows the cover again.
+    }
+  }
 
   // Follow the log inside the panel, never by scrolling the page.
   useEffect(() => {
@@ -92,6 +122,7 @@ export function FoodPointDemo() {
     setLog([]);
     setMail(null);
     setFrame((f) => f + 1);
+    open();
   }
 
   return (
@@ -120,13 +151,34 @@ export function FoodPointDemo() {
             </span>
           </header>
 
-          <div className="h-[min(44rem,78svh)] bg-surface lg:h-auto lg:min-h-0 lg:flex-1">
-            <iframe
-              key={frame}
-              ref={frameRef}
-              title={t("frameTitle")}
-              className="block size-full border-0 bg-white"
-            />
+          <div className="relative h-[min(44rem,78svh)] bg-surface lg:h-auto lg:min-h-0 lg:flex-1">
+            {opened ? (
+              <iframe
+                key={frame}
+                ref={frameRef}
+                title={t("frameTitle")}
+                className="block size-full border-0 bg-white"
+              />
+            ) : (
+              // A screenshot of the app until the visitor opens it.
+              <div className="absolute inset-0">
+                <Image
+                  src={photos.projectFoodPoint.src}
+                  alt=""
+                  fill
+                  sizes="(min-width: 1024px) 70vw, 100vw"
+                  className="object-cover object-top opacity-60 blur-[2px]"
+                />
+                <div className="absolute inset-0 grid place-items-center p-6">
+                  <div className="flex max-w-sm flex-col items-center gap-3 rounded-2xl bg-bg p-6 text-center shadow-sm ring-1 ring-line">
+                    <button type="button" onClick={open} className="btn btn-primary">
+                      {t("open")}
+                    </button>
+                    <p className="text-sm text-muted text-pretty">{t("openNote")}</p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </section>
 

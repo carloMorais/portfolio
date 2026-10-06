@@ -11,6 +11,20 @@ export const omnichannelAi: CaseStudy = {
     pt: "Empresas conectavam o WhatsApp delas à plataforma e passavam o contexto do negócio. A IA respondia os clientes dessas empresas, buscava dados em sistemas externos quando precisava, e as empresas disparavam campanhas para milhares de contatos.",
     en: "Companies connected their WhatsApp to the platform and gave it their business context. The AI answered those companies' customers, fetched data from external systems when needed, and the companies sent campaigns to thousands of contacts.",
   },
+  summary: [
+    {
+      pt: "Full-stack numa startup que atendia os clientes de outras empresas com IA no WhatsApp.",
+      en: "Full-stack at a startup whose AI answered other companies’ customers on WhatsApp.",
+    },
+    {
+      pt: "Construí do zero o sistema de campanhas em massa (planilha, fila no BullMQ, status por contato) e mantive os webhooks de mensagens.",
+      en: "I built the bulk campaign system from scratch (spreadsheet import, a BullMQ queue, status per contact) and maintained the message webhooks.",
+    },
+    {
+      pt: "Cerca de 5 empresas, ~100 atendimentos por dia e picos de 1.000 mensagens.",
+      en: "About 5 companies, ~100 conversations a day and peaks of 1,000 messages.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },

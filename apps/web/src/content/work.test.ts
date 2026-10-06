@@ -2,7 +2,7 @@ import { isWide } from "@/components/WorkCard";
 import { work } from "./work";
 
 describe("work", () => {
-  it("lists the RaceGame second, after the main job, then Renova and Food Point last, on the home and the Demos tab", () => {
+  it("lists the RaceGame second, after the main job, then Renova and Food Point last, on the home and the Work tab", () => {
     expect(work.map((item) => item.slug)).toEqual([
       "plumaa",
       "racegame",

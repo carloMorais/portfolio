@@ -30,6 +30,8 @@ export type DiagramSpec = {
 export type CaseStudy = {
   slug: string;
   lead: Localized;
+  /** Three lines for whoever reads only the top: my role, what I built, the result. */
+  summary: [Localized, Localized, Localized];
   facts: { label: Localized; value: Localized }[];
   context: Localized[];
   problem: Localized[];

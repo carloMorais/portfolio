@@ -10,6 +10,20 @@ export const bayer: CaseStudy = {
     pt: "Estagiário e único desenvolvedor numa plataforma que ninguém da área dominava: aprendi Power Apps em poucos meses e entreguei três aplicações usadas de químicos do laboratório a gestores e executivos.",
     en: "An intern and the only developer on a platform nobody in the area knew: I learned Power Apps in a few months and delivered three apps used by everyone from lab chemists to managers and executives.",
   },
+  summary: [
+    {
+      pt: "Estagiário e único desenvolvedor das aplicações, em Power Apps, Power Automate e SharePoint.",
+      en: "Intern and sole developer of the apps, on Power Apps, Power Automate and SharePoint.",
+    },
+    {
+      pt: "Três aplicações: coleta de laboratório com validação, acompanhamento de pedidos por etapas e um painel de Gantt.",
+      en: "Three apps: validated lab data collection, step-by-step order tracking and a Gantt dashboard.",
+    },
+    {
+      pt: "A atualização diária dos pedidos caiu de cerca de 1 hora para poucos minutos.",
+      en: "The daily order update went from about 1 hour to a few minutes.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },

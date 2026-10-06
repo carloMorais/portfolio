@@ -2,13 +2,12 @@ import type { Metadata } from "next";
 import { useLocale, useTranslations } from "next-intl";
 import { getLocale, getTranslations } from "next-intl/server";
 import { Link } from "@/i18n/navigation";
-import { jobs, skillGroups, stats } from "@/content/career";
+import { skillGroups, stats } from "@/content/career";
 import { site } from "@/content/site";
 import { WakeApi } from "@/components/race/WakeApi";
 import { work } from "@/content/work";
 import { ContactSection } from "@/components/ContactSection";
 import { CvDownloadLink } from "@/components/CvDownloadLink";
-import { JobEntry } from "@/components/JobEntry";
 import { PhotoSlot } from "@/components/PhotoSlot";
 import { SectionHeader } from "@/components/SectionHeader";
 import { SectionMinimap } from "@/components/SectionMinimap";
@@ -26,8 +25,9 @@ import { PageTransition } from "@/components/PageTransition";
 export const revalidate = 86400;
 
 const coreStack = ["React", "Next.js", "TypeScript", "Node.js", "NestJS", "PostgreSQL"];
-// "numbers" is too short a section to earn a minimap entry.
-const minimapSections = ["intro", "work", "about", "career", "contact"] as const;
+// "numbers" is too short a section to earn a minimap entry. The career lives
+// on its own tab: the work cards already say where and when.
+const minimapSections = ["intro", "work", "about", "contact"] as const;
 
 export async function generateMetadata(): Promise<Metadata> {
   const [t, locale] = await Promise.all([getTranslations("Metadata"), getLocale()]);
@@ -102,7 +102,7 @@ export default function HomePage() {
               ))}
             </ul>
             <div className="mt-9 flex flex-wrap gap-3">
-              <Link href="/demos" className="btn btn-primary group/cta">
+              <Link href="/work" className="btn btn-primary group/cta">
                 <GridIcon />
                 {t("ctaWork")}
                 <ArrowIcon className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
@@ -154,22 +154,13 @@ export default function HomePage() {
             <WorkCard key={item.slug} item={item} wide={isWide(i, work.length)} />
           ))}
         </div>
-        <Link href="/demos" className="btn btn-ghost group/cta mt-14">
-          {t("workCta")}
-          <ArrowIcon className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
-        </Link>
       </section>
 
-      {/* About */}
+      {/* About: how I work on the left, the stack on the right. */}
       <section id="about" className="scroll-mt-16 border-t border-line">
-        <div className="container-page grid items-start gap-12 py-20 md:grid-cols-[1fr_1.2fr] md:gap-16 md:py-28">
-          <PhotoSlot
-            id="aboutWorkspace"
-            sizes="(min-width: 768px) 40vw, 100vw"
-            className="md:sticky md:top-24"
-          />
+        <div className="container-page grid items-start gap-16 py-20 md:py-28 lg:grid-cols-[1fr_1fr] lg:gap-20">
           <div>
-            <SectionHeader eyebrow={t("aboutEyebrow")} title={t.rich("aboutTitle", brushTags)} />
+            <SectionHeader title={t("aboutTitle")} />
             <p className="mt-6 text-lg leading-relaxed text-pretty">{t("aboutBody")}</p>
             <ul className="mt-10 grid gap-3">
               {([1, 2, 3] as const).map((n) => (
@@ -187,58 +178,32 @@ export default function HomePage() {
                 </li>
               ))}
             </ul>
+          </div>
 
-            <div className="mt-16">
-              <SectionHeader
-                as="h3"
-                size="md"
-                eyebrow={t("skillsEyebrow")}
-                title={t.rich("skillsTitle", brushTags)}
-              />
-              <dl className="mt-6 grid gap-3 sm:grid-cols-2">
-                {skillGroups.map((group) => (
-                  <div
-                    key={group.title.en}
-                    className="reveal rounded-2xl bg-surface/50 p-5 ring-1 ring-line"
-                  >
-                    <dt className="flex items-center gap-2 text-sm font-medium">
-                      <span aria-hidden className="size-1.5 rounded-full bg-accent" />
-                      {group.title[locale]}
-                    </dt>
-                    <dd className="mt-3 flex flex-wrap gap-1.5">
-                      {group.items.map((item) => (
-                        <span
-                          key={item}
-                          className="rounded-full bg-bg px-2.5 py-1 text-xs text-muted ring-1 ring-line"
-                        >
-                          {item}
-                        </span>
-                      ))}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </div>
+          <div>
+            <SectionHeader as="h3" title={t("skillsTitle")} />
+            <dl className="mt-6">
+              {skillGroups.map((group) => (
+                <div
+                  key={group.title.en}
+                  className="reveal grid gap-3 border-t border-line py-5 first:border-t-0 first:pt-0 sm:grid-cols-[9rem_1fr] sm:gap-6"
+                >
+                  <dt className="text-sm font-medium sm:pt-1">{group.title[locale]}</dt>
+                  <dd className="flex flex-wrap gap-1.5">
+                    {group.items.map((item) => (
+                      <span
+                        key={item}
+                        className="rounded-full bg-surface/60 px-2.5 py-1 text-xs text-muted ring-1 ring-line"
+                      >
+                        {item}
+                      </span>
+                    ))}
+                  </dd>
+                </div>
+              ))}
+            </dl>
           </div>
         </div>
-      </section>
-
-      {/* Career preview */}
-      <div aria-hidden className="border-t border-line" />
-      <section id="career" className="container-page scroll-mt-16 py-20 md:py-28">
-        <SectionHeader
-          eyebrow={t("experienceEyebrow")}
-          title={t.rich("experienceTitle", brushTags)}
-        />
-        <div className="mt-10">
-          {jobs.map((job) => (
-            <JobEntry key={job.id} job={job} variant="compact" />
-          ))}
-        </div>
-        <Link href="/experience" className="btn btn-ghost group/cta mt-4">
-          {t("experienceCta")}
-          <ArrowIcon className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
-        </Link>
       </section>
 
       <ContactSection />

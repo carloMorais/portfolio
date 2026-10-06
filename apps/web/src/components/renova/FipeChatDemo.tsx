@@ -21,6 +21,7 @@ import {
   type Option,
   type Price,
   type ToolCall,
+  type ToolName,
   type VehicleType,
 } from "./fipe";
 
@@ -48,6 +49,9 @@ type Step =
 
 /** The bot's turn after a successful call: what it says and what comes next. */
 type Turn = { text: string; price?: Price; count: number; next: Step };
+
+/** The order the FIPE API demands, shown on the side before the first call. */
+const TOOL_ORDER: ToolName[] = ["getMarcas", "getModelos", "getAnos", "getValor"];
 
 /** Long lists show this many options until the visitor types a filter. */
 const VISIBLE = 48;
@@ -219,8 +223,14 @@ export function FipeChatDemo() {
             tabIndex={0}
             className="flex flex-1 flex-col overflow-y-auto overscroll-contain px-5 py-5"
           >
+            {/* Before the first answer the window would be empty: say what happens. */}
+            {messages.length === 1 && (
+              <p className="m-auto max-w-sm px-4 py-6 text-center text-sm text-muted text-pretty">
+                {t("chatEmpty")}
+              </p>
+            )}
             {/* Messages sit on the composer, like any chat, until they fill the window. */}
-            <div className="mt-auto space-y-3">
+            <div className={`space-y-3 ${messages.length === 1 ? "" : "mt-auto"}`}>
               {messages.map((m) => (
                 <Bubble key={m.id} from={m.from} label={m.from === "user" ? t("you") : t("window")}>
                   <p>{m.text}</p>
@@ -326,7 +336,18 @@ export function FipeChatDemo() {
             tabIndex={0}
             className="flex-1 space-y-3 overflow-y-auto overscroll-contain p-4"
           >
-            {calls.length === 0 && <li className="px-1 text-sm text-muted">{t("panelEmpty")}</li>}
+            {/* Before the first call: the four tools, in the order they will be called. */}
+            {calls.length === 0 &&
+              TOOL_ORDER.map((name, i) => (
+                <li
+                  key={name}
+                  className="flex items-center gap-3 rounded-xl border border-dashed border-line p-3.5 font-mono text-[0.78rem]"
+                >
+                  <span className="font-sans text-xs text-muted tabular-nums">{i + 1}</span>
+                  <span className="text-muted">{name}</span>
+                  <span className="ml-auto font-sans text-xs text-muted">{t("pending")}</span>
+                </li>
+              ))}
             {calls.map((c) => (
               <li
                 key={c.id}

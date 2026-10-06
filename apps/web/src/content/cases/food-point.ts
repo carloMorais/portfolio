@@ -12,6 +12,20 @@ export const foodPoint: CaseStudy = {
     pt: "Uma plataforma para planejar eventos gastronômicos: o evento, o local no mapa, o cardápio com os ingredientes, os convidados e a lista de compras. Uma SPA em JavaScript puro, sem framework, feita em grupo.",
     en: "A platform to plan food-centered events: the event, the place on a map, the menu with its ingredients, the guests and the shopping list. A single-page app in plain JavaScript, no framework, built by a team.",
   },
+  summary: [
+    {
+      pt: "Projeto em grupo de 4 pessoas na Alpha EdTech, em cerca de 4 semanas, sem framework no frontend.",
+      en: "A team project of 4 people at Alpha EdTech, in about 4 weeks, with no frontend framework.",
+    },
+    {
+      pt: "Fiz a maior parte do frontend: o roteador da SPA, a home e o fluxo de criar evento, com mapa e cardápio.",
+      en: "I wrote most of the frontend: the SPA router, the home page and the create-event flow, with a map and a menu.",
+    },
+    {
+      pt: "Apresentado num demo day. O frontend de 2024 roda acima, sem mudanças, sobre um servidor simulado.",
+      en: "Presented at a demo day. The 2024 frontend runs above, unchanged, on a simulated server.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },

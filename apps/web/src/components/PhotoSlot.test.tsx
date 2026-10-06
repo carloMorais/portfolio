@@ -4,33 +4,33 @@ import { photos, type PhotoSlot as Slot } from "@/content/photos";
 import { PhotoSlot } from "./PhotoSlot";
 
 // Every slot is filled today, so empty one temporarily to exercise the placeholder.
-const banner: Slot = photos.experienceBanner;
-const bannerSrc = banner.src;
+const slot: Slot = photos.contactPortrait;
+const slotSrc = slot.src;
 
 describe("PhotoSlot", () => {
   describe("without an image", () => {
     beforeEach(() => {
-      banner.src = undefined;
+      slot.src = undefined;
     });
     afterEach(() => {
-      banner.src = bannerSrc;
+      slot.src = slotSrc;
     });
 
     it("renders a labelled placeholder while the slot has no image", () => {
-      renderWithIntl(<PhotoSlot id="experienceBanner" />, "en");
+      renderWithIntl(<PhotoSlot id="contactPortrait" />, "en");
 
       expect(
-        screen.getByRole("img", { name: "Modern office with computers and a city view" }),
+        screen.getByRole("img", { name: "Two people talking in front of a laptop" }),
       ).toBeInTheDocument();
       expect(screen.getByText("Photo coming soon")).toBeInTheDocument();
     });
 
     it("localizes the placeholder", () => {
-      renderWithIntl(<PhotoSlot id="experienceBanner" />, "pt");
+      renderWithIntl(<PhotoSlot id="contactPortrait" />, "pt");
 
       expect(
         screen.getByRole("img", {
-          name: "Escritório moderno com computadores e vista para a cidade",
+          name: "Duas pessoas conversando em frente a um notebook",
         }),
       ).toBeInTheDocument();
       expect(screen.getByText("Foto em breve")).toBeInTheDocument();
@@ -47,11 +47,11 @@ describe("PhotoSlot", () => {
   });
 
   it("credits stock photos with a link to the source", () => {
-    renderWithIntl(<PhotoSlot id="aboutWorkspace" />, "en");
+    renderWithIntl(<PhotoSlot id="contactPortrait" />, "en");
 
-    expect(screen.getByRole("link", { name: "Photo: AltumCode / Unsplash" })).toHaveAttribute(
+    expect(screen.getByRole("link", { name: "Photo: Jose Vazquez / Unsplash" })).toHaveAttribute(
       "href",
-      "https://unsplash.com/photos/PNbDkQ2DDgM",
+      "https://unsplash.com/photos/Q5RBHz9cu1A",
     );
   });
 
