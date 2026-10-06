@@ -12,6 +12,16 @@ const nextConfig: NextConfig = {
         destination: "/:locale/projects/racegame",
         permanent: true,
       },
+      // The "Demos" tab became "Work" (most cards are case studies, not demos).
+      { source: "/:locale(pt|en)/demos", destination: "/:locale/work", permanent: true },
+    ];
+  },
+  async rewrites() {
+    return [
+      // The Food Point demo runs the 2024 frontend unchanged, and it asks for
+      // its files at the root (/assets, /js). They live in public/food-point-2024.
+      { source: "/assets/:path*", destination: "/food-point-2024/assets/:path*" },
+      { source: "/js/:path*", destination: "/food-point-2024/js/:path*" },
     ];
   },
 };

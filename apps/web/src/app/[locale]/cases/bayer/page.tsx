@@ -5,7 +5,6 @@ import { site } from "@/content/site";
 import { work } from "@/content/work";
 import { pageMetadata } from "@/lib/seo";
 import { CaseStudyLayout } from "@/components/case/CaseStudyLayout";
-import { PhotoSlot } from "@/components/PhotoSlot";
 
 const item = work.find((w) => w.slug === "bayer")!;
 
@@ -21,15 +20,5 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export default function CasePage() {
-  return (
-    <CaseStudyLayout
-      item={item}
-      study={bayer}
-      media={
-        <div className="max-w-3xl">
-          <PhotoSlot id={item.photo} priority sizes="(min-width: 48rem) 48rem, 100vw" />
-        </div>
-      }
-    />
-  );
+  return <CaseStudyLayout item={item} study={bayer} />;
 }

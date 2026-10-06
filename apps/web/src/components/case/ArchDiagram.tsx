@@ -236,18 +236,22 @@ function Tall({ spec, locale }: Omit<Props, "description">) {
       {(single ? [180] : [90, 270]).map((x) => (
         <Arrow prefix={prefix} key={x} d={`M${x} ${midY + midH + 8} V${zoneY - 8}`} />
       ))}
-      {spec.right.map((box, j) => (
-        <Box
-          key={box.title.en}
-          x={single ? 8 : 8 + (j % 2) * 180}
-          y={zoneY + Math.floor(j / 2) * 76}
-          w={single ? 344 : 164}
-          h={64}
-          title={box.title[locale]}
-          sub={box.sub[locale]}
-          small
-        />
-      ))}
+      {spec.right.map((box, j) => {
+        // A box alone on the last row takes the whole width.
+        const full = single || (j === spec.right.length - 1 && j % 2 === 0);
+        return (
+          <Box
+            key={box.title.en}
+            x={full ? 8 : 8 + (j % 2) * 180}
+            y={zoneY + Math.floor(j / 2) * 76}
+            w={full ? 344 : 164}
+            h={64}
+            title={box.title[locale]}
+            sub={box.sub[locale]}
+            small
+          />
+        );
+      })}
     </svg>
   );
 }

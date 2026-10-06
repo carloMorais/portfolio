@@ -701,30 +701,35 @@ export function PracticeRace({
           {(phase === "ready" || phase === "paused" || phase === "finished") && (
             <div className={VEIL}>
               {phase === "ready" && (
-                <StartCard header={modeSwitch} slideFrom={slideFrom}>
-                  {/* Phones: the track is too short for the legend too; it goes under the controls. */}
-                  <div className="w-full max-lg:hidden">
-                    <Controls />
-                  </div>
-                  {/* Phones: the colour goes under the track too (the card must fit over it). */}
-                  <div className="max-lg:hidden">
-                    <ColorPicker value={myColor} onChange={chooseColor} t={t} />
-                  </div>
-                  {trial ? (
-                    <div className="flex w-full max-w-56 flex-col items-center gap-2">
-                      <MedalTargets record={best.race} t={t} className="w-full text-left" />
-                      {hasGhost && (
-                        <p className="text-xs text-muted max-lg:hidden">{t("ghostLegend")}</p>
-                      )}
+                <StartCard header={modeSwitch} slideFrom={slideFrom} wide>
+                  {/* Desktop: keys and track items on the left, the choices and Start on the right. */}
+                  <div className="grid w-full items-center gap-4 lg:grid-cols-2 lg:gap-6">
+                    {/* Phones: the track is too short for the legend too; it goes under the controls. */}
+                    <div className="w-full max-lg:hidden lg:border-r lg:border-line lg:pr-6">
+                      <Controls />
                     </div>
-                  ) : (
-                    <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
-                  )}
-                  <div className="flex flex-col items-center gap-2">
-                    <button type="button" onClick={start} className="btn btn-primary">
-                      {t("start")}
-                    </button>
-                    <p className="hidden text-xs text-muted lg:block">{t("startHint")}</p>
+                    <div className="flex flex-col items-center gap-4">
+                      {/* Phones: the colour goes under the track too (the card must fit over it). */}
+                      <div className="max-lg:hidden">
+                        <ColorPicker value={myColor} onChange={chooseColor} t={t} />
+                      </div>
+                      {trial ? (
+                        <div className="flex w-full max-w-56 flex-col items-center gap-2">
+                          <MedalTargets record={best.race} t={t} className="w-full text-left" />
+                          {hasGhost && (
+                            <p className="text-xs text-muted max-lg:hidden">{t("ghostLegend")}</p>
+                          )}
+                        </div>
+                      ) : (
+                        <DifficultyPicker value={difficulty} onChange={chooseDifficulty} t={t} />
+                      )}
+                      <div className="flex flex-col items-center gap-2">
+                        <button type="button" onClick={start} className="btn btn-primary">
+                          {t("start")}
+                        </button>
+                        <p className="hidden text-xs text-muted lg:block">{t("startHint")}</p>
+                      </div>
+                    </div>
                   </div>
                 </StartCard>
               )}

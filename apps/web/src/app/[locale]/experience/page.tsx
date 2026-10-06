@@ -6,7 +6,6 @@ import { pageMetadata } from "@/lib/seo";
 import { education, jobs, languages, volunteering } from "@/content/career";
 import { CvDownloadLink } from "@/components/CvDownloadLink";
 import { JobEntry } from "@/components/JobEntry";
-import { PhotoSlot } from "@/components/PhotoSlot";
 import { formatYearMonth } from "@/lib/dates";
 import { brushTags } from "@/lib/rich";
 import { PageTransition } from "@/components/PageTransition";
@@ -42,11 +41,7 @@ export default function ExperiencePage() {
         </div>
       </section>
 
-      <div className="container-page">
-        <PhotoSlot id="experienceBanner" priority sizes="(min-width: 72rem) 72rem, 100vw" />
-      </div>
-
-      <section className="container-page py-20" aria-labelledby="jobs">
+      <section className="container-page pt-8 pb-20" aria-labelledby="jobs">
         <h2 id="jobs" className="font-display text-3xl tracking-tight">
           {t("jobsTitle")}
         </h2>

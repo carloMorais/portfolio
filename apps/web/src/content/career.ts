@@ -33,8 +33,8 @@ export const jobs: Job[] = [
     location: { pt: "São Paulo, Brasil", en: "São Paulo, Brazil" },
     workMode: { pt: "Remoto", en: "Remote" },
     summary: {
-      pt: "SaaS B2B/B2C com ~100 clientes ativos, entre usuários comuns e psicólogos.",
-      en: "B2B/B2C SaaS with ~100 active clients, individual users and psychologists.",
+      pt: "SaaS B2B/B2C com ~100 contas ativas, entre clientes, psicólogos e empresas.",
+      en: "B2B/B2C SaaS with ~100 active accounts across clients, psychologists and companies.",
     },
     highlights: [
       {
@@ -222,27 +222,22 @@ export const skillGroups: { title: Localized; items: string[] }[] = [
       "TypeScript",
       "JavaScript (ES6+)",
       "Vite",
-      "Angular",
+      "Tailwind CSS",
       "HTML5",
       "CSS3",
-      "UI/UX",
     ],
   },
   {
     title: { pt: "Back-end", en: "Back-end" },
-    items: ["Node.js", "NestJS", "Express", "REST APIs", "Webhooks", "Microservices"],
+    items: ["Node.js", "NestJS", "Express", "REST APIs", "Webhooks", "WebSocket", "BullMQ"],
   },
   {
     title: { pt: "Banco de dados", en: "Databases" },
-    items: ["PostgreSQL", "MySQL", "Redis", "Prisma", "TypeORM", "Data modeling"],
+    items: ["PostgreSQL", "Prisma", "Redis", "Data modeling"],
   },
   {
-    title: { pt: "Testes", en: "Testing" },
-    items: ["Jest", "Playwright", "Code review"],
-  },
-  {
-    title: { pt: "Cloud & DevOps", en: "Cloud & DevOps" },
-    items: ["Docker", "Digital Ocean", "Vercel", "CI"],
+    title: { pt: "Testes & DevOps", en: "Testing & DevOps" },
+    items: ["Jest", "Playwright", "GitHub Actions", "Docker", "Digital Ocean", "Vercel"],
   },
   {
     title: { pt: "Integrações & IA", en: "Integrations & AI" },
@@ -257,14 +252,18 @@ export const skillGroups: { title: Localized; items: string[] }[] = [
   },
 ];
 
-/** Headline numbers — each one appears verbatim in the resume. */
+/**
+ * Headline numbers, all from the resume. The resume says "~100 active clients";
+ * the site says accounts, as the Plumaa case study does: the ~100 add up
+ * clients, psychologists, companies and their employees.
+ */
 export const stats: { value: string; label: Localized }[] = [
   { value: "2+", label: { pt: "anos entregando em produção", en: "years shipping to production" } },
   {
     value: "~100",
     label: {
-      pt: "clientes ativos na plataforma em que trabalho hoje",
-      en: "active clients on the platform I currently work on",
+      pt: "contas ativas na plataforma em que trabalho hoje",
+      en: "active accounts on the platform I currently work on",
     },
   },
   {

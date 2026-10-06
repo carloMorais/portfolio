@@ -18,10 +18,10 @@ describe("siteUrl", () => {
 
 describe("languageAlternates", () => {
   it("lists both locales and points x-default at English", () => {
-    expect(languageAlternates("/demos")).toEqual({
-      "pt-BR": "/pt/demos",
-      en: "/en/demos",
-      "x-default": "/en/demos",
+    expect(languageAlternates("/work")).toEqual({
+      "pt-BR": "/pt/work",
+      en: "/en/work",
+      "x-default": "/en/work",
     });
   });
 });

@@ -11,6 +11,20 @@ export const plumaa: CaseStudy = {
     pt: "Entrei quando a Plumaa ainda era só uma ideia. Escolhi a stack, modelei o banco e construí o backend de uma plataforma de saúde mental com três públicos: pessoas que buscam terapia, psicólogos e empresas.",
     en: "I joined when Plumaa was still just an idea. I picked the stack, designed the database and built the backend of a mental health platform with three audiences: people looking for therapy, psychologists and companies.",
   },
+  summary: [
+    {
+      pt: "Único desenvolvedor de backend desde a ideia: escolhi a stack (NestJS, Prisma, PostgreSQL) e modelei o banco.",
+      en: "The only backend developer since the idea stage: I picked the stack (NestJS, Prisma, PostgreSQL) and designed the database.",
+    },
+    {
+      pt: "Cinco perfis com permissão decidida no backend, pagamentos com Stripe, agenda com Google e um pipeline de IA para prontuários.",
+      en: "Five roles with permissions decided in the backend, Stripe payments, Google scheduling and an AI pipeline for session notes.",
+    },
+    {
+      pt: "Em produção, com ~100 contas ativas; o resumo com IA economiza de 3 a 8 horas por semana para cada psicólogo.",
+      en: "In production, with ~100 active accounts; the AI summary saves each psychologist 3 to 8 hours a week.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },

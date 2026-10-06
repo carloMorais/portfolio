@@ -18,11 +18,7 @@ export function ContactSection() {
           className="order-last max-w-sm md:order-none md:max-w-none"
         />
         <div className="reveal">
-          <SectionHeader
-            eyebrow={t("contactEyebrow")}
-            title={t.rich("contactTitle", brushTags)}
-            lead={t("contactLead")}
-          />
+          <SectionHeader title={t.rich("contactTitle", brushTags)} lead={t("contactLead")} />
           <a
             href={`mailto:${site.email}`}
             className="link-underline mt-8 inline-block font-display text-2xl break-all sm:text-3xl"

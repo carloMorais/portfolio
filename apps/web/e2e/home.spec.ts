@@ -104,3 +104,11 @@ test.describe("home page extras (desktop)", () => {
     }).toPass({ timeout: 10_000, intervals: [250] });
   });
 });
+
+test("the home shows four work cards and links to the Work tab for the rest", async ({ page }) => {
+  await page.goto("/pt");
+  await expect(page.locator("#work [data-work]")).toHaveCount(4);
+  await page.locator("[data-work-more]").click();
+  await expect(page).toHaveURL(/\/pt\/work$/);
+  await expect(page.locator("[data-work]")).toHaveCount(6);
+});

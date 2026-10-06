@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // The Food Point demo ships the 2024 frontend as it was.
+    "public/food-point-2024/**",
   ]),
 ]);
 

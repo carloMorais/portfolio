@@ -25,10 +25,12 @@ describe("WorkCard", () => {
     );
   });
 
-  it("invites to play when the project page is a playable demo", () => {
+  it("invites to play or to try when the project page opens on a demo", () => {
     renderWithIntl(<WorkCard item={racegame} />, "en");
     expect(screen.getByText("Play now")).toBeInTheDocument();
-    renderWithIntl(<WorkCard item={{ ...racegame, playable: undefined }} />, "en");
+    renderWithIntl(<WorkCard item={{ ...racegame, demo: "try" }} />, "en");
+    expect(screen.getByText("Try it now")).toBeInTheDocument();
+    renderWithIntl(<WorkCard item={{ ...racegame, demo: undefined }} />, "en");
     expect(screen.getByText("View project")).toBeInTheDocument();
   });
 

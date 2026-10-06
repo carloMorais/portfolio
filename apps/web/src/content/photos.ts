@@ -11,7 +11,8 @@ export type PhotoCredit = {
  * Every photo on the site is a named slot. To fill one, drop an optimized
  * image (≤ 2400px, no EXIF) in `public/photos/` and set `src`.
  * Slots without `src` render an elegant placeholder instead.
- * Stock photos must carry a `credit` — it is rendered on the photo.
+ * Stock photos must carry a `credit` — it is rendered on the photo. Personal
+ * projects use screenshots of the project itself (`screenshot: true`).
  */
 export type PhotoSlot = {
   src?: string;
@@ -23,6 +24,8 @@ export type PhotoSlot = {
   /** What should go here — shown on the placeholder while it is empty. */
   hint: Record<Locale, string>;
   credit?: PhotoCredit;
+  /** A screenshot of my own project: nobody to credit. */
+  screenshot?: boolean;
 };
 
 export const photos = {
@@ -32,24 +35,6 @@ export const photos = {
     position: "50% 35%",
     alt: { pt: "Retrato de Carlos Morais, sorrindo", en: "Portrait of Carlos Morais, smiling" },
     hint: { pt: "Retrato vertical (4:5)", en: "Vertical portrait (4:5)" },
-  },
-  aboutWorkspace: {
-    src: "/photos/about-workspace.jpg",
-    ratio: "4 / 5",
-    position: "50% 55%",
-    alt: {
-      pt: "Notebook com código aberto ao lado de uma pilha de livros",
-      en: "Laptop showing code next to a stack of books",
-    },
-    hint: {
-      pt: "Você trabalhando / seu setup (4:5)",
-      en: "You at work / your setup (4:5)",
-    },
-    credit: {
-      author: "AltumCode",
-      source: "Unsplash",
-      url: "https://unsplash.com/photos/PNbDkQ2DDgM",
-    },
   },
   contactPortrait: {
     src: "/photos/contact-meeting.jpg",
@@ -64,24 +49,6 @@ export const photos = {
       author: "Jose Vazquez",
       source: "Unsplash",
       url: "https://unsplash.com/photos/Q5RBHz9cu1A",
-    },
-  },
-  experienceBanner: {
-    src: "/photos/experience-banner.jpg",
-    ratio: "21 / 9",
-    position: "50% 62%",
-    alt: {
-      pt: "Escritório moderno com computadores e vista para a cidade",
-      en: "Modern office with computers and a city view",
-    },
-    credit: {
-      author: "Dextar Studio",
-      source: "Pexels",
-      url: "https://www.pexels.com/photo/15599164/",
-    },
-    hint: {
-      pt: "Foto horizontal larga: evento, time ou escritório (21:9)",
-      en: "Wide landscape: event, team or office (21:9)",
     },
   },
   casePlumaa: {
@@ -139,19 +106,37 @@ export const photos = {
     },
   },
   projectRacegame: {
-    src: "/photos/project-racegame.jpg",
+    src: "/photos/project-racegame-track.jpg",
     ratio: "16 / 10",
-    position: "50% 62%",
+    position: "50% 50%",
+    screenshot: true,
     alt: {
-      pt: "Carrinhos em miniatura sobre um tapete com pista de corrida",
-      en: "Miniature cars on a race track desk mat",
+      pt: "O RaceGame em uma corrida de treino: a pista vista de cima, com os carros na primeira curva",
+      en: "RaceGame in a practice race: the track seen from above, with the cars in the first corner",
     },
     hint: { pt: "Print do jogo em ação (16:10)", en: "Game screenshot in action (16:10)" },
-    credit: {
-      author: "I'M ZION",
-      source: "Unsplash",
-      url: "https://unsplash.com/photos/ybQcEX5zcNQ",
+  },
+  projectRenova: {
+    src: "/photos/project-renova-chat.jpg",
+    ratio: "16 / 10",
+    position: "0% 50%",
+    screenshot: true,
+    alt: {
+      pt: "A demonstração do Renova com o preço FIPE de um Fiat Uno Mille e as chamadas de ferramenta ao lado",
+      en: "The Renova demo showing the FIPE price of a Fiat Uno Mille, with the tool calls on the side",
     },
+    hint: { pt: "Print da demonstração (16:10)", en: "Demo screenshot (16:10)" },
+  },
+  projectFoodPoint: {
+    src: "/photos/project-food-point-app.jpg",
+    ratio: "16 / 10",
+    position: "50% 0%",
+    screenshot: true,
+    alt: {
+      pt: "A página inicial do Food Point de 2024: “Planeje e Compartilhe Momentos de Sabor!”",
+      en: "The 2024 Food Point home page: “Plan and Share Moments of Flavor!”",
+    },
+    hint: { pt: "Print do app (16:10)", en: "App screenshot (16:10)" },
   },
 } satisfies Record<string, PhotoSlot>;
 

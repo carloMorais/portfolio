@@ -10,12 +10,9 @@ import { PageTransition } from "../PageTransition";
 type Props = {
   item: WorkItem;
   study: CaseStudy;
-  /** Cover: a screenshot or clip of the real thing. */
-  media?: ReactNode;
   /**
    * The real thing, playable, right under the title: a visitor tries it
-   * first and reads about it after. Takes the cover's place; the facts move
-   * below it.
+   * first and reads about it after. The facts move below it.
    */
   demo?: ReactNode;
   /** Optional call to action under the facts. */
@@ -50,13 +47,30 @@ export function Section({
  * The shared shape of every case study page:
  * context → problem → my part → decisions → architecture → result.
  */
-export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Props) {
+export function CaseStudyLayout({ item, study, demo, actions, extra }: Props) {
   const locale = useLocale();
   const t = useTranslations("Case");
   const common = useTranslations("Common");
 
   const facts = (
     <>
+      {/* For whoever reads only the top: role, what I built, result. */}
+      <section
+        aria-labelledby="summary"
+        className="mb-8 rounded-2xl bg-surface/60 px-6 py-5 ring-1 ring-line"
+      >
+        <h2 id="summary" className="text-xs tracking-wide text-muted uppercase">
+          {t("summary")}
+        </h2>
+        <ul className="mt-3 space-y-2">
+          {study.summary.map((line) => (
+            <li key={line.en} className="flex gap-3 text-pretty">
+              <span aria-hidden className="mt-2.5 size-1.5 shrink-0 rounded-full bg-accent" />
+              <span>{line[locale]}</span>
+            </li>
+          ))}
+        </ul>
+      </section>
       <dl className="grid gap-x-10 gap-y-6 border-t border-line pt-8 sm:grid-cols-2 lg:grid-cols-4">
         {study.facts.map((fact) => (
           <div key={fact.label.en}>
@@ -89,7 +103,7 @@ export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Pr
           className={`container-page ${demo ? "pt-6 pb-5 md:pt-10" : "pt-10 pb-12 md:pt-16"}`}
         >
           <Link
-            href="/demos"
+            href="/work"
             className="inline-flex items-center gap-1.5 text-sm text-muted transition-colors hover:text-ink"
           >
             <ArrowIcon className="size-4 rotate-180" />
@@ -104,20 +118,18 @@ export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Pr
             {item.title[locale]}
           </h1>
           <p
-            className={`max-w-2xl text-muted text-pretty ${demo ? "mt-3 sm:text-lg" : "mt-5 text-lg"}`}
+            className={`text-muted text-pretty ${demo ? "mt-3 max-w-4xl sm:text-lg" : "mt-5 max-w-2xl text-lg"}`}
           >
             {study.lead[locale]}
           </p>
           {!demo && <div className="mt-10">{facts}</div>}
         </header>
 
-        {demo ? (
+        {demo && (
           <>
             {demo}
             <div className="container-page mt-16">{facts}</div>
           </>
-        ) : (
-          <div className="container-page">{media}</div>
         )}
 
         <div className="container-page mt-16">
@@ -197,10 +209,7 @@ export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Pr
 
         <footer className="container-page pb-20">
           <div className="border-t border-line pt-10">
-            <Link
-              href="/demos"
-              className="inline-flex items-center gap-1.5 font-medium text-accent"
-            >
+            <Link href="/work" className="inline-flex items-center gap-1.5 font-medium text-accent">
               {t("more")}
               <ArrowIcon className="size-4" />
             </Link>

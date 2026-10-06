@@ -13,8 +13,8 @@ export type WorkItem = {
   tags: string[];
   photo: PhotoId;
   repo?: string;
-  /** The project page opens on a playable demo: the card says so. */
-  playable?: true;
+  /** The page opens on a live demo, to play or to try: the card says so. */
+  demo?: "play" | "try";
 };
 
 export const work: WorkItem[] = [
@@ -52,7 +52,7 @@ export const work: WorkItem[] = [
     tags: ["HTML5 Canvas", "React", "Express", "WebSocket"],
     photo: "projectRacegame",
     repo: "https://github.com/Projeto-Ciclo-2/RaceGame",
-    playable: true,
+    demo: "play",
   },
   {
     slug: "omnichannel-ai",
@@ -87,5 +87,43 @@ export const work: WorkItem[] = [
     },
     tags: ["Power Apps", "Power Automate", "SharePoint"],
     photo: "caseBayer",
+  },
+  {
+    slug: "renova",
+    kind: "project",
+    ready: true,
+    context: { pt: "Projeto solo · desafio técnico", en: "Solo project · hiring challenge" },
+    period: { pt: "fev — mar 2025", en: "Feb — Mar 2025" },
+    title: {
+      pt: "Renova: chatbot de preços da Tabela FIPE",
+      en: "Renova: a chatbot for Brazil’s vehicle price table",
+    },
+    blurb: {
+      pt: "Um chatbot com GPT-4o que consulta a Tabela FIPE por quatro ferramentas, na ordem que a API exige. Feito sozinho, em 10 dias. Dá para testar aqui, com a FIPE de verdade.",
+      en: "A GPT-4o chatbot that looks up the FIPE table through four tools, in the order the API demands. Built alone, in 10 days. You can try it here, against the real FIPE API.",
+    },
+    tags: ["OpenAI", "LangChain", "Express", "Prisma"],
+    photo: "projectRenova",
+    repo: "https://github.com/carloMorais/renova",
+    demo: "try",
+  },
+  {
+    slug: "food-point",
+    kind: "project",
+    ready: true,
+    context: { pt: "Alpha EdTech · Projeto em grupo", en: "Alpha EdTech · Team project" },
+    period: { pt: "abr — mai 2024", en: "Apr — May 2024" },
+    title: {
+      pt: "Food Point: planejamento de eventos gastronômicos",
+      en: "Food Point: planning food-centered events",
+    },
+    blurb: {
+      pt: "Uma SPA em JavaScript puro, sem framework, feita em grupo em quatro semanas. Fiz o roteador, a home e o fluxo de criar evento, com mapa e cardápio. Dá para usar aqui o frontend de 2024, como era.",
+      en: "A single-page app in plain JavaScript, no framework, built by a team in four weeks. I wrote the router, the home page and the create-event flow, with a map and a menu. You can use the 2024 frontend here, as it was.",
+    },
+    tags: ["JavaScript", "Express", "PostgreSQL", "Leaflet"],
+    photo: "projectFoodPoint",
+    repo: "https://github.com/carloMorais/food-point",
+    demo: "try",
   },
 ];

@@ -4,11 +4,11 @@ describe("tabIndex", () => {
   it("maps paths to their tab", () => {
     expect(tabIndex("/")).toBe(0);
     expect(tabIndex("/experience")).toBe(1);
-    expect(tabIndex("/demos")).toBe(2);
+    expect(tabIndex("/work")).toBe(2);
   });
 
   it("keeps nested pages under their tab", () => {
-    expect(tabIndex("/demos/racegame")).toBe(2);
+    expect(tabIndex("/work/racegame")).toBe(2);
   });
 
   it("returns -1 outside the tabs", () => {

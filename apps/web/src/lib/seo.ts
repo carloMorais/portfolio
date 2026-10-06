@@ -18,18 +18,20 @@ export function siteUrl(env: Record<string, string | undefined> = process.env): 
 export const hreflang: Record<Locale, string> = { pt: "pt-BR", en: "en" };
 const ogLocale: Record<Locale, string> = { pt: "pt_BR", en: "en_US" };
 
-/** Locale-prefixed path: `localePath("pt", "/demos")` → `/pt/demos`, `("pt", "")` → `/pt`. */
+/** Locale-prefixed path: `localePath("pt", "/work")` → `/pt/work`, `("pt", "")` → `/pt`. */
 export const localePath = (locale: Locale, path: string) => `/${locale}${path}`;
 
 /** Every indexable page, without the locale prefix ("" is the home page). */
 export const indexablePaths = [
   "",
   "/experience",
-  "/demos",
+  "/work",
   "/cases/plumaa",
   "/cases/omnichannel-ai",
   "/cases/bayer",
   "/projects/racegame",
+  "/projects/renova",
+  "/projects/food-point",
 ] as const;
 
 export type IndexablePath = (typeof indexablePaths)[number];

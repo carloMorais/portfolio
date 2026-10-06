@@ -743,10 +743,13 @@ export function ModeSwitch({
 export function StartCard({
   header,
   slideFrom = null,
+  wide = false,
   children,
 }: {
   header?: ReactNode;
   slideFrom?: SlideFrom;
+  /** Two columns on a desktop (controls beside the choices): a shorter card, so Start sits higher. */
+  wide?: boolean;
   children: ReactNode;
 }) {
   const slide =
@@ -756,7 +759,9 @@ export function StartCard({
         ? "race-slide-from-left"
         : "";
   return (
-    <div className="my-auto flex w-full max-w-xl flex-col items-center gap-4 overflow-hidden rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line">
+    <div
+      className={`my-auto flex w-full ${wide ? "max-w-xl lg:max-w-3xl" : "max-w-xl"} flex-col items-center gap-4 overflow-hidden rounded-2xl bg-bg p-5 text-center shadow-sm ring-1 ring-line`}
+    >
       {header}
       <div className={`flex w-full flex-col items-center gap-4 ${slide}`}>{children}</div>
     </div>

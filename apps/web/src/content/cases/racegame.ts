@@ -11,6 +11,20 @@ export const racegame: CaseStudy = {
     pt: "Uma corrida top-down para até 10 jogadores na mesma pista, em que o servidor decide onde cada carro está e o navegador desenha a corrida sem esperar por ele.",
     en: "A top-down race for up to 10 players on the same track, where the server decides where every car is and the browser draws the race without waiting for it.",
   },
+  summary: [
+    {
+      pt: "Líder de um time de 4 num projeto da Alpha EdTech, feito em 3 semanas.",
+      en: "Lead of a team of 4 on an Alpha EdTech project, built in 3 weeks.",
+    },
+    {
+      pt: "Escrevi o motor do jogo nos dois lados: servidor autoritativo a 30 ticks/s, predição e interpolação no cliente, por WebSocket.",
+      en: "I wrote the game engine on both sides: an authoritative server at 30 ticks/s, client-side prediction and interpolation, over WebSocket.",
+    },
+    {
+      pt: "Testado com a sala cheia, 10 jogadores. Em 2026 refiz o jogo com o Claude Code para rodar nesta página.",
+      en: "Tested with a full room of 10 players. In 2026 I rebuilt it with Claude Code to run on this page.",
+    },
+  ],
   facts: [
     {
       label: { pt: "Quando", en: "When" },
