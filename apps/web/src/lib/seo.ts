@@ -31,6 +31,7 @@ export const indexablePaths = [
   "/cases/bayer",
   "/projects/racegame",
   "/projects/renova",
+  "/projects/food-point",
 ] as const;
 
 export type IndexablePath = (typeof indexablePaths)[number];

@@ -104,7 +104,7 @@ test("every work card on Demos opens a page with its title", async ({ page }) =>
   await page.goto("/en/demos");
   const links = page.locator("[data-work] h2 a");
   const count = await links.count();
-  expect(count).toBe(5);
+  expect(count).toBe(6);
   for (let i = 0; i < count; i++) {
     await page.goto("/en/demos");
     const link = page.locator("[data-work] h2 a").nth(i);

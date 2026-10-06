@@ -168,6 +168,21 @@ export const photos = {
       url: "https://unsplash.com/photos/MbiSXN8u8q4",
     },
   },
+  projectFoodPoint: {
+    src: "/photos/project-food-point.jpg",
+    ratio: "16 / 10",
+    position: "50% 55%",
+    alt: {
+      pt: "Mesa comprida posta para um jantar, com flores, velas e taças, à espera dos convidados",
+      en: "A long table set for a dinner, with flowers, candles and glasses, waiting for the guests",
+    },
+    hint: { pt: "Capa do Food Point (16:10)", en: "Food Point cover (16:10)" },
+    credit: {
+      author: "M F",
+      source: "Unsplash",
+      url: "https://unsplash.com/photos/fb0_wj2MZk4",
+    },
+  },
 } satisfies Record<string, PhotoSlot>;
 
 export type PhotoId = keyof typeof photos;

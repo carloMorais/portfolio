@@ -5,3 +5,6 @@ playwright-report
 test-results
 package-lock.json
 context
+# The Food Point demo ships the 2024 frontend as it was (see its README).
+apps/web/public/food-point-2024
+apps/web/public/food-point-demo/index.html

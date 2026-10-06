@@ -296,5 +296,25 @@
     "contextValue": "{chars} caracteres",
     "contextNote": "No Renova, o histórico inteiro, com as respostas da FIPE, volta para o modelo a cada mensagem.",
     "disclaimer": "Reprodução: as falas seguem um roteiro e as escolhas são por botões. As consultas à Tabela FIPE são de verdade, feitas agora pelo seu navegador. No Renova, quem conversa é o GPT-4o, que entende texto livre e decide sozinho quando chamar cada ferramenta."
+  },
+  "FoodPoint": {
+    "window": "Food Point",
+    "address": "Endereço",
+    "replay": "Reprodução",
+    "frameTitle": "Food Point, o app de 2024",
+    "panelTitle": "Servidor simulado",
+    "panelLead": "Cada requisição que o frontend de 2024 faz à API, com a resposta.",
+    "email": "E-mail",
+    "password": "Senha",
+    "logLabel": "Requisições à API",
+    "panelEmpty": "Nenhuma requisição ainda. Entre com a conta de teste ou crie uma.",
+    "requestBody": "Corpo enviado",
+    "responseBody": "Resposta",
+    "mailTitle": "E-mail que o servidor enviaria",
+    "mailLead": "Na demonstração, nenhum e-mail sai daqui. O código que iria para {to}:",
+    "storage": "Os dados ficam só neste navegador.",
+    "reset": "Restaurar dados",
+    "disclaimer": "Reprodução: o frontend é o de 2024, sem mudanças. O backend em Express e PostgreSQL deu lugar a uma simulação no seu navegador, com as mesmas rotas, validações e respostas, e a recuperação de senha mostra aqui o código que iria por e-mail. O CEP, o mapa e o endereço usam as APIs públicas de verdade.",
+    "mailLink": "Abrir o link do e-mail"
   }
 }

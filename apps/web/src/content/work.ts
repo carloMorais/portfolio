@@ -107,4 +107,23 @@ export const work: WorkItem[] = [
     repo: "https://github.com/carloMorais/renova",
     demo: "try",
   },
+  {
+    slug: "food-point",
+    kind: "project",
+    ready: true,
+    context: { pt: "Alpha EdTech · Projeto em grupo", en: "Alpha EdTech · Team project" },
+    period: { pt: "abr — mai 2024", en: "Apr — May 2024" },
+    title: {
+      pt: "Food Point: planejamento de eventos gastronômicos",
+      en: "Food Point: planning food-centered events",
+    },
+    blurb: {
+      pt: "Uma SPA em JavaScript puro, sem framework, feita em grupo em quatro semanas. Fiz o roteador, a home e o fluxo de criar evento, com mapa e cardápio. Dá para usar aqui o frontend de 2024, como era.",
+      en: "A single-page app in plain JavaScript, no framework, built by a team in four weeks. I wrote the router, the home page and the create-event flow, with a map and a menu. You can use the 2024 frontend here, as it was.",
+    },
+    tags: ["JavaScript", "Express", "PostgreSQL", "Leaflet"],
+    photo: "projectFoodPoint",
+    repo: "https://github.com/carloMorais/food-point",
+    demo: "try",
+  },
 ];

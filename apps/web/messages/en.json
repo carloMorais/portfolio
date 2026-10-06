@@ -296,5 +296,25 @@
     "contextValue": "{chars} characters",
     "contextNote": "In Renova, the whole history, FIPE answers included, goes back to the model on every message.",
     "disclaimer": "A replay: the lines follow a script and you choose with buttons. The FIPE lookups are real, made right now by your browser. In Renova, GPT-4o does the talking: it understands free text and decides on its own when to call each tool."
+  },
+  "FoodPoint": {
+    "window": "Food Point",
+    "address": "Address",
+    "replay": "Replay",
+    "frameTitle": "Food Point, the 2024 app",
+    "panelTitle": "Simulated server",
+    "panelLead": "Every request the 2024 frontend makes to the API, with the answer.",
+    "email": "E-mail",
+    "password": "Password",
+    "logLabel": "API requests",
+    "panelEmpty": "No requests yet. Log in with the test account or create one.",
+    "requestBody": "Request body",
+    "responseBody": "Response",
+    "mailTitle": "E-mail the server would send",
+    "mailLead": "In the demo, no e-mail leaves this page. The code that would go to {to}:",
+    "storage": "The data stays in this browser only.",
+    "reset": "Reset data",
+    "disclaimer": "A replay: the frontend is the 2024 one, unchanged, and in Portuguese, as it was. The Express and PostgreSQL backend became a simulation in your browser, with the same routes, validation and answers, and password recovery shows here the code it would e-mail. The postal code, the map and the address use the real public APIs.",
+    "mailLink": "Open the e-mail’s link"
   }
 }
