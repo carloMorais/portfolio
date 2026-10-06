@@ -10,12 +10,9 @@ import { PageTransition } from "../PageTransition";
 type Props = {
   item: WorkItem;
   study: CaseStudy;
-  /** Cover: a screenshot or clip of the real thing. */
-  media?: ReactNode;
   /**
    * The real thing, playable, right under the title: a visitor tries it
-   * first and reads about it after. Takes the cover's place; the facts move
-   * below it.
+   * first and reads about it after. The facts move below it.
    */
   demo?: ReactNode;
   /** Optional call to action under the facts. */
@@ -50,7 +47,7 @@ export function Section({
  * The shared shape of every case study page:
  * context → problem → my part → decisions → architecture → result.
  */
-export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Props) {
+export function CaseStudyLayout({ item, study, demo, actions, extra }: Props) {
   const locale = useLocale();
   const t = useTranslations("Case");
   const common = useTranslations("Common");
@@ -128,13 +125,11 @@ export function CaseStudyLayout({ item, study, media, demo, actions, extra }: Pr
           {!demo && <div className="mt-10">{facts}</div>}
         </header>
 
-        {demo ? (
+        {demo && (
           <>
             {demo}
             <div className="container-page mt-16">{facts}</div>
           </>
-        ) : (
-          <div className="container-page">{media}</div>
         )}
 
         <div className="container-page mt-16">

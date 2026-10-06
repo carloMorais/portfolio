@@ -28,6 +28,8 @@ const coreStack = ["React", "Next.js", "TypeScript", "Node.js", "NestJS", "Postg
 // "numbers" is too short a section to earn a minimap entry. The career lives
 // on its own tab: the work cards already say where and when.
 const minimapSections = ["intro", "work", "about", "contact"] as const;
+// The home shows a sample; the Work tab has every card.
+const homeWork = work.slice(0, 4);
 
 export async function generateMetadata(): Promise<Metadata> {
   const [t, locale] = await Promise.all([getTranslations("Metadata"), getLocale()]);
@@ -150,10 +152,19 @@ export default function HomePage() {
           lead={t("workLead")}
         />
         <div className="mt-14 grid gap-x-10 gap-y-16 md:grid-cols-2">
-          {work.map((item, i) => (
-            <WorkCard key={item.slug} item={item} wide={isWide(i, work.length)} />
+          {homeWork.map((item, i) => (
+            <WorkCard key={item.slug} item={item} wide={isWide(i, homeWork.length)} />
           ))}
         </div>
+        <Link
+          href="/work"
+          transitionTypes={["nav-forward"]}
+          className="btn btn-ghost group/cta mt-14"
+          data-work-more
+        >
+          {t("workMore")}
+          <ArrowIcon className="size-4 transition-transform group-hover/cta:translate-x-0.5" />
+        </Link>
       </section>
 
       {/* About: how I work on the left, the stack on the right. */}
