@@ -31,7 +31,7 @@ export function ContactSection() {
               .map((link) => (
                 <li key={link.id}>
                   <a href={link.href} target="_blank" rel="noreferrer" className="btn btn-ghost">
-                    {link.label} ↗
+                    {link.label} <span aria-hidden="true">↗</span>
                   </a>
                 </li>
               ))}
