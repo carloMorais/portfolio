@@ -3,10 +3,10 @@ export const site = {
   shortName: "Carlos Morais",
   // Used to keep the age on the hero caption current (the home page revalidates daily).
   birthDate: "2003-04-03",
-  email: "carlos13bem@gmail.com",
+  email: "carlosaraujomoraiss@gmail.com",
   // wa.me expects digits only, country code first.
-  whatsapp: "5563992046146",
-  linkedin: "https://www.linkedin.com/in/carlos-m-678974245",
+  whatsapp: "5512997550534",
+  linkedin: "https://www.linkedin.com/in/carlosaraujomorais",
   github: "https://github.com/carloMorais",
   // Canonical origin: every Vercel deployment (previews too) points search engines here.
   url: "https://portfolio-carlomorais.vercel.app",

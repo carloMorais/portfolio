@@ -70,4 +70,4 @@ This project is built with [Claude Code](https://claude.com/claude-code) as a pa
 
 ## Contact
 
-[LinkedIn](https://www.linkedin.com/in/carlos-m-678974245) · [GitHub](https://github.com/carloMorais) · carlos13bem@gmail.com
+[LinkedIn](https://www.linkedin.com/in/carlosaraujomorais) · [GitHub](https://github.com/carloMorais) · carlosaraujomoraiss@gmail.com
