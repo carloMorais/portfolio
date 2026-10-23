@@ -55,15 +55,17 @@ export function LoopVideo({
         width={width}
         height={height}
         aria-label={label}
+        onClick={toggle}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
-        className="block h-auto w-full"
+        className="block h-auto w-full cursor-pointer"
       >
         <source src={webm} type="video/webm" />
         <source src={mp4} type="video/mp4" />
       </video>
       <button
         type="button"
+        aria-pressed={playing}
         onClick={toggle}
         className="absolute right-3 bottom-3 rounded-full bg-bg/85 px-3 py-1.5 text-xs font-medium text-muted ring-1 ring-line backdrop-blur transition-colors hover:text-ink"
       >
