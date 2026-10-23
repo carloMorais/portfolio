@@ -1,0 +1,1 @@
+## 2024-05-18 - LoopVideo Accessibility\n**Learning:** Added aria-pressed attribute to toggle buttons and click interactions to video players improve screen reader feedback and general usability respectively.\n**Action:** Ensure toggle buttons use `aria-pressed` and video elements without native controls have a large clickable area.
