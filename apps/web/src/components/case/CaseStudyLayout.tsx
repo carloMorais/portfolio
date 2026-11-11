@@ -88,7 +88,7 @@ export function CaseStudyLayout({ item, study, demo, actions, extra }: Props) {
             rel="noreferrer"
             className="link-underline text-sm text-muted hover:text-ink"
           >
-            {common("sourceCode")} ↗
+            {common("sourceCode")} <span aria-hidden="true">↗</span>
           </a>
         )}
       </div>

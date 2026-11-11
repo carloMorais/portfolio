@@ -22,6 +22,7 @@ export function SiteFooter() {
                 className="link-underline hover:text-ink"
               >
                 {link.label}
+                {link.id !== "email" && <span aria-hidden="true"> ↗</span>}
               </a>
             </li>
           ))}
@@ -34,6 +35,7 @@ export function SiteFooter() {
                 className="link-underline hover:text-ink"
               >
                 {t("source")}
+                <span aria-hidden="true"> ↗</span>
               </a>
             </li>
           )}

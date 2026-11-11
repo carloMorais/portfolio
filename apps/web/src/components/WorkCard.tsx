@@ -79,7 +79,7 @@ export function WorkCard({ item, headingLevel: Heading = "h3", wide = false }: P
               rel="noreferrer"
               className="link-underline relative z-10 ml-auto text-muted hover:text-ink"
             >
-              {t("sourceCode")} ↗
+              {t("sourceCode")} <span aria-hidden="true">↗</span>
             </a>
           )}
         </div>
